@@ -293,11 +293,27 @@ function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri): s
 			overflow: hidden;
 		}
 		.branch-list {
+			min-width: 150px;
 			width: 200px;
+			max-width: 400px;
 			background: var(--vscode-sideBar-background);
 			border-right: 1px solid var(--vscode-panel-border);
 			overflow-y: auto;
 			padding: 8px 0;
+			position: relative;
+		}
+		.resize-handle-right {
+			position: absolute;
+			top: 0;
+			right: -2px;
+			width: 4px;
+			height: 100%;
+			cursor: ew-resize;
+			background: transparent;
+			z-index: 10;
+		}
+		.resize-handle-right:hover {
+			background: var(--vscode-focusBorder);
 		}
 		.branch-section {
 			margin-bottom: 16px;
@@ -341,10 +357,26 @@ function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri): s
 			overflow-y: auto;
 		}
 		.commit-details {
+			min-width: 200px;
 			width: 300px;
+			max-width: 500px;
 			padding: 8px;
 			overflow-y: auto;
 			background: var(--vscode-sideBar-background);
+			position: relative;
+		}
+		.resize-handle-left {
+			position: absolute;
+			top: 0;
+			left: -2px;
+			width: 4px;
+			height: 100%;
+			cursor: ew-resize;
+			background: transparent;
+			z-index: 10;
+		}
+		.resize-handle-left:hover {
+			background: var(--vscode-focusBorder);
 		}
 		.commit-row {
 			display: flex;
@@ -361,9 +393,12 @@ function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri): s
 			background: var(--vscode-list-activeSelectionBackground);
 		}
 		.commit-graph {
-			width: 60px;
-			height: 20px;
+			width: 30px;
+			height: 30px;
 			margin-right: 8px;
+			display: flex;
+			align-items: center;
+			justify-content: center;
 		}
 		.commit-hash {
 			font-family: var(--vscode-editor-font-family);

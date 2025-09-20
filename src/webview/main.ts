@@ -23,18 +23,35 @@ let selectedBranch: string = 'main';
 let commits: CommitDTO[] = [];
 let branches: BranchDTO[] = [];
 
-function createSimpleGraph(commit: CommitDTO, index: number): string {
-    // Simple ASCII-style graph representation
+function createSimpleGraph(commit: CommitDTO, index: number, allCommits: CommitDTO[]): string {
+    // Create a simple but effective graph representation
+    const hasMultipleParents = commit.parents.length > 1;
     const isFirst = index === 0;
-    const hasParents = commit.parents.length > 0;
+    const isLast = index === allCommits.length - 1;
     
-    if (isFirst) {
-        return '● ';
-    } else if (commit.parents.length > 1) {
-        return '◉ '; // Merge commit
-    } else {
-        return '● ';
+    let graph = '<div style="display: flex; flex-direction: column; align-items: center; height: 100%; font-family: monospace;">';
+    
+    // Add vertical line from previous commit (top part)
+    if (!isFirst) {
+        graph += '<div style="width: 2px; height: 8px; background: #007ACC; flex-shrink: 0;"></div>';
     }
+    
+    // Add the commit dot
+    if (hasMultipleParents) {
+        // Merge commit - diamond shape
+        graph += '<div style="width: 8px; height: 8px; background: #FD7E14; transform: rotate(45deg); margin: 2px 0; flex-shrink: 0;"></div>';
+    } else {
+        // Regular commit - circle
+        graph += '<div style="width: 8px; height: 8px; background: #28A745; border-radius: 50%; margin: 2px 0; flex-shrink: 0;"></div>';
+    }
+    
+    // Add vertical line to next commit (bottom part)
+    if (!isLast) {
+        graph += '<div style="width: 2px; height: 8px; background: #007ACC; flex-shrink: 0;"></div>';
+    }
+    
+    graph += '</div>';
+    return graph;
 }
 
 function formatDate(dateStr?: string): string {
@@ -56,10 +73,10 @@ function renderCommitList(commitData: CommitDTO[]) {
             row.classList.add('selected');
         }
         
-        // Graph column
+        // Graph visualization column
         const graphCell = document.createElement('div');
         graphCell.className = 'commit-graph';
-        graphCell.textContent = createSimpleGraph(commit, index);
+        graphCell.innerHTML = createSimpleGraph(commit, index, commits);
         
         // Hash column
         const hashCell = document.createElement('div');
@@ -281,8 +298,11 @@ function render(commitData: CommitDTO[], branchData?: BranchDTO[]) {
     const mainContent = document.createElement('div');
     mainContent.className = 'main-content';
     
-    // Create branch list
+    // Create branch list with resize handle
     const branchListEl = createBranchList();
+    const branchResizeHandle = document.createElement('div');
+    branchResizeHandle.className = 'resize-handle-right';
+    branchListEl.appendChild(branchResizeHandle);
     
     // Create commit area
     const commitArea = document.createElement('div');
@@ -291,10 +311,13 @@ function render(commitData: CommitDTO[], branchData?: BranchDTO[]) {
     // Create commit list
     const commitListEl = renderCommitList(commitData);
     
-    // Create details panel
+    // Create details panel with resize handle
     const detailsPanel = document.createElement('div');
     detailsPanel.className = 'commit-details';
     detailsPanel.innerHTML = '<div class="details-content">Select a commit to see details</div>';
+    const detailsResizeHandle = document.createElement('div');
+    detailsResizeHandle.className = 'resize-handle-left';
+    detailsPanel.appendChild(detailsResizeHandle);
     
     commitArea.appendChild(commitListEl);
     commitArea.appendChild(detailsPanel);
@@ -305,16 +328,53 @@ function render(commitData: CommitDTO[], branchData?: BranchDTO[]) {
     mainContainer.appendChild(toolbar);
     mainContainer.appendChild(mainContent);
     container.appendChild(mainContainer);
+}
+
+
+
+function initResizers() {
+    // Initialize all resize handles
+    setupResizer('.branch-list', '.resize-handle-right', 'width', 150, 400, 1);
+    setupResizer('.commit-details', '.resize-handle-left', 'width', 200, 500, -1);
+}
+
+function setupResizer(containerSelector: string, handleSelector: string, property: string, min: number, max: number, direction: number) {
+    const container = document.querySelector(containerSelector) as HTMLElement;
+    const handle = container?.querySelector(handleSelector) as HTMLElement;
     
-    // Auto-select first commit
-    if (commitData.length > 0) {
-        selectedCommit = commitData[0];
-        const firstRow = document.querySelector('.commit-row');
-        if (firstRow) {
-            firstRow.classList.add('selected');
-            renderCommitDetails(commitData[0]);
-        }
+    if (!container || !handle) {
+        return;
     }
+    
+    let isResizing = false;
+    let startX = 0;
+    let startValue = 0;
+    
+    handle.addEventListener('mousedown', (e) => {
+        isResizing = true;
+        startX = e.clientX;
+        startValue = container.offsetWidth;
+        e.preventDefault();
+        document.body.style.cursor = 'ew-resize';
+    });
+    
+    document.addEventListener('mousemove', (e) => {
+        if (isResizing) {
+            const delta = (e.clientX - startX) * direction;
+            const newValue = startValue + delta;
+            
+            if (newValue >= min && newValue <= max) {
+                container.style[property as any] = newValue + 'px';
+            }
+        }
+    });
+    
+    document.addEventListener('mouseup', () => {
+        if (isResizing) {
+            isResizing = false;
+            document.body.style.cursor = '';
+        }
+    });
 }
 
 // Receive messages from extension
@@ -323,6 +383,7 @@ window.addEventListener('message', (event) => {
     switch (message.type) {
         case 'init':
             render(message.commits as CommitDTO[], message.branches as BranchDTO[]);
+            initResizers();
             break;
         case 'append':
             render(message.commits as CommitDTO[], message.branches as BranchDTO[]);
