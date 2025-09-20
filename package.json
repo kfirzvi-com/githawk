@@ -80,6 +80,7 @@
     "typescript": "^5.9.2"
   },
   "dependencies": {
-    "@gitgraph/js": "^1.4.0"
+    "@gitgraph/js": "^1.4.0",
+    "@vscode/webview-ui-toolkit": "^1.4.0"
   }
 }

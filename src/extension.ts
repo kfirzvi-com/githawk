@@ -48,6 +48,13 @@ type CommitDTO = {
 	branchHint?: string;
 };
 
+type BranchDTO = {
+	name: string;
+	type: 'local' | 'remote';
+	current: boolean;
+	commit: string;
+};
+
 class GitGraphViewProvider implements vscode.WebviewViewProvider {
 	constructor(private readonly _extensionUri: vscode.Uri) { }
 
@@ -64,15 +71,15 @@ class GitGraphViewProvider implements vscode.WebviewViewProvider {
 		webviewView.webview.html = getWebviewContent(webviewView.webview, this._extensionUri);
 
 		// Get Git data and send to webview
-		getGitData().then(commits => {
-			webviewView.webview.postMessage({ type: 'init', commits });
+		getGitData().then(data => {
+			webviewView.webview.postMessage({ type: 'init', commits: data.commits, branches: data.branches });
 		});
 	}
 }
 
-async function getGitData(): Promise<CommitDTO[]> {
+async function getGitData(): Promise<{ commits: CommitDTO[], branches: BranchDTO[] }> {
 	// Mock data that looks more like a real Git log
-	return [
+	const commits: CommitDTO[] = [
 		{
 			hash: 'a1b2c3d4e5f6g7h8',
 			message: 'feat: add authentication system',
@@ -138,6 +145,18 @@ async function getGitData(): Promise<CommitDTO[]> {
 			branchHint: 'main'
 		}
 	];
+
+	const branches: BranchDTO[] = [
+		{ name: 'main', type: 'local', current: true, commit: 'a1b2c3d4e5f6g7h8' },
+		{ name: 'feature/user-profiles', type: 'local', current: false, commit: 'g7h8i9j0k1l2m3n4' },
+		{ name: 'feature/api-improvements', type: 'local', current: false, commit: 'b2c3d4e5f6g7h8i9' },
+		{ name: 'bugfix/memory-leak', type: 'local', current: false, commit: 'c3d4e5f6g7h8i9j0' },
+		{ name: 'origin/main', type: 'remote', current: false, commit: 'e5f6g7h8i9j0k1l2' },
+		{ name: 'origin/feature/user-profiles', type: 'remote', current: false, commit: 'g7h8i9j0k1l2m3n4' },
+		{ name: 'origin/develop', type: 'remote', current: false, commit: 'f6g7h8i9j0k1l2m3' }
+	];
+
+	return { commits, branches };
 }
 
 function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri): string {
@@ -159,10 +178,87 @@ function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri): s
 			background: var(--vscode-editor-background);
 			color: var(--vscode-editor-foreground);
 		}
-		.git-log-container {
+		.git-container {
 			display: flex;
+			flex-direction: column;
 			height: 100vh;
 			width: 100%;
+		}
+		.toolbar {
+			display: flex;
+			align-items: center;
+			padding: 8px 12px;
+			background: var(--vscode-titleBar-activeBackground);
+			border-bottom: 1px solid var(--vscode-panel-border);
+			gap: 8px;
+		}
+		.toolbar-button {
+			background: var(--vscode-button-background);
+			color: var(--vscode-button-foreground);
+			border: none;
+			padding: 6px 12px;
+			border-radius: 3px;
+			cursor: pointer;
+			font-size: 12px;
+			font-family: var(--vscode-font-family);
+		}
+		.toolbar-button:hover {
+			background: var(--vscode-button-hoverBackground);
+		}
+		.toolbar-button.secondary {
+			background: var(--vscode-button-secondaryBackground);
+			color: var(--vscode-button-secondaryForeground);
+		}
+		.toolbar-button.secondary:hover {
+			background: var(--vscode-button-secondaryHoverBackground);
+		}
+		.main-content {
+			display: flex;
+			flex: 1;
+			overflow: hidden;
+		}
+		.branch-list {
+			width: 200px;
+			background: var(--vscode-sideBar-background);
+			border-right: 1px solid var(--vscode-panel-border);
+			overflow-y: auto;
+			padding: 8px 0;
+		}
+		.branch-section {
+			margin-bottom: 16px;
+		}
+		.branch-section-title {
+			font-size: 11px;
+			font-weight: 600;
+			text-transform: uppercase;
+			color: var(--vscode-descriptionForeground);
+			padding: 4px 12px;
+			margin-bottom: 4px;
+		}
+		.branch-item {
+			display: flex;
+			align-items: center;
+			padding: 4px 12px;
+			cursor: pointer;
+			font-size: 13px;
+		}
+		.branch-item:hover {
+			background: var(--vscode-list-hoverBackground);
+		}
+		.branch-item.active {
+			background: var(--vscode-list-activeSelectionBackground);
+			color: var(--vscode-list-activeSelectionForeground);
+		}
+		.branch-icon {
+			margin-right: 6px;
+			opacity: 0.8;
+		}
+		.branch-name {
+			flex: 1;
+		}
+		.commit-area {
+			display: flex;
+			flex: 1;
 		}
 		.commit-list {
 			flex: 1;

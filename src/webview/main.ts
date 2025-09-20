@@ -10,9 +10,18 @@ type CommitDTO = {
     branchHint?: string;
 };
 
+type BranchDTO = {
+    name: string;
+    type: 'local' | 'remote';
+    current: boolean;
+    commit: string;
+};
+
 const container = document.getElementById('root')!;
 let selectedCommit: CommitDTO | null = null;
+let selectedBranch: string = 'main';
 let commits: CommitDTO[] = [];
+let branches: BranchDTO[] = [];
 
 function createSimpleGraph(commit: CommitDTO, index: number): string {
     // Simple ASCII-style graph representation
@@ -131,15 +140,153 @@ function renderCommitDetails(commit: CommitDTO) {
     `;
 }
 
-function render(commitData: CommitDTO[]) {
+function createToolbar() {
+    const toolbar = document.createElement('div');
+    toolbar.className = 'toolbar';
+    
+    const refreshBtn = document.createElement('button');
+    refreshBtn.className = 'toolbar-button';
+    refreshBtn.textContent = '↻ Refresh';
+    refreshBtn.onclick = () => vscode.postMessage({ type: 'refresh' });
+    
+    const fetchBtn = document.createElement('button');
+    fetchBtn.className = 'toolbar-button secondary';
+    fetchBtn.textContent = '⇣ Fetch';
+    fetchBtn.onclick = () => vscode.postMessage({ type: 'fetch' });
+    
+    const pullBtn = document.createElement('button');
+    pullBtn.className = 'toolbar-button secondary';
+    pullBtn.textContent = '⇣ Pull';
+    pullBtn.onclick = () => vscode.postMessage({ type: 'pull' });
+    
+    const pushBtn = document.createElement('button');
+    pushBtn.className = 'toolbar-button secondary';
+    pushBtn.textContent = '⇡ Push';
+    pushBtn.onclick = () => vscode.postMessage({ type: 'push' });
+    
+    toolbar.appendChild(refreshBtn);
+    toolbar.appendChild(fetchBtn);
+    toolbar.appendChild(pullBtn);
+    toolbar.appendChild(pushBtn);
+    
+    return toolbar;
+}
+
+function createBranchList() {
+    const branchList = document.createElement('div');
+    branchList.className = 'branch-list';
+    
+    // Local branches section
+    const localSection = document.createElement('div');
+    localSection.className = 'branch-section';
+    
+    const localTitle = document.createElement('div');
+    localTitle.className = 'branch-section-title';
+    localTitle.textContent = 'Local';
+    localSection.appendChild(localTitle);
+    
+    const localBranches = branches.filter(b => b.type === 'local');
+    localBranches.forEach(branch => {
+        const item = document.createElement('div');
+        item.className = 'branch-item';
+        if (branch.current) {
+            item.classList.add('active');
+        }
+        
+        const icon = document.createElement('span');
+        icon.className = 'branch-icon';
+        icon.textContent = branch.current ? '★' : '○';
+        
+        const name = document.createElement('span');
+        name.className = 'branch-name';
+        name.textContent = branch.name;
+        
+        item.appendChild(icon);
+        item.appendChild(name);
+        
+        item.onclick = () => {
+            selectedBranch = branch.name;
+            vscode.postMessage({ type: 'switchBranch', branch: branch.name });
+            updateBranchSelection();
+        };
+        
+        localSection.appendChild(item);
+    });
+    
+    // Remote branches section
+    const remoteSection = document.createElement('div');
+    remoteSection.className = 'branch-section';
+    
+    const remoteTitle = document.createElement('div');
+    remoteTitle.className = 'branch-section-title';
+    remoteTitle.textContent = 'Remote';
+    remoteSection.appendChild(remoteTitle);
+    
+    const remoteBranches = branches.filter(b => b.type === 'remote');
+    remoteBranches.forEach(branch => {
+        const item = document.createElement('div');
+        item.className = 'branch-item';
+        
+        const icon = document.createElement('span');
+        icon.className = 'branch-icon';
+        icon.textContent = '◊';
+        
+        const name = document.createElement('span');
+        name.className = 'branch-name';
+        name.textContent = branch.name;
+        
+        item.appendChild(icon);
+        item.appendChild(name);
+        
+        item.onclick = () => {
+            vscode.postMessage({ type: 'checkoutRemote', branch: branch.name });
+        };
+        
+        remoteSection.appendChild(item);
+    });
+    
+    branchList.appendChild(localSection);
+    branchList.appendChild(remoteSection);
+    
+    return branchList;
+}
+
+function updateBranchSelection() {
+    document.querySelectorAll('.branch-item').forEach(item => {
+        item.classList.remove('active');
+        const nameEl = item.querySelector('.branch-name') as HTMLElement;
+        if (nameEl && nameEl.textContent === selectedBranch) {
+            item.classList.add('active');
+        }
+    });
+}
+
+function render(commitData: CommitDTO[], branchData?: BranchDTO[]) {
     commits = commitData;
+    if (branchData) {
+        branches = branchData;
+    }
     
     // Clear container
     container.innerHTML = '';
     
     // Create main layout
     const mainContainer = document.createElement('div');
-    mainContainer.className = 'git-log-container';
+    mainContainer.className = 'git-container';
+    
+    // Create toolbar
+    const toolbar = createToolbar();
+    
+    // Create main content area
+    const mainContent = document.createElement('div');
+    mainContent.className = 'main-content';
+    
+    // Create branch list
+    const branchListEl = createBranchList();
+    
+    // Create commit area
+    const commitArea = document.createElement('div');
+    commitArea.className = 'commit-area';
     
     // Create commit list
     const commitListEl = renderCommitList(commitData);
@@ -149,8 +296,14 @@ function render(commitData: CommitDTO[]) {
     detailsPanel.className = 'commit-details';
     detailsPanel.innerHTML = '<div class="details-content">Select a commit to see details</div>';
     
-    mainContainer.appendChild(commitListEl);
-    mainContainer.appendChild(detailsPanel);
+    commitArea.appendChild(commitListEl);
+    commitArea.appendChild(detailsPanel);
+    
+    mainContent.appendChild(branchListEl);
+    mainContent.appendChild(commitArea);
+    
+    mainContainer.appendChild(toolbar);
+    mainContainer.appendChild(mainContent);
     container.appendChild(mainContainer);
     
     // Auto-select first commit
@@ -169,10 +322,10 @@ window.addEventListener('message', (event) => {
     const message = event.data;
     switch (message.type) {
         case 'init':
-            render(message.commits as CommitDTO[]);
+            render(message.commits as CommitDTO[], message.branches as BranchDTO[]);
             break;
         case 'append':
-            render(message.commits as CommitDTO[]);
+            render(message.commits as CommitDTO[], message.branches as BranchDTO[]);
             break;
     }
 });
