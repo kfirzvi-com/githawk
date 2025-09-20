@@ -78,82 +78,157 @@ class GitGraphViewProvider implements vscode.WebviewViewProvider {
 }
 
 async function getGitData(): Promise<{ commits: CommitDTO[], branches: BranchDTO[] }> {
-	// Mock data that looks more like a real Git log
+	// Complex mock data with multiple branches and realistic merge patterns
 	const commits: CommitDTO[] = [
 		{
 			hash: 'a1b2c3d4e5f6g7h8',
-			message: 'feat: add authentication system',
-			author: 'John Doe',
-			parents: ['b2c3d4e5f6g7h8i9'],
-			refs: ['main', 'origin/main'],
+			message: 'Merge pull request #89 from hotfix/critical-security-fix',
+			author: 'GitHub',
+			parents: ['b2c3d4e5f6g7h8i9', 'z9y8x7w6v5u4t3s2'],
+			refs: ['main', 'origin/main', 'HEAD'],
 			branchHint: 'main'
 		},
 		{
 			hash: 'b2c3d4e5f6g7h8i9',
-			message: 'fix: resolve memory leak in user service',
-			author: 'Jane Smith',
-			parents: ['c3d4e5f6g7h8i9j0'],
+			message: 'Merge branch \'develop\' into main',
+			author: 'Release Bot',
+			parents: ['c3d4e5f6g7h8i9j0', 'p0o9n8m7l6k5j4i3'],
 			refs: [],
 			branchHint: 'main'
 		},
 		{
+			hash: 'z9y8x7w6v5u4t3s2',
+			message: 'fix: patch critical security vulnerability in auth',
+			author: 'Security Team',
+			parents: ['c3d4e5f6g7h8i9j0'],
+			refs: ['hotfix/critical-security-fix'],
+			branchHint: 'hotfix/critical-security-fix'
+		},
+		{
 			hash: 'c3d4e5f6g7h8i9j0',
-			message: 'refactor: restructure database models',
-			author: 'Bob Wilson',
+			message: 'feat: add user dashboard with analytics',
+			author: 'John Doe',
 			parents: ['d4e5f6g7h8i9j0k1'],
 			refs: [],
 			branchHint: 'main'
 		},
 		{
+			hash: 'p0o9n8m7l6k5j4i3',
+			message: 'Merge feature/notification-system into develop',
+			author: 'Lead Developer',
+			parents: ['q1w2e3r4t5y6u7i8', 'l2m3n4o5p6q7r8s9'],
+			refs: ['develop', 'origin/develop'],
+			branchHint: 'develop'
+		},
+		{
 			hash: 'd4e5f6g7h8i9j0k1',
-			message: 'docs: update API documentation',
+			message: 'refactor: improve database connection pooling',
 			author: 'Alice Johnson',
 			parents: ['e5f6g7h8i9j0k1l2'],
 			refs: [],
 			branchHint: 'main'
 		},
 		{
-			hash: 'e5f6g7h8i9j0k1l2',
-			message: 'Merge pull request #42 from feature/user-profiles',
-			author: 'GitHub',
-			parents: ['f6g7h8i9j0k1l2m3', 'g7h8i9j0k1l2m3n4'],
+			hash: 'q1w2e3r4t5y6u7i8',
+			message: 'Merge feature/user-profiles into develop',
+			author: 'Diana Prince',
+			parents: ['e5f6g7h8i9j0k1l2', 'g7h8i9j0k1l2m3n4'],
 			refs: [],
-			branchHint: 'main'
+			branchHint: 'develop'
 		},
 		{
-			hash: 'f6g7h8i9j0k1l2m3',
-			message: 'test: add unit tests for user service',
-			author: 'Charlie Brown',
-			parents: ['h8i9j0k1l2m3n4o5'],
+			hash: 'l2m3n4o5p6q7r8s9',
+			message: 'feat: add real-time push notifications',
+			author: 'Mike Chen',
+			parents: ['m3n4o5p6q7r8s9t0'],
+			refs: ['feature/notification-system'],
+			branchHint: 'feature/notification-system'
+		},
+		{
+			hash: 'e5f6g7h8i9j0k1l2',
+			message: 'docs: update API documentation for v2.0',
+			author: 'Technical Writer',
+			parents: ['f6g7h8i9j0k1l2m3'],
 			refs: [],
 			branchHint: 'main'
 		},
 		{
 			hash: 'g7h8i9j0k1l2m3n4',
-			message: 'feat: implement user profile editing',
+			message: 'feat: implement user profile avatar upload',
 			author: 'Diana Prince',
 			parents: ['h8i9j0k1l2m3n4o5'],
 			refs: ['feature/user-profiles'],
 			branchHint: 'feature/user-profiles'
 		},
 		{
+			hash: 'f6g7h8i9j0k1l2m3',
+			message: 'test: add comprehensive integration tests',
+			author: 'Charlie Brown',
+			parents: ['h8i9j0k1l2m3n4o5'],
+			refs: [],
+			branchHint: 'main'
+		},
+		{
+			hash: 'm3n4o5p6q7r8s9t0',
+			message: 'feat: add notification preferences UI',
+			author: 'Sarah Wilson',
+			parents: ['n4o5p6q7r8s9t0u1'],
+			refs: [],
+			branchHint: 'feature/notification-system'
+		},
+		{
 			hash: 'h8i9j0k1l2m3n4o5',
-			message: 'chore: update dependencies',
-			author: 'DevBot',
+			message: 'feat: add basic user profile management',
+			author: 'Diana Prince',
 			parents: ['i9j0k1l2m3n4o5p6'],
+			refs: [],
+			branchHint: 'feature/user-profiles'
+		},
+		{
+			hash: 'n4o5p6q7r8s9t0u1',
+			message: 'feat: implement WebSocket notification service',
+			author: 'Mike Chen',
+			parents: ['i9j0k1l2m3n4o5p6'],
+			refs: [],
+			branchHint: 'feature/notification-system'
+		},
+		{
+			hash: 'i9j0k1l2m3n4o5p6',
+			message: 'chore: update dependencies to latest versions',
+			author: 'Dependabot',
+			parents: ['j0k1l2m3n4o5p6q7'],
+			refs: [],
+			branchHint: 'main'
+		},
+		{
+			hash: 'j0k1l2m3n4o5p6q7',
+			message: 'Initial commit with project structure',
+			author: 'Project Lead',
+			parents: [],
 			refs: [],
 			branchHint: 'main'
 		}
 	];
 
 	const branches: BranchDTO[] = [
+		// Local branches
 		{ name: 'main', type: 'local', current: true, commit: 'a1b2c3d4e5f6g7h8' },
+		{ name: 'develop', type: 'local', current: false, commit: 'p0o9n8m7l6k5j4i3' },
 		{ name: 'feature/user-profiles', type: 'local', current: false, commit: 'g7h8i9j0k1l2m3n4' },
-		{ name: 'feature/api-improvements', type: 'local', current: false, commit: 'b2c3d4e5f6g7h8i9' },
-		{ name: 'bugfix/memory-leak', type: 'local', current: false, commit: 'c3d4e5f6g7h8i9j0' },
-		{ name: 'origin/main', type: 'remote', current: false, commit: 'e5f6g7h8i9j0k1l2' },
-		{ name: 'origin/feature/user-profiles', type: 'remote', current: false, commit: 'g7h8i9j0k1l2m3n4' },
-		{ name: 'origin/develop', type: 'remote', current: false, commit: 'f6g7h8i9j0k1l2m3' }
+		{ name: 'feature/notification-system', type: 'local', current: false, commit: 'l2m3n4o5p6q7r8s9' },
+		{ name: 'hotfix/critical-security-fix', type: 'local', current: false, commit: 'z9y8x7w6v5u4t3s2' },
+		{ name: 'feature/api-v2', type: 'local', current: false, commit: 'e5f6g7h8i9j0k1l2' },
+		{ name: 'bugfix/authentication-timeout', type: 'local', current: false, commit: 'd4e5f6g7h8i9j0k1' },
+		
+		// Remote branches  
+		{ name: 'origin/main', type: 'remote', current: false, commit: 'b2c3d4e5f6g7h8i9' },
+		{ name: 'origin/develop', type: 'remote', current: false, commit: 'q1w2e3r4t5y6u7i8' },
+		{ name: 'origin/feature/user-profiles', type: 'remote', current: false, commit: 'h8i9j0k1l2m3n4o5' },
+		{ name: 'origin/feature/notification-system', type: 'remote', current: false, commit: 'm3n4o5p6q7r8s9t0' },
+		{ name: 'origin/hotfix/critical-security-fix', type: 'remote', current: false, commit: 'z9y8x7w6v5u4t3s2' },
+		{ name: 'upstream/main', type: 'remote', current: false, commit: 'c3d4e5f6g7h8i9j0' },
+		{ name: 'upstream/develop', type: 'remote', current: false, commit: 'p0o9n8m7l6k5j4i3' },
+		{ name: 'fork/feature/experimental', type: 'remote', current: false, commit: 'f6g7h8i9j0k1l2m3' }
 	];
 
 	return { commits, branches };
