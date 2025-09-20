@@ -23,35 +23,106 @@ let selectedBranch: string = 'main';
 let commits: CommitDTO[] = [];
 let branches: BranchDTO[] = [];
 
+// Global graph state to maintain consistency across rows
+let branchPositions: Map<string, number> = new Map();
+let branchColors: Map<string, string> = new Map();
+let maxBranches = 0;
+
+function initializeGraphState(commits: CommitDTO[]) {
+    branchPositions.clear();
+    branchColors.clear();
+    
+    const colors = ['#007ACC', '#28A745', '#FD7E14', '#DC3545', '#6F42C1', '#17A2B8', '#FFC107'];
+    let colorIndex = 0;
+    let nextPosition = 0;
+    
+    // Assign positions and colors to branches
+    commits.forEach(commit => {
+        const branchHint = commit.branchHint || 'main';
+        if (!branchPositions.has(branchHint)) {
+            branchPositions.set(branchHint, nextPosition++);
+            branchColors.set(branchHint, colors[colorIndex % colors.length]);
+            colorIndex++;
+        }
+    });
+    
+    maxBranches = nextPosition;
+}
+
 function createSimpleGraph(commit: CommitDTO, index: number, allCommits: CommitDTO[]): string {
-    // Create a simple but effective graph representation
-    const hasMultipleParents = commit.parents.length > 1;
-    const isFirst = index === 0;
-    const isLast = index === allCommits.length - 1;
+    const branchHint = commit.branchHint || 'main';
+    const branchPosition = branchPositions.get(branchHint) || 0;
+    const branchColor = branchColors.get(branchHint) || '#007ACC';
     
-    let graph = '<div style="display: flex; flex-direction: column; align-items: center; height: 100%; font-family: monospace;">';
+    const width = Math.max(120, maxBranches * 25 + 20);
+    const height = 35;
+    const centerY = height / 2;
     
-    // Add vertical line from previous commit (top part)
-    if (!isFirst) {
-        graph += '<div style="width: 2px; height: 8px; background: #007ACC; flex-shrink: 0;"></div>';
+    let svg = `<svg width="${width}" height="${height}" style="display: block;">`;
+    
+    // Draw vertical lines for all active branches at this point
+    for (let i = 0; i < maxBranches; i++) {
+        const x = i * 25 + 15;
+        
+        // Check if this branch should have a line at this commit
+        let shouldDrawLine = false;
+        const branchName = Array.from(branchPositions.keys())[i];
+        
+        if (branchName) {
+            // Draw line if this branch has commits before and after this point
+            const hasBefore = index < allCommits.length - 1 && 
+                            allCommits.slice(index + 1).some(c => (c.branchHint || 'main') === branchName);
+            const hasAfter = index > 0 && 
+                           allCommits.slice(0, index).some(c => (c.branchHint || 'main') === branchName);
+            
+            shouldDrawLine = hasBefore || hasAfter || branchName === branchHint;
+        }
+        
+        if (shouldDrawLine) {
+            const color = branchColors.get(branchName) || '#666';
+            svg += `<line x1="${x}" y1="0" x2="${x}" y2="${height}" 
+                    stroke="${color}" stroke-width="2" opacity="0.3"/>`;
+        }
     }
     
-    // Add the commit dot
-    if (hasMultipleParents) {
-        // Merge commit - diamond shape
-        graph += '<div style="width: 8px; height: 8px; background: #FD7E14; transform: rotate(45deg); margin: 2px 0; flex-shrink: 0;"></div>';
+    // Draw merge lines if this is a merge commit
+    if (commit.parents.length > 1) {
+        commit.parents.forEach(parentHash => {
+            const parentCommit = allCommits.find(c => c.hash === parentHash);
+            if (parentCommit) {
+                const parentBranch = parentCommit.branchHint || 'main';
+                const parentPosition = branchPositions.get(parentBranch) || 0;
+                const parentX = parentPosition * 25 + 15;
+                const currentX = branchPosition * 25 + 15;
+                
+                if (parentX !== currentX) {
+                    svg += `<line x1="${parentX}" y1="${centerY}" x2="${currentX}" y2="${centerY}" 
+                            stroke="#FD7E14" stroke-width="3" opacity="0.8"/>`;
+                }
+            }
+        });
+    }
+    
+    // Draw the commit dot
+    const commitX = branchPosition * 25 + 15;
+    
+    if (commit.parents.length > 1) {
+        // Merge commit - diamond
+        svg += `<rect x="${commitX-5}" y="${centerY-5}" width="10" height="10" 
+                transform="rotate(45 ${commitX} ${centerY})" 
+                fill="#FD7E14" stroke="#fff" stroke-width="1"/>`;
+    } else if (commit.parents.length === 0) {
+        // Initial commit - larger circle
+        svg += `<circle cx="${commitX}" cy="${centerY}" r="6" 
+                fill="${branchColor}" stroke="#fff" stroke-width="2"/>`;
     } else {
         // Regular commit - circle
-        graph += '<div style="width: 8px; height: 8px; background: #28A745; border-radius: 50%; margin: 2px 0; flex-shrink: 0;"></div>';
+        svg += `<circle cx="${commitX}" cy="${centerY}" r="4" 
+                fill="${branchColor}" stroke="#fff" stroke-width="1"/>`;
     }
     
-    // Add vertical line to next commit (bottom part)
-    if (!isLast) {
-        graph += '<div style="width: 2px; height: 8px; background: #007ACC; flex-shrink: 0;"></div>';
-    }
-    
-    graph += '</div>';
-    return graph;
+    svg += '</svg>';
+    return svg;
 }
 
 function formatDate(dateStr?: string): string {
@@ -63,6 +134,9 @@ function formatDate(dateStr?: string): string {
 }
 
 function renderCommitList(commitData: CommitDTO[]) {
+    // Initialize the graph state for consistent positioning
+    initializeGraphState(commitData);
+    
     const commitList = document.createElement('div');
     commitList.className = 'commit-list';
     
@@ -361,6 +435,45 @@ function setupResizer(containerSelector: string, handleSelector: string, propert
     document.addEventListener('mousemove', (e) => {
         if (isResizing) {
             const delta = (e.clientX - startX) * direction;
+            const newValue = startValue + delta;
+            
+            if (newValue >= min && newValue <= max) {
+                container.style[property as any] = newValue + 'px';
+            }
+        }
+    });
+    
+    document.addEventListener('mouseup', () => {
+        if (isResizing) {
+            isResizing = false;
+            document.body.style.cursor = '';
+        }
+    });
+}
+
+function setupResizerVertical(containerSelector: string, handleSelector: string, property: string, min: number, max: number, direction: number) {
+    const container = document.querySelector(containerSelector) as HTMLElement;
+    const handle = container?.querySelector(handleSelector) as HTMLElement;
+    
+    if (!container || !handle) {
+        return;
+    }
+    
+    let isResizing = false;
+    let startY = 0;
+    let startValue = 0;
+    
+    handle.addEventListener('mousedown', (e) => {
+        isResizing = true;
+        startY = e.clientY;
+        startValue = container.offsetHeight;
+        e.preventDefault();
+        document.body.style.cursor = 'ns-resize';
+    });
+    
+    document.addEventListener('mousemove', (e) => {
+        if (isResizing) {
+            const delta = (e.clientY - startY) * direction;
             const newValue = startValue + delta;
             
             if (newValue >= min && newValue <= max) {

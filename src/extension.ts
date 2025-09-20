@@ -393,12 +393,9 @@ function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri): s
 			background: var(--vscode-list-activeSelectionBackground);
 		}
 		.commit-graph {
-			width: 30px;
-			height: 30px;
+			width: 120px;
+			height: 35px;
 			margin-right: 8px;
-			display: flex;
-			align-items: center;
-			justify-content: center;
 		}
 		.commit-hash {
 			font-family: var(--vscode-editor-font-family);
