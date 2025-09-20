@@ -85,28 +85,47 @@ function getBranchLifetime(branchName: string, commits: any[]): { start: number,
 function shouldDrawBranchLineAt(branchName: string, commitIndex: number, commits: any[]): boolean {
     const commit = commits[commitIndex];
     
-    // Always draw for the commit's own branch
+    // Always draw for the commit's own branch (but we'll handle spacing in the drawing code)
     if (commit.branchHint === branchName) {
         return true;
     }
     
-    // Check if this branch flows through this commit level
-    // This happens when:
-    // 1. A commit above belongs to this branch AND
-    // 2. A commit below belongs to this branch OR this commit is a merge target from this branch
+    // Get basic branch lifetime
+    const branchLifetime = getBranchLifetime(branchName, commits);
+    if (branchLifetime.start === -1) {
+        return false; // Branch doesn't exist
+    }
     
-    const hasCommitAbove = commitIndex > 0 && 
-        commits.slice(0, commitIndex).some(c => c.branchHint === branchName);
+    // Find where this branch gets merged (if it does)
+    let branchMergePoint = -1;
+    for (let i = 0; i < commits.length; i++) {
+        const mergeCommit = commits[i];
+        if (mergeCommit.parents.length > 1) {
+            const mergesFromThisBranch = mergeCommit.parents.some((parentHash: string) => {
+                const parentCommit = commits.find(c => c.hash === parentHash);
+                return parentCommit && parentCommit.branchHint === branchName;
+            });
+            if (mergesFromThisBranch) {
+                branchMergePoint = i;
+                break; // Take the first (topmost) merge point
+            }
+        }
+    }
     
-    const hasCommitBelow = commitIndex < commits.length - 1 && 
-        commits.slice(commitIndex + 1).some(c => c.branchHint === branchName);
+    // Determine the range where we should draw lines
+    let startPoint = branchLifetime.start;
+    let endPoint = branchLifetime.end;
     
-    const isMergeTarget = commit.parents.some((parentHash: string) => {
-        const parentCommit = commits.find(c => c.hash === parentHash);
-        return parentCommit && parentCommit.branchHint === branchName;
-    });
+    // If this branch gets merged, extend the line to the merge point
+    if (branchMergePoint !== -1 && branchMergePoint < startPoint) {
+        startPoint = branchMergePoint;
+    }
     
-    return hasCommitAbove && (hasCommitBelow || isMergeTarget);
+    // Draw line if we're within the extended range and there are commits above
+    const withinRange = commitIndex >= startPoint && commitIndex <= endPoint;
+    const hasCommitAbove = commitIndex > startPoint;
+    
+    return withinRange && hasCommitAbove;
 }
 
 function createSimpleGraph(commit: CommitDTO, index: number, allCommits: CommitDTO[]): string {
