@@ -2,6 +2,14 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 
+// Test importing gitgraph.js
+try {
+	const gitgraph = require('@gitgraph/js');
+	console.log('Gitgraph.js loaded successfully:', gitgraph);
+} catch (error) {
+	console.error('Failed to load gitgraph.js:', error);
+}
+
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
@@ -14,12 +22,109 @@ export function activate(context: vscode.ExtensionContext) {
 	// Now provide the implementation of the command with registerCommand
 	// The commandId parameter must match the command field in package.json
 	const disposable = vscode.commands.registerCommand('y.helloWorld', () => {
-		// The code you place here will be executed every time your command is executed
-		// Display a message box to the user
 		vscode.window.showInformationMessage('Hello World from Git Graph!');
 	});
-
 	context.subscriptions.push(disposable);
+
+	// Register the command to open the Git Graph webview
+	const graphDisposable = vscode.commands.registerCommand('y.openGitGraph', () => {
+		const panel = vscode.window.createWebviewPanel(
+			'gitGraph',
+			'Git Graph',
+			vscode.ViewColumn.One,
+			{
+				enableScripts: true,
+				localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'dist')]
+			}
+		);
+		panel.webview.html = getWebviewContent(panel.webview, context.extensionUri);
+		
+		// Get Git data and send to webview
+		getGitData().then(commits => {
+			panel.webview.postMessage({ type: 'init', commits });
+		});
+	});
+	context.subscriptions.push(graphDisposable);
+}
+
+type CommitDTO = {
+	hash: string;
+	message: string;
+	author?: string;
+	parents: string[];
+	refs: string[];
+	branchHint?: string;
+};
+
+async function getGitData(): Promise<CommitDTO[]> {
+	// For now, return mock data. Later we'll integrate with VS Code Git API
+	return [
+		{
+			hash: 'abc123',
+			message: 'Initial commit',
+			author: 'Developer',
+			parents: [],
+			refs: ['main'],
+			branchHint: 'main'
+		},
+		{
+			hash: 'def456',
+			message: 'Add feature',
+			author: 'Developer',
+			parents: ['abc123'],
+			refs: [],
+			branchHint: 'main'
+		},
+		{
+			hash: 'ghi789',
+			message: 'Create feature branch',
+			author: 'Developer',
+			parents: ['def456'],
+			refs: ['feature'],
+			branchHint: 'feature'
+		},
+		{
+			hash: 'jkl012',
+			message: 'Merge feature branch',
+			author: 'Developer',
+			parents: ['def456', 'ghi789'],
+			refs: ['main'],
+			branchHint: 'main'
+		}
+	];
+}
+
+function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri): string {
+	const nonce = getNonce();
+	const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'dist', 'webview', 'main.js'));
+	
+	return `<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline';">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Git Graph</title>
+	<style>
+		body { font-family: var(--vscode-font-family); }
+		#root { width: 100%; height: 400px; }
+	</style>
+</head>
+<body class="vscode-body">
+	<h1>Git Graph</h1>
+	<div id="root">Loading graph...</div>
+	<script nonce="${nonce}" src="${scriptUri}"></script>
+</body>
+</html>`;
+}
+
+function getNonce() {
+	let text = '';
+	const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+	for (let i = 0; i < 32; i++) {
+		text += possible.charAt(Math.floor(Math.random() * possible.length));
+	}
+	return text;
 }
 
 // This method is called when your extension is deactivated
