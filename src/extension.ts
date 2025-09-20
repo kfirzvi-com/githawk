@@ -26,23 +26,15 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 	context.subscriptions.push(disposable);
 
+	// Create webview view provider for the panel
+	const provider = new GitGraphViewProvider(context.extensionUri);
+	context.subscriptions.push(
+		vscode.window.registerWebviewViewProvider('gitGraphView', provider)
+	);
+
 	// Register the command to open the Git Graph webview
 	const graphDisposable = vscode.commands.registerCommand('y.openGitGraph', () => {
-		const panel = vscode.window.createWebviewPanel(
-			'gitGraph',
-			'Git Graph',
-			vscode.ViewColumn.One,
-			{
-				enableScripts: true,
-				localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'dist')]
-			}
-		);
-		panel.webview.html = getWebviewContent(panel.webview, context.extensionUri);
-		
-		// Get Git data and send to webview
-		getGitData().then(commits => {
-			panel.webview.postMessage({ type: 'init', commits });
-		});
+		vscode.commands.executeCommand('workbench.view.extension.gitGraphPanel');
 	});
 	context.subscriptions.push(graphDisposable);
 }
@@ -55,6 +47,28 @@ type CommitDTO = {
 	refs: string[];
 	branchHint?: string;
 };
+
+class GitGraphViewProvider implements vscode.WebviewViewProvider {
+	constructor(private readonly _extensionUri: vscode.Uri) { }
+
+	public resolveWebviewView(
+		webviewView: vscode.WebviewView,
+		context: vscode.WebviewViewResolveContext,
+		_token: vscode.CancellationToken,
+	) {
+		webviewView.webview.options = {
+			enableScripts: true,
+			localResourceRoots: [vscode.Uri.joinPath(this._extensionUri, 'dist')]
+		};
+
+		webviewView.webview.html = getWebviewContent(webviewView.webview, this._extensionUri);
+
+		// Get Git data and send to webview
+		getGitData().then(commits => {
+			webviewView.webview.postMessage({ type: 'init', commits });
+		});
+	}
+}
 
 async function getGitData(): Promise<CommitDTO[]> {
 	// For now, return mock data. Later we'll integrate with VS Code Git API

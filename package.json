@@ -24,7 +24,33 @@
         "command": "y.openGitGraph",
         "title": "Open Git Graph"
       }
-    ]
+    ],
+    "keybindings": [
+      {
+        "command": "y.openGitGraph",
+        "key": "cmd+9",
+        "when": "!terminalFocus"
+      }
+    ],
+    "viewsContainers": {
+      "panel": [
+        {
+          "id": "gitGraphPanel",
+          "title": "Git Graph",
+          "icon": "$(git-branch)"
+        }
+      ]
+    },
+    "views": {
+      "gitGraphPanel": [
+        {
+          "id": "gitGraphView",
+          "name": "Git Graph",
+          "type": "webview",
+          "icon": "$(git-branch)"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
