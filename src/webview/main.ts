@@ -36,7 +36,7 @@ function initializeGraphState(commits: CommitDTO[]) {
     let colorIndex = 0;
     let nextPosition = 0;
     
-    // Assign positions and colors to branches
+    // Assign positions and colors to branches in order of first appearance
     commits.forEach(commit => {
         const branchHint = commit.branchHint || 'main';
         if (!branchPositions.has(branchHint)) {
@@ -49,6 +49,31 @@ function initializeGraphState(commits: CommitDTO[]) {
     maxBranches = nextPosition;
 }
 
+function getBranchLifetime(branchName: string, commits: CommitDTO[]): { start: number, end: number } {
+    let start = -1;
+    let end = -1;
+    
+    commits.forEach((commit, index) => {
+        const commitBranch = commit.branchHint || 'main';
+        
+        // Check if this commit is on this branch OR if this commit has a parent on this branch
+        const isOnBranch = commitBranch === branchName;
+        const hasParentOnBranch = commit.parents.some(parentHash => {
+            const parentCommit = commits.find(c => c.hash === parentHash);
+            return parentCommit && (parentCommit.branchHint || 'main') === branchName;
+        });
+        
+        if (isOnBranch || hasParentOnBranch) {
+            if (start === -1) {
+                start = index;
+            }
+            end = index;
+        }
+    });
+    
+    return { start, end };
+}
+
 function createSimpleGraph(commit: CommitDTO, index: number, allCommits: CommitDTO[]): string {
     const branchHint = commit.branchHint || 'main';
     const branchPosition = branchPositions.get(branchHint) || 0;
@@ -58,46 +83,82 @@ function createSimpleGraph(commit: CommitDTO, index: number, allCommits: CommitD
     const height = 35;
     const centerY = height / 2;
     
-    let svg = `<svg width="${width}" height="${height}" style="display: block;">`;
+    let svg = `<svg width="${width}" height="${height}" style="display: block;">
+        <defs>
+            <marker id="arrowhead" markerWidth="6" markerHeight="4" 
+                    refX="5" refY="2" orient="auto" markerUnits="strokeWidth">
+                <polygon points="0 0, 6 2, 0 4" fill="currentColor" opacity="0.6" />
+            </marker>
+        </defs>`;
     
-    // Draw vertical lines for all active branches at this point
+    // Draw vertical lines for branches that are active at this point
     for (let i = 0; i < maxBranches; i++) {
         const x = i * 25 + 15;
-        
-        // Check if this branch should have a line at this commit
-        let shouldDrawLine = false;
         const branchName = Array.from(branchPositions.keys())[i];
         
         if (branchName) {
-            // Draw line if this branch has commits before and after this point
-            const hasBefore = index < allCommits.length - 1 && 
-                            allCommits.slice(index + 1).some(c => (c.branchHint || 'main') === branchName);
-            const hasAfter = index > 0 && 
-                           allCommits.slice(0, index).some(c => (c.branchHint || 'main') === branchName);
+            const lifetime = getBranchLifetime(branchName, allCommits);
             
-            shouldDrawLine = hasBefore || hasAfter || branchName === branchHint;
-        }
-        
-        if (shouldDrawLine) {
-            const color = branchColors.get(branchName) || '#666';
-            svg += `<line x1="${x}" y1="0" x2="${x}" y2="${height}" 
-                    stroke="${color}" stroke-width="2" opacity="0.3"/>`;
+            // Show line if we're within the branch's lifetime
+            const shouldDrawLine = index >= lifetime.start && index <= lifetime.end;
+            
+            if (shouldDrawLine) {
+                const color = branchColors.get(branchName) || '#666';
+                
+                // Draw top half if there are commits above in this branch's lifetime
+                if (index > lifetime.start) {
+                    svg += `<line x1="${x}" y1="0" x2="${x}" y2="${centerY - 6}" 
+                            stroke="${color}" stroke-width="1.5" opacity="0.3"/>`;
+                }
+                
+                // Draw bottom half if there are commits below in this branch's lifetime
+                if (index < lifetime.end) {
+                    svg += `<line x1="${x}" y1="${centerY + 6}" x2="${x}" y2="${height}" 
+                            stroke="${color}" stroke-width="1.5" opacity="0.3"/>`;
+                }
+            }
         }
     }
     
-    // Draw merge lines if this is a merge commit
+    // Draw subtle arrows only for branch splits and merges
+    const nextCommit = index > 0 ? allCommits[index - 1] : null;
+    if (nextCommit && nextCommit.parents.includes(commit.hash)) {
+        const nextBranch = nextCommit.branchHint || 'main';
+        const nextPosition = branchPositions.get(nextBranch) || 0;
+        const nextX = nextPosition * 25 + 15;
+        const commitX = branchPosition * 25 + 15;
+        
+        // Only show arrow if it's not a straight vertical line
+        if (nextX !== commitX) {
+            const startY = centerY - 2;
+            const endY = 2;
+            const color = branchColors.get(nextBranch) || '#007ACC';
+            
+            // Simple diagonal line with small arrow
+            svg += `<line x1="${commitX}" y1="${startY}" x2="${nextX}" y2="${endY}" 
+                    stroke="${color}" stroke-width="1.5" 
+                    marker-end="url(#arrowhead)" opacity="0.7"/>`;
+        }
+    }
+    
+    // Show merge arrows for merge commits
     if (commit.parents.length > 1) {
         commit.parents.forEach(parentHash => {
-            const parentCommit = allCommits.find(c => c.hash === parentHash);
-            if (parentCommit) {
+            const parentIndex = allCommits.findIndex(c => c.hash === parentHash);
+            if (parentIndex > index) { // Parent is below in the list
+                const parentCommit = allCommits[parentIndex];
                 const parentBranch = parentCommit.branchHint || 'main';
                 const parentPosition = branchPositions.get(parentBranch) || 0;
                 const parentX = parentPosition * 25 + 15;
-                const currentX = branchPosition * 25 + 15;
+                const commitX = branchPosition * 25 + 15;
                 
-                if (parentX !== currentX) {
-                    svg += `<line x1="${parentX}" y1="${centerY}" x2="${currentX}" y2="${centerY}" 
-                            stroke="#FD7E14" stroke-width="3" opacity="0.8"/>`;
+                if (parentX !== commitX) {
+                    const startY = height - 2;
+                    const endY = centerY + 2;
+                    
+                    svg += `<line x1="${parentX}" y1="${startY}" x2="${commitX}" y2="${endY}" 
+                            stroke="#FD7E14" stroke-width="1.5" 
+                            marker-end="url(#arrowhead)" opacity="0.7"/>`;
                 }
             }
         });
