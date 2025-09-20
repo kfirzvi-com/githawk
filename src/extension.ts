@@ -132,7 +132,7 @@ async function getGitData(): Promise<{ commits: CommitDTO[], branches: BranchDTO
 			hash: 'q1w2e3r4t5y6u7i8',
 			message: 'Merge feature/user-profiles into develop',
 			author: 'Diana Prince',
-			parents: ['e5f6g7h8i9j0k1l2', 'g7h8i9j0k1l2m3n4'],
+			parents: ['r1s2t3u4v5w6x7y8', 'g7h8i9j0k1l2m3n4'],
 			refs: [],
 			branchHint: 'develop'
 		},
@@ -191,6 +191,14 @@ async function getGitData(): Promise<{ commits: CommitDTO[], branches: BranchDTO
 			parents: ['i9j0k1l2m3n4o5p6'],
 			refs: [],
 			branchHint: 'feature/notification-system'
+		},
+		{
+			hash: 'r1s2t3u4v5w6x7y8',
+			message: 'feat: improve error handling in API layer',
+			author: 'Bob Smith',
+			parents: ['i9j0k1l2m3n4o5p6'],
+			refs: [],
+			branchHint: 'develop'
 		},
 		{
 			hash: 'i9j0k1l2m3n4o5p6',

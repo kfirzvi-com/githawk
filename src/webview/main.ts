@@ -32,46 +32,81 @@ function initializeGraphState(commits: CommitDTO[]) {
     branchPositions.clear();
     branchColors.clear();
     
-    const colors = ['#007ACC', '#28A745', '#FD7E14', '#DC3545', '#6F42C1', '#17A2B8', '#FFC107'];
-    let colorIndex = 0;
+    // Predefined colors for main branches, then additional colors for feature branches
+    const mainColors = ['#007ACC', '#28A745', '#FD7E14', '#DC3545'];  // Blue, Green, Orange, Red
+    const featureColors = ['#6F42C1', '#17A2B8', '#FFC107', '#E83E8C', '#20C997', '#6C757D'];
+    let mainColorIndex = 0;
+    let featureColorIndex = 0;
     let nextPosition = 0;
     
-    // Assign positions and colors to branches in order of first appearance
+    // Assign main/develop branches to leftmost positions first
+    const mainBranches = ['main', 'develop', 'master'];
+    commits.forEach(commit => {
+        const branchHint = commit.branchHint || 'main';
+        if (mainBranches.includes(branchHint) && !branchPositions.has(branchHint)) {
+            branchPositions.set(branchHint, nextPosition++);
+            branchColors.set(branchHint, mainColors[mainColorIndex % mainColors.length]);
+            mainColorIndex++;
+        }
+    });
+    
+    // Then assign feature branches
     commits.forEach(commit => {
         const branchHint = commit.branchHint || 'main';
         if (!branchPositions.has(branchHint)) {
             branchPositions.set(branchHint, nextPosition++);
-            branchColors.set(branchHint, colors[colorIndex % colors.length]);
-            colorIndex++;
+            branchColors.set(branchHint, featureColors[featureColorIndex % featureColors.length]);
+            featureColorIndex++;
         }
     });
     
     maxBranches = nextPosition;
 }
 
-function getBranchLifetime(branchName: string, commits: CommitDTO[]): { start: number, end: number } {
-    let start = -1;
+function getBranchLifetime(branchName: string, commits: any[]): { start: number, end: number } {
+    let start = commits.length;
     let end = -1;
     
     commits.forEach((commit, index) => {
-        const commitBranch = commit.branchHint || 'main';
-        
-        // Check if this commit is on this branch OR if this commit has a parent on this branch
-        const isOnBranch = commitBranch === branchName;
-        const hasParentOnBranch = commit.parents.some(parentHash => {
-            const parentCommit = commits.find(c => c.hash === parentHash);
-            return parentCommit && (parentCommit.branchHint || 'main') === branchName;
-        });
-        
-        if (isOnBranch || hasParentOnBranch) {
-            if (start === -1) {
-                start = index;
-            }
-            end = index;
+        if (commit.branchHint === branchName || commit.refs.includes(branchName)) {
+            start = Math.min(start, index);
+            end = Math.max(end, index);
         }
     });
     
+    // If no commits found, return invalid range
+    if (start === commits.length) {
+        return { start: -1, end: -1 };
+    }
+    
     return { start, end };
+}
+
+function shouldDrawBranchLineAt(branchName: string, commitIndex: number, commits: any[]): boolean {
+    const commit = commits[commitIndex];
+    
+    // Always draw for the commit's own branch
+    if (commit.branchHint === branchName) {
+        return true;
+    }
+    
+    // Check if this branch flows through this commit level
+    // This happens when:
+    // 1. A commit above belongs to this branch AND
+    // 2. A commit below belongs to this branch OR this commit is a merge target from this branch
+    
+    const hasCommitAbove = commitIndex > 0 && 
+        commits.slice(0, commitIndex).some(c => c.branchHint === branchName);
+    
+    const hasCommitBelow = commitIndex < commits.length - 1 && 
+        commits.slice(commitIndex + 1).some(c => c.branchHint === branchName);
+    
+    const isMergeTarget = commit.parents.some((parentHash: string) => {
+        const parentCommit = commits.find(c => c.hash === parentHash);
+        return parentCommit && parentCommit.branchHint === branchName;
+    });
+    
+    return hasCommitAbove && (hasCommitBelow || isMergeTarget);
 }
 
 function createSimpleGraph(commit: CommitDTO, index: number, allCommits: CommitDTO[]): string {
@@ -91,31 +126,24 @@ function createSimpleGraph(commit: CommitDTO, index: number, allCommits: CommitD
             </marker>
         </defs>`;
     
-    // Draw vertical lines for branches that are active at this point
+    // Draw continuous vertical lines for branches that flow through this commit level
     for (let i = 0; i < maxBranches; i++) {
         const x = i * 25 + 15;
         const branchName = Array.from(branchPositions.keys())[i];
         
-        if (branchName) {
-            const lifetime = getBranchLifetime(branchName, allCommits);
+        if (branchName && shouldDrawBranchLineAt(branchName, index, allCommits)) {
+            const color = branchColors.get(branchName) || '#666';
             
-            // Show line if we're within the branch's lifetime
-            const shouldDrawLine = index >= lifetime.start && index <= lifetime.end;
-            
-            if (shouldDrawLine) {
-                const color = branchColors.get(branchName) || '#666';
-                
-                // Draw top half if there are commits above in this branch's lifetime
-                if (index > lifetime.start) {
-                    svg += `<line x1="${x}" y1="0" x2="${x}" y2="${centerY - 6}" 
-                            stroke="${color}" stroke-width="1.5" opacity="0.3"/>`;
-                }
-                
-                // Draw bottom half if there are commits below in this branch's lifetime
-                if (index < lifetime.end) {
-                    svg += `<line x1="${x}" y1="${centerY + 6}" x2="${x}" y2="${height}" 
-                            stroke="${color}" stroke-width="1.5" opacity="0.3"/>`;
-                }
+            if (branchName === branchHint) {
+                // For the current commit's branch, draw line but leave space for the commit dot
+                svg += `<line x1="${x}" y1="0" x2="${x}" y2="${centerY - 6}" 
+                        stroke="${color}" stroke-width="1.5" opacity="0.6"/>`;
+                svg += `<line x1="${x}" y1="${centerY + 6}" x2="${x}" y2="${height}" 
+                        stroke="${color}" stroke-width="1.5" opacity="0.6"/>`;
+            } else {
+                // For other branches, draw continuous line
+                svg += `<line x1="${x}" y1="0" x2="${x}" y2="${height}" 
+                        stroke="${color}" stroke-width="1.5" opacity="0.4"/>`;
             }
         }
     }
@@ -164,22 +192,33 @@ function createSimpleGraph(commit: CommitDTO, index: number, allCommits: CommitD
         });
     }
     
-    // Draw the commit dot
+    // Draw the commit dot - always a circle
     const commitX = branchPosition * 25 + 15;
     
+    // Determine commit color based on branch column position
+    let commitColor = branchColor;
+    
     if (commit.parents.length > 1) {
-        // Merge commit - diamond
-        svg += `<rect x="${commitX-5}" y="${centerY-5}" width="10" height="10" 
-                transform="rotate(45 ${commitX} ${centerY})" 
-                fill="#FD7E14" stroke="#fff" stroke-width="1"/>`;
+        // Merge commit - use color from the primary parent (first parent)
+        const primaryParentHash = commit.parents[0];
+        const primaryParent = allCommits.find(c => c.hash === primaryParentHash);
+        if (primaryParent && primaryParent.branchHint) {
+            const primaryParentColor = branchColors.get(primaryParent.branchHint);
+            if (primaryParentColor) {
+                commitColor = primaryParentColor;
+            }
+        }
+        // Merge commit - larger circle
+        svg += `<circle cx="${commitX}" cy="${centerY}" r="5" 
+                fill="${commitColor}" stroke="#fff" stroke-width="1"/>`;
     } else if (commit.parents.length === 0) {
-        // Initial commit - larger circle
-        svg += `<circle cx="${commitX}" cy="${centerY}" r="6" 
-                fill="${branchColor}" stroke="#fff" stroke-width="2"/>`;
+        // Initial commit - larger circle with branch color
+        svg += `<circle cx="${commitX}" cy="${centerY}" r="5" 
+                fill="${commitColor}" stroke="#fff" stroke-width="2"/>`;
     } else {
-        // Regular commit - circle
+        // Regular commit - circle with branch color
         svg += `<circle cx="${commitX}" cy="${centerY}" r="4" 
-                fill="${branchColor}" stroke="#fff" stroke-width="1"/>`;
+                fill="${commitColor}" stroke="#fff" stroke-width="1"/>`;
     }
     
     svg += '</svg>';
