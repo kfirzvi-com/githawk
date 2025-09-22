@@ -45,14 +45,14 @@ async function main() {
 
 	// Build webview
 	const webviewCtx = await esbuild.context({
-		entryPoints: ['src/webview/main.ts'],
+		entryPoints: ['src/webview/main.ts', 'src/webview/styles/main.css'],
 		bundle: true,
 		format: 'iife',
 		minify: production,
 		sourcemap: !production,
 		platform: 'browser',
 		target: 'es2020',
-		outfile: 'dist/webview/main.js',
+		outdir: 'dist/webview',
 		logLevel: 'silent',
 		plugins: [
 			esbuildProblemMatcherPlugin,

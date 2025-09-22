@@ -1,0 +1,30 @@
+/* Resize handles for panels */
+.resize-handle-right {
+    position: absolute;
+    top: 0;
+    right: -2px;
+    width: 4px;
+    height: 100%;
+    cursor: ew-resize;
+    background: transparent;
+    z-index: 10;
+}
+
+.resize-handle-right:hover {
+    background: var(--vscode-focusBorder);
+}
+
+.resize-handle-left {
+    position: absolute;
+    top: 0;
+    left: -2px;
+    width: 4px;
+    height: 100%;
+    cursor: ew-resize;
+    background: transparent;
+    z-index: 10;
+}
+
+.resize-handle-left:hover {
+    background: var(--vscode-focusBorder);
+}

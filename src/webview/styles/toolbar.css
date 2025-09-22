@@ -1,0 +1,33 @@
+/* Toolbar styles */
+.toolbar {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    background: var(--vscode-titleBar-activeBackground);
+    border-bottom: 1px solid var(--vscode-panel-border);
+    gap: 8px;
+}
+
+.toolbar-button {
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border: none;
+    padding: 6px 12px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 12px;
+    font-family: var(--vscode-font-family);
+}
+
+.toolbar-button:hover {
+    background: var(--vscode-button-hoverBackground);
+}
+
+.toolbar-button.secondary {
+    background: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+}
+
+.toolbar-button.secondary:hover {
+    background: var(--vscode-button-secondaryHoverBackground);
+}
