@@ -1,14 +1,8 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
-
-// Test importing gitgraph.js
-try {
-	const gitgraph = require('@gitgraph/js');
-	console.log('Gitgraph.js loaded successfully:', gitgraph);
-} catch (error) {
-	console.error('Failed to load gitgraph.js:', error);
-}
+import { MockGitRepository } from './infrastructure/MockGitRepository';
+import { GitGraphWebviewController, GitGraphData } from './presentation/GitGraphWebviewController';
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -17,14 +11,6 @@ export function activate(context: vscode.ExtensionContext) {
 	// Use the console to output diagnostic information (console.log) and errors (console.error)
 	// This line of code will only be executed once when your extension is activated
 	console.log('Congratulations, your extension "y" is now active!');
-
-	// The command has been defined in the package.json file
-	// Now provide the implementation of the command with registerCommand
-	// The commandId parameter must match the command field in package.json
-	const disposable = vscode.commands.registerCommand('y.helloWorld', () => {
-		vscode.window.showInformationMessage('Hello World from Git Graph!');
-	});
-	context.subscriptions.push(disposable);
 
 	// Create webview view provider for the panel
 	const provider = new GitGraphViewProvider(context.extensionUri);
@@ -38,22 +24,6 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 	context.subscriptions.push(graphDisposable);
 }
-
-type CommitDTO = {
-	hash: string;
-	message: string;
-	author?: string;
-	parents: string[];
-	refs: string[];
-	branchHint?: string;
-};
-
-type BranchDTO = {
-	name: string;
-	type: 'local' | 'remote';
-	current: boolean;
-	commit: string;
-};
 
 class GitGraphViewProvider implements vscode.WebviewViewProvider {
 	constructor(private readonly _extensionUri: vscode.Uri) { }
@@ -77,169 +47,11 @@ class GitGraphViewProvider implements vscode.WebviewViewProvider {
 	}
 }
 
-async function getGitData(): Promise<{ commits: CommitDTO[], branches: BranchDTO[] }> {
-	// Complex mock data with multiple branches and realistic merge patterns
-	const commits: CommitDTO[] = [
-		{
-			hash: 'a1b2c3d4e5f6g7h8',
-			message: 'Merge pull request #89 from hotfix/critical-security-fix',
-			author: 'GitHub',
-			parents: ['b2c3d4e5f6g7h8i9', 'z9y8x7w6v5u4t3s2'],
-			refs: ['main', 'origin/main', 'HEAD'],
-			branchHint: 'main'
-		},
-		{
-			hash: 'b2c3d4e5f6g7h8i9',
-			message: 'Merge branch \'develop\' into main',
-			author: 'Release Bot',
-			parents: ['c3d4e5f6g7h8i9j0', 'p0o9n8m7l6k5j4i3'],
-			refs: [],
-			branchHint: 'main'
-		},
-		{
-			hash: 'z9y8x7w6v5u4t3s2',
-			message: 'fix: patch critical security vulnerability in auth',
-			author: 'Security Team',
-			parents: ['c3d4e5f6g7h8i9j0'],
-			refs: ['hotfix/critical-security-fix'],
-			branchHint: 'hotfix/critical-security-fix'
-		},
-		{
-			hash: 'c3d4e5f6g7h8i9j0',
-			message: 'feat: add user dashboard with analytics',
-			author: 'John Doe',
-			parents: ['d4e5f6g7h8i9j0k1'],
-			refs: [],
-			branchHint: 'main'
-		},
-		{
-			hash: 'p0o9n8m7l6k5j4i3',
-			message: 'Merge feature/notification-system into develop',
-			author: 'Lead Developer',
-			parents: ['q1w2e3r4t5y6u7i8', 'l2m3n4o5p6q7r8s9'],
-			refs: ['develop', 'origin/develop'],
-			branchHint: 'develop'
-		},
-		{
-			hash: 'd4e5f6g7h8i9j0k1',
-			message: 'refactor: improve database connection pooling',
-			author: 'Alice Johnson',
-			parents: ['e5f6g7h8i9j0k1l2'],
-			refs: [],
-			branchHint: 'main'
-		},
-		{
-			hash: 'q1w2e3r4t5y6u7i8',
-			message: 'Merge feature/user-profiles into develop',
-			author: 'Diana Prince',
-			parents: ['r1s2t3u4v5w6x7y8', 'g7h8i9j0k1l2m3n4'],
-			refs: [],
-			branchHint: 'develop'
-		},
-		{
-			hash: 'l2m3n4o5p6q7r8s9',
-			message: 'feat: add real-time push notifications',
-			author: 'Mike Chen',
-			parents: ['m3n4o5p6q7r8s9t0'],
-			refs: ['feature/notification-system'],
-			branchHint: 'feature/notification-system'
-		},
-		{
-			hash: 'e5f6g7h8i9j0k1l2',
-			message: 'docs: update API documentation for v2.0',
-			author: 'Technical Writer',
-			parents: ['f6g7h8i9j0k1l2m3'],
-			refs: [],
-			branchHint: 'main'
-		},
-		{
-			hash: 'g7h8i9j0k1l2m3n4',
-			message: 'feat: implement user profile avatar upload',
-			author: 'Diana Prince',
-			parents: ['h8i9j0k1l2m3n4o5'],
-			refs: ['feature/user-profiles'],
-			branchHint: 'feature/user-profiles'
-		},
-		{
-			hash: 'f6g7h8i9j0k1l2m3',
-			message: 'test: add comprehensive integration tests',
-			author: 'Charlie Brown',
-			parents: ['h8i9j0k1l2m3n4o5'],
-			refs: [],
-			branchHint: 'main'
-		},
-		{
-			hash: 'm3n4o5p6q7r8s9t0',
-			message: 'feat: add notification preferences UI',
-			author: 'Sarah Wilson',
-			parents: ['n4o5p6q7r8s9t0u1'],
-			refs: [],
-			branchHint: 'feature/notification-system'
-		},
-		{
-			hash: 'h8i9j0k1l2m3n4o5',
-			message: 'feat: add basic user profile management',
-			author: 'Diana Prince',
-			parents: ['i9j0k1l2m3n4o5p6'],
-			refs: [],
-			branchHint: 'feature/user-profiles'
-		},
-		{
-			hash: 'n4o5p6q7r8s9t0u1',
-			message: 'feat: implement WebSocket notification service',
-			author: 'Mike Chen',
-			parents: ['i9j0k1l2m3n4o5p6'],
-			refs: [],
-			branchHint: 'feature/notification-system'
-		},
-		{
-			hash: 'r1s2t3u4v5w6x7y8',
-			message: 'feat: improve error handling in API layer',
-			author: 'Bob Smith',
-			parents: ['i9j0k1l2m3n4o5p6'],
-			refs: [],
-			branchHint: 'develop'
-		},
-		{
-			hash: 'i9j0k1l2m3n4o5p6',
-			message: 'chore: update dependencies to latest versions',
-			author: 'Dependabot',
-			parents: ['j0k1l2m3n4o5p6q7'],
-			refs: [],
-			branchHint: 'main'
-		},
-		{
-			hash: 'j0k1l2m3n4o5p6q7',
-			message: 'Initial commit with project structure',
-			author: 'Project Lead',
-			parents: [],
-			refs: [],
-			branchHint: 'main'
-		}
-	];
-
-	const branches: BranchDTO[] = [
-		// Local branches
-		{ name: 'main', type: 'local', current: true, commit: 'a1b2c3d4e5f6g7h8' },
-		{ name: 'develop', type: 'local', current: false, commit: 'p0o9n8m7l6k5j4i3' },
-		{ name: 'feature/user-profiles', type: 'local', current: false, commit: 'g7h8i9j0k1l2m3n4' },
-		{ name: 'feature/notification-system', type: 'local', current: false, commit: 'l2m3n4o5p6q7r8s9' },
-		{ name: 'hotfix/critical-security-fix', type: 'local', current: false, commit: 'z9y8x7w6v5u4t3s2' },
-		{ name: 'feature/api-v2', type: 'local', current: false, commit: 'e5f6g7h8i9j0k1l2' },
-		{ name: 'bugfix/authentication-timeout', type: 'local', current: false, commit: 'd4e5f6g7h8i9j0k1' },
-		
-		// Remote branches  
-		{ name: 'origin/main', type: 'remote', current: false, commit: 'b2c3d4e5f6g7h8i9' },
-		{ name: 'origin/develop', type: 'remote', current: false, commit: 'q1w2e3r4t5y6u7i8' },
-		{ name: 'origin/feature/user-profiles', type: 'remote', current: false, commit: 'h8i9j0k1l2m3n4o5' },
-		{ name: 'origin/feature/notification-system', type: 'remote', current: false, commit: 'm3n4o5p6q7r8s9t0' },
-		{ name: 'origin/hotfix/critical-security-fix', type: 'remote', current: false, commit: 'z9y8x7w6v5u4t3s2' },
-		{ name: 'upstream/main', type: 'remote', current: false, commit: 'c3d4e5f6g7h8i9j0' },
-		{ name: 'upstream/develop', type: 'remote', current: false, commit: 'p0o9n8m7l6k5j4i3' },
-		{ name: 'fork/feature/experimental', type: 'remote', current: false, commit: 'f6g7h8i9j0k1l2m3' }
-	];
-
-	return { commits, branches };
+async function getGitData(): Promise<GitGraphData> {
+	// Use the new modular architecture
+	const mockRepository = new MockGitRepository();
+	const controller = new GitGraphWebviewController(mockRepository);
+	return controller.getInitialData();
 }
 
 function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri): string {
