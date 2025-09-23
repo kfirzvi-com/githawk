@@ -34,9 +34,21 @@
       </svg>`;
     }
     
-    const width = Math.max(150, (graphRow.commitX || 15) + 50);
-    const height = 35;
-    const scaledCommitX = Math.min(graphRow.commitX || 15, width - 20);
+    console.log('[DEBUG] CommitRow - Raw graphRow data:', graphRow);
+    console.log('[DEBUG] CommitRow - commitX:', graphRow.commitX, 'commitY:', graphRow.commitY);
+    console.log('[DEBUG] CommitRow - branchLines:', graphRow.branchLines?.length);
+    console.log('[DEBUG] CommitRow - connectionLines:', graphRow.connectionLines?.length);
+    
+    // Scale coordinates from GitGraphService (50px grid) to webview (35px height)
+    const TARGET_HEIGHT = 35;
+    const SOURCE_ROW_HEIGHT = 50;
+    const SCALE_Y = TARGET_HEIGHT / SOURCE_ROW_HEIGHT; // 0.7
+    
+    // Calculate scaled dimensions
+    const scaledCommitX = graphRow.commitX || 15;
+    const scaledCommitY = TARGET_HEIGHT / 2; // Center vertically in our 35px height
+    const width = Math.max(150, scaledCommitX + 50);
+    const height = TARGET_HEIGHT;
     
     let svg = `<svg width="${width}" height="${height}" style="display: block;">
       <defs>
@@ -46,24 +58,31 @@
         </marker>
       </defs>`;
     
-    // Draw branch lines
+    // Draw branch lines with scaled coordinates
     graphRow.branchLines.forEach((line: any) => {
-      svg += `<line x1="${line.x}" y1="${line.startY}" x2="${line.x}" y2="${line.endY}" 
+      const scaledStartY = Math.max(0, Math.min(height, line.startY * SCALE_Y));
+      const scaledEndY = Math.max(0, Math.min(height, line.endY * SCALE_Y));
+      console.log('[DEBUG] CommitRow - Branch line:', { x: line.x, startY: line.startY, endY: line.endY, scaledStartY, scaledEndY });
+      svg += `<line x1="${line.x}" y1="${scaledStartY}" x2="${line.x}" y2="${scaledEndY}" 
               stroke="${line.color}" stroke-width="1.5" opacity="${line.opacity}"/>`;
     });
     
-    // Draw connection lines
+    // Draw connection lines with scaled coordinates
     graphRow.connectionLines.forEach((line: any) => {
       const markerEnd = line.hasArrow ? 'marker-end="url(#arrowhead)"' : '';
-      svg += `<line x1="${line.startX}" y1="${line.startY}" x2="${line.endX}" y2="${line.endY}" 
+      const scaledStartY = Math.max(0, Math.min(height, line.startY * SCALE_Y));
+      const scaledEndY = Math.max(0, Math.min(height, line.endY * SCALE_Y));
+      console.log('[DEBUG] CommitRow - Connection line:', { startX: line.startX, endX: line.endX, startY: line.startY, endY: line.endY, scaledStartY, scaledEndY });
+      svg += `<line x1="${line.startX}" y1="${scaledStartY}" x2="${line.endX}" y2="${scaledEndY}" 
               stroke="${line.color}" stroke-width="1.5" ${markerEnd} opacity="0.7"/>`;
     });
     
-    // Draw the commit dot
+    // Draw the commit dot with scaled coordinates
     const radius = commit.parents.length > 1 ? 5 : (commit.parents.length === 0 ? 5 : 4);
     const strokeWidth = commit.parents.length === 0 ? 2 : 1;
     
-    svg += `<circle cx="${graphRow.commitX}" cy="${graphRow.commitY}" r="${radius}" 
+    console.log('[DEBUG] CommitRow - Commit dot:', { x: scaledCommitX, y: scaledCommitY, radius, color: graphRow.commitColor });
+    svg += `<circle cx="${scaledCommitX}" cy="${scaledCommitY}" r="${radius}" 
             fill="${graphRow.commitColor}" stroke="#fff" stroke-width="${strokeWidth}"/>`;
     
     svg += '</svg>';
