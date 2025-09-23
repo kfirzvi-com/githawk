@@ -7,7 +7,8 @@
   // @ts-ignore - acquireVsCodeApi is provided by VS Code webview context
   const vscode = window.acquireVsCodeApi?.() || { postMessage: () => {} };
 
-  type CommitDTO = {
+  // Pure display data types - no business logic
+  type GitCommit = {
     hash: string;
     message: string;
     author?: string;
@@ -16,97 +17,92 @@
     branchHint?: string;
   };
 
-  type BranchDTO = {
+  type GitBranch = {
     name: string;
     type: 'local' | 'remote';
     current: boolean;
     commit: string;
   };
 
-  let commits: CommitDTO[] = [];
-  let branches: BranchDTO[] = [];
+  // Display state - purely reactive
+  let commits: GitCommit[] = [];
+  let branches: GitBranch[] = [];
   let graphRows: any[] = [];
-  let selectedCommit: CommitDTO | null = null;
+  let selectedCommit: GitCommit | null = null;
   let isLoading = true;
 
-  function handleToolbarAction(event: CustomEvent) {
+  // Pure event handlers - no business logic, just message passing
+  const handleToolbarAction = (event: CustomEvent) => {
     vscode.postMessage({ type: event.detail.type });
-  }
+  };
 
-  function handleCommitSelect(commit: CommitDTO) {
+  const handleCommitSelect = (commit: GitCommit) => {
     selectedCommit = commit;
     vscode.postMessage({ type: 'selectCommit', hash: commit.hash });
-  }
+  };
 
-  function handleSwitchBranch(event: CustomEvent) {
+  const handleSwitchBranch = (event: CustomEvent) => {
     vscode.postMessage({ type: 'switchBranch', branch: event.detail.branch });
-  }
+  };
 
-  function handleCheckoutRemote(event: CustomEvent) {
+  const handleCheckoutRemote = (event: CustomEvent) => {
     vscode.postMessage({ type: 'checkoutRemote', branch: event.detail.branch });
-  }
+  };
 
-  // Listen for messages from the extension
-  function handleMessage(event: MessageEvent) {
+  // Pure message handler - only updates display state
+  const handleMessage = (event: MessageEvent) => {
     const message = event.data;
-    console.log('[DEBUG] App.svelte - Received message:', message.type);
     
-    // Handle hot-reload messages separately
-    if (message.type === 'hot-reload') {
-      console.log('[HOT RELOAD] Hot reload message received in App.svelte, ignoring for data processing');
-      return; // Don't process hot-reload messages as data
-    }
+    // Ignore hot-reload messages
+    if (message.type === 'hot-reload') return;
     
-    console.log('[DEBUG] App.svelte - Commits count:', message.commits?.length);
-    console.log('[DEBUG] App.svelte - Graph rows count:', message.graphRows?.length);
-    console.log('[DEBUG] App.svelte - Full message:', message);
-    
+    // Pure data binding - no processing
     switch (message.type) {
       case 'init':
       case 'append':
-        console.log('[DEBUG] App.svelte - Updating data...');
         commits = message.commits || [];
         branches = message.branches || [];
         graphRows = message.graphRows || [];
         isLoading = false;
-        console.log('[DEBUG] App.svelte - Data updated. Commits:', commits.length, 'Branches:', branches.length);
         break;
     }
-  }
+  };
 
-  // Set up message listener
+  // Setup - pure initialization
   if (typeof window !== 'undefined') {
-    console.log('[DEBUG] App.svelte - Setting up message listener');
     window.addEventListener('message', handleMessage);
   }
-
-  // Component lifecycle
-  import { onMount } from 'svelte';
-  
-  onMount(() => {
-    console.log('[DEBUG] App.svelte - Component mounted successfully');
-    console.log('[DEBUG] App.svelte - Initial state - commits:', commits.length, 'branches:', branches.length);
-  });
 </script>
 
-<div class="git-container">
+<!-- Pure Display Layer - Modern Git Graph Interface -->
+<div class="flex flex-col h-screen bg-gray-900 text-gray-100 font-sans">
   {#if isLoading}
-    <div class="loading-container">
-      <div class="loading-message">Loading Git log...</div>
-      <div class="loading-details">Initializing Svelte components...</div>
+    <!-- Loading State -->
+    <div class="flex flex-col items-center justify-center h-full">
+      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400 mb-4"></div>
+      <div class="text-lg font-medium text-gray-200">Loading Git Repository</div>
+      <div class="text-sm text-gray-400 mt-2">Analyzing commit history...</div>
     </div>
   {:else}
-    <Toolbar on:action={handleToolbarAction} />
+    <!-- Toolbar -->
+    <div class="flex-shrink-0 border-b border-gray-700">
+      <Toolbar on:action={handleToolbarAction} />
+    </div>
     
-    <div class="main-content">
-      <BranchList 
-        {branches} 
-        on:switch-branch={handleSwitchBranch}
-        on:checkout-remote={handleCheckoutRemote}
-      />
+    <!-- Main Content Area -->
+    <div class="flex flex-1 overflow-hidden">
+      <!-- Left Panel: Branches -->
+      <div class="w-64 flex-shrink-0 border-r border-gray-700 bg-gray-850">
+        <BranchList 
+          {branches} 
+          on:switch-branch={handleSwitchBranch}
+          on:checkout-remote={handleCheckoutRemote}
+        />
+      </div>
       
-      <div class="commit-area">
-        <div class="commit-list">
+      <!-- Center: Commit Graph & List -->
+      <div class="flex-1 flex flex-col overflow-hidden">
+        <div class="flex-1 overflow-y-auto bg-gray-800">
           {#each commits as commit, index}
             <CommitRow 
               {commit} 
@@ -116,59 +112,14 @@
             />
           {/each}
         </div>
-        
-        <CommitDetails {selectedCommit} />
+      </div>
+      
+      <!-- Right Panel: Commit Details -->
+      <div class="w-80 flex-shrink-0 border-l border-gray-700 bg-gray-850">
+        <CommitDetails selectedCommit={selectedCommit} />
       </div>
     </div>
   {/if}
 </div>
 
-<style>
-  .git-container {
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
-    font-family: var(--vscode-font-family);
-    background: var(--vscode-editor-background);
-    color: var(--vscode-foreground);
-  }
-
-  .main-content {
-    display: flex;
-    flex: 1;
-    overflow: hidden;
-  }
-
-  .commit-area {
-    display: flex;
-    flex: 1;
-    overflow: hidden;
-  }
-
-  .commit-list {
-    flex: 1;
-    overflow-y: auto;
-    background: var(--vscode-editor-background);
-  }
-
-  .loading-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100vh;
-    text-align: center;
-  }
-
-  .loading-message {
-    font-size: 16px;
-    font-weight: 500;
-    margin-bottom: 8px;
-    color: var(--vscode-foreground);
-  }
-
-  .loading-details {
-    font-size: 12px;
-    color: var(--vscode-descriptionForeground);
-  }
-</style>
+<!-- Pure Tailwind CSS - No custom styles needed for layout -->

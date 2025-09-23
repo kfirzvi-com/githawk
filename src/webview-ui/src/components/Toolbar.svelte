@@ -3,69 +3,44 @@
   
   const dispatch = createEventDispatcher();
 
-  function handleRefresh() {
-    dispatch('action', { type: 'refresh' });
-  }
+  // Pure event handlers - just dispatch actions
+  const actions = [
+    { id: 'refresh', label: 'Refresh', icon: '↻', primary: true },
+    { id: 'fetch', label: 'Fetch', icon: '⇣', primary: false },
+    { id: 'pull', label: 'Pull', icon: '⇣', primary: false },
+    { id: 'push', label: 'Push', icon: '⇡', primary: false },
+  ];
 
-  function handleFetch() {
-    dispatch('action', { type: 'fetch' });
-  }
-
-  function handlePull() {
-    dispatch('action', { type: 'pull' });
-  }
-
-  function handlePush() {
-    dispatch('action', { type: 'push' });
-  }
+  const handleAction = (type: string) => {
+    dispatch('action', { type });
+  };
 </script>
 
-<div class="toolbar">
-  <button class="toolbar-button" on:click={handleRefresh}>
-    ↻ Refresh
-  </button>
-  <button class="toolbar-button secondary" on:click={handleFetch}>
-    ⇣ Fetch
-  </button>
-  <button class="toolbar-button secondary" on:click={handlePull}>
-    ⇣ Pull
-  </button>
-  <button class="toolbar-button secondary" on:click={handlePush}>
-    ⇡ Push
-  </button>
+<!-- Modern Toolbar with Tailwind -->
+<div class="flex items-center gap-3 px-4 py-3 bg-gray-800 border-b border-gray-600">
+  <div class="flex items-center gap-2">
+    <div class="w-2 h-2 rounded-full bg-green-400"></div>
+    <span class="text-sm font-medium text-gray-200">Git Repository</span>
+  </div>
+  
+  <div class="flex-1"></div>
+  
+  <div class="flex items-center gap-2">
+    {#each actions as action}
+      <button 
+        class={`
+          flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md
+          transition-all duration-200 hover:scale-105
+          ${action.primary 
+            ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-md' 
+            : 'bg-gray-700 hover:bg-gray-600 text-gray-200 border border-gray-600'
+          }
+        `}
+        on:click={() => handleAction(action.id)}
+      >
+        <span class="text-sm">{action.icon}</span>
+        <span>{action.label}</span>
+      </button>
+    {/each}
+  </div>
 </div>
-
-<style>
-  .toolbar {
-    display: flex;
-    gap: 8px;
-    padding: 8px;
-    background: var(--vscode-editorWidget-background);
-    border-bottom: 1px solid var(--vscode-widget-border);
-    align-items: center;
-  }
-
-  .toolbar-button {
-    padding: 6px 12px;
-    border: 1px solid var(--vscode-button-border);
-    background: var(--vscode-button-background);
-    color: var(--vscode-button-foreground);
-    font-size: 12px;
-    cursor: pointer;
-    border-radius: 3px;
-    white-space: nowrap;
-  }
-
-  .toolbar-button:hover {
-    background: var(--vscode-button-hoverBackground);
-  }
-
-  .toolbar-button.secondary {
-    background: var(--vscode-button-secondaryBackground);
-    color: var(--vscode-button-secondaryForeground);
-  }
-
-  .toolbar-button.secondary:hover {
-    background: var(--vscode-button-secondaryHoverBackground);
-  }
-</style>

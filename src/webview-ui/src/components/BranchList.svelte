@@ -1,9 +1,9 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   
-  export let branches: BranchDTO[] = [];
+  export let branches: GitBranch[] = [];
 
-  type BranchDTO = {
+  type GitBranch = {
     name: string;
     type: 'local' | 'remote';
     current: boolean;
@@ -12,123 +12,83 @@
 
   const dispatch = createEventDispatcher();
 
+  // Pure reactive computations
   $: localBranches = branches.filter(b => b.type === 'local');
   $: remoteBranches = branches.filter(b => b.type === 'remote');
 
-  function handleBranchSelect(branchName: string, isRemote: boolean = false) {
-    if (isRemote) {
-      dispatch('checkout-remote', { branch: branchName });
-    } else {
-      dispatch('switch-branch', { branch: branchName });
-    }
-  }
+  // Pure event handlers
+  const handleBranchSelect = (branchName: string, isRemote: boolean = false) => {
+    const eventType = isRemote ? 'checkout-remote' : 'switch-branch';
+    dispatch(eventType, { branch: branchName });
+  };
 </script>
 
-<div class="branch-list">
-  <div class="branch-section">
-    <div class="branch-section-title">✅ Local (Hot Reload Works!)</div>
-    {#each localBranches as branch}
-      <div 
-        class="branch-item" 
-        class:active={branch.current}
-        on:click={() => handleBranchSelect(branch.name)}
-        role="button"
-        tabindex="0"
-        on:keydown={(e) => e.key === 'Enter' && handleBranchSelect(branch.name)}
-      >
-        <span class="branch-icon">
-          {branch.current ? '★' : '○'}
-        </span>
-        <span class="branch-name">{branch.name}</span>
-      </div>
-    {/each}
+<!-- Modern Branch Panel -->
+<div class="flex flex-col h-full bg-gray-850 overflow-hidden">
+  <!-- Header -->
+  <div class="px-4 py-3 border-b border-gray-700">
+    <h2 class="text-sm font-semibold text-gray-200 uppercase tracking-wide">Branches</h2>
   </div>
-
-  <div class="branch-section">
-    <div class="branch-section-title">Remote</div>
-    {#each remoteBranches as branch}
-      <div 
-        class="branch-item"
-        on:click={() => handleBranchSelect(branch.name, true)}
-        role="button"
-        tabindex="0"
-        on:keydown={(e) => e.key === 'Enter' && handleBranchSelect(branch.name, true)}
-      >
-        <span class="branch-icon">◊</span>
-        <span class="branch-name">{branch.name}</span>
+  
+  <!-- Scrollable Branch List -->
+  <div class="flex-1 overflow-y-auto">
+    <!-- Local Branches -->
+    <div class="px-2 py-3">
+      <div class="flex items-center gap-2 px-2 py-1 mb-2">
+        <div class="w-2 h-2 rounded-full bg-green-400"></div>
+        <span class="text-xs font-medium text-gray-300 uppercase tracking-wider">Local</span>
       </div>
-    {/each}
-  </div>
+      
+      <div class="space-y-1">
+        {#each localBranches as branch}
+          <button 
+            class={`
+              w-full flex items-center gap-3 px-3 py-2 rounded-md text-left
+              transition-all duration-200 group
+              ${branch.current 
+                ? 'bg-blue-600/20 border border-blue-500/30 text-blue-200' 
+                : 'hover:bg-gray-700 text-gray-300'
+              }
+            `}
+            on:click={() => handleBranchSelect(branch.name)}
+          >
+            <span class={`text-sm ${branch.current ? 'text-yellow-400' : 'text-gray-500'}`}>
+              {branch.current ? '★' : '○'}
+            </span>
+            <span class="flex-1 text-sm font-medium truncate">
+              {branch.name}
+            </span>
+            {#if branch.current}
+              <span class="text-xs text-blue-300 bg-blue-600/30 px-2 py-0.5 rounded">
+                current
+              </span>
+            {/if}
+          </button>
+        {/each}
+      </div>
+    </div>
 
-  <div class="resize-handle-right"></div>
+    <!-- Remote Branches -->
+    {#if remoteBranches.length > 0}
+      <div class="px-2 py-3 border-t border-gray-700">
+        <div class="flex items-center gap-2 px-2 py-1 mb-2">
+          <div class="w-2 h-2 rounded-full bg-orange-400"></div>
+          <span class="text-xs font-medium text-gray-300 uppercase tracking-wider">Remote</span>
+        </div>
+        
+        <div class="space-y-1">
+          {#each remoteBranches as branch}
+            <button 
+              class="w-full flex items-center gap-3 px-3 py-2 rounded-md text-left
+                     hover:bg-gray-700 text-gray-300 transition-all duration-200"
+              on:click={() => handleBranchSelect(branch.name, true)}
+            >
+              <span class="text-sm text-orange-400">◊</span>
+              <span class="flex-1 text-sm truncate">{branch.name}</span>
+            </button>
+          {/each}
+        </div>
+      </div>
+    {/if}
+  </div>
 </div>
-
-<style>
-  .branch-list {
-    width: 250px;
-    background: var(--vscode-sideBar-background);
-    border-right: 1px solid var(--vscode-widget-border);
-    overflow-y: auto;
-    position: relative;
-  }
-
-  .branch-section {
-    padding: 8px 0;
-  }
-
-  .branch-section-title {
-    padding: 4px 12px;
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--vscode-descriptionForeground);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-
-  .branch-item {
-    display: flex;
-    align-items: center;
-    padding: 4px 12px;
-    cursor: pointer;
-    font-size: 13px;
-    user-select: none;
-  }
-
-  .branch-item:hover {
-    background: var(--vscode-list-hoverBackground);
-  }
-
-  .branch-item.active {
-    background: var(--vscode-list-activeSelectionBackground);
-    color: var(--vscode-list-activeSelectionForeground);
-    font-weight: 600;
-  }
-
-  .branch-icon {
-    margin-right: 8px;
-    font-size: 12px;
-    width: 12px;
-    text-align: center;
-  }
-
-  .branch-name {
-    flex: 1;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .resize-handle-right {
-    position: absolute;
-    top: 0;
-    right: 0;
-    width: 4px;
-    height: 100%;
-    cursor: ew-resize;
-    background: transparent;
-  }
-
-  .resize-handle-right:hover {
-    background: var(--vscode-focusBorder);
-  }
-</style>
