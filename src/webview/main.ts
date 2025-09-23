@@ -203,8 +203,11 @@ function createSimpleGraph(commit: CommitDTO, index: number, allCommits: CommitD
                     const startY = height - 2;
                     const endY = centerY + 2;
                     
+                    // Use the color of the branch being merged FROM (the source branch)
+                    const sourceBranchColor = branchColors.get(parentBranch) || '#FD7E14';
+                    
                     svg += `<line x1="${parentX}" y1="${startY}" x2="${commitX}" y2="${endY}" 
-                            stroke="#FD7E14" stroke-width="1.5" 
+                            stroke="${sourceBranchColor}" stroke-width="1.5" 
                             marker-end="url(#arrowhead)" opacity="0.7"/>`;
                 }
             }
@@ -218,15 +221,10 @@ function createSimpleGraph(commit: CommitDTO, index: number, allCommits: CommitD
     let commitColor = branchColor;
     
     if (commit.parents.length > 1) {
-        // Merge commit - use color from the primary parent (first parent)
-        const primaryParentHash = commit.parents[0];
-        const primaryParent = allCommits.find(c => c.hash === primaryParentHash);
-        if (primaryParent && primaryParent.branchHint) {
-            const primaryParentColor = branchColors.get(primaryParent.branchHint);
-            if (primaryParentColor) {
-                commitColor = primaryParentColor;
-            }
-        }
+        // Merge commit - use the target branch color (the branch being merged INTO)
+        // This commit's branchHint represents the target branch
+        commitColor = branchColor;
+        
         // Merge commit - larger circle
         svg += `<circle cx="${commitX}" cy="${centerY}" r="5" 
                 fill="${commitColor}" stroke="#fff" stroke-width="1"/>`;
