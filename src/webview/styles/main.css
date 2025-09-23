@@ -1,7 +1,0 @@
-/* Import all component styles */
-@import './base.css';
-@import './toolbar.css';
-@import './branches.css';
-@import './commits.css';
-@import './details.css';
-@import './resize.css';

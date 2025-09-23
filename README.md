@@ -1,20 +1,39 @@
-# y README
+# Git Graph VS Code Extension
 
-This is the README for your extension "y". After writing up a brief description, we recommend including the following sections.
+A VS Code extension for Git management with a graph visualization feature similar to JetBrains IDEs.
 
-## Features
+## Development Setup
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+This extension uses a modern development setup with:
+- **Extension Host**: TypeScript + esbuild bundling
+- **Webview UI**: Svelte 5 + Vite with Hot Module Replacement (HMR)
+- **Styling**: Tailwind CSS with VS Code theme integration
 
-For example if there is an image subfolder under your extension project workspace:
+### Quick Start
 
-\!\[feature X\]\(images/feature-x.png\)
+1. **Install dependencies**:
+   ```bash
+   npm install
+   cd src/webview-ui && npm install
+   ```
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+2. **Start development mode**:
+   ```bash
+   npm run dev
+   ```
+   This runs both:
+   - Extension build watcher (Node.js + esbuild)
+   - Vite dev server with HMR (http://localhost:5173)
 
-## Requirements
+3. **Open VS Code and test**:
+   - Press `F5` to launch Extension Development Host
+   - Use `Cmd+9` to open the Git Graph panel
+   - Make changes to webview components and see instant HMR updates
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+### Development vs Production
+
+- **Development**: Webview loads from Vite dev server (localhost:5173) with HMR
+- **Production**: Webview loads from bundled assets in `dist/webview-ui/`
 
 ## Extension Settings
 

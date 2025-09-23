@@ -4,8 +4,8 @@
   import CommitRow from './components/CommitRow.svelte';
   import CommitDetails from './components/CommitDetails.svelte';
 
-  declare function acquireVsCodeApi(): { postMessage(msg: any): void };
-  const vscode = acquireVsCodeApi();
+  // @ts-ignore - acquireVsCodeApi is provided by VS Code webview context
+  const vscode = window.acquireVsCodeApi?.() || { postMessage: () => {} };
 
   type CommitDTO = {
     hash: string;
@@ -50,6 +50,13 @@
   function handleMessage(event: MessageEvent) {
     const message = event.data;
     console.log('[DEBUG] App.svelte - Received message:', message.type);
+    
+    // Handle hot-reload messages separately
+    if (message.type === 'hot-reload') {
+      console.log('[HOT RELOAD] Hot reload message received in App.svelte, ignoring for data processing');
+      return; // Don't process hot-reload messages as data
+    }
+    
     console.log('[DEBUG] App.svelte - Commits count:', message.commits?.length);
     console.log('[DEBUG] App.svelte - Graph rows count:', message.graphRows?.length);
     console.log('[DEBUG] App.svelte - Full message:', message);
@@ -103,7 +110,6 @@
           {#each commits as commit, index}
             <CommitRow 
               {commit} 
-              {index} 
               graphRow={graphRows[index]}
               isSelected={selectedCommit?.hash === commit.hash}
               on:click={() => handleCommitSelect(commit)}

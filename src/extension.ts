@@ -17,7 +17,7 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider('gitGraphView', provider)
 	);
-
+	
 	// Register the command to open the Git Graph webview
 	const graphDisposable = vscode.commands.registerCommand('y.openGitGraph', () => {
 		vscode.commands.executeCommand('workbench.view.extension.gitGraphPanel');
@@ -26,6 +26,8 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 class GitGraphViewProvider implements vscode.WebviewViewProvider {
+	private _webviewView?: vscode.WebviewView;
+	
 	constructor(private readonly _extensionUri: vscode.Uri) { }
 
 	public resolveWebviewView(
@@ -33,12 +35,16 @@ class GitGraphViewProvider implements vscode.WebviewViewProvider {
 		context: vscode.WebviewViewResolveContext,
 		_token: vscode.CancellationToken,
 	) {
+		this._webviewView = webviewView;
 		webviewView.webview.options = {
 			enableScripts: true,
-			localResourceRoots: [vscode.Uri.joinPath(this._extensionUri, 'dist')]
+			localResourceRoots: [
+				vscode.Uri.joinPath(this._extensionUri, 'dist'),
+				vscode.Uri.joinPath(this._extensionUri, 'dist', 'webview-ui')
+			]
 		};
 
-		webviewView.webview.html = getWebviewContent(webviewView.webview, this._extensionUri);
+		webviewView.webview.html = this.getWebviewContent(webviewView.webview);
 
 		// Get Git data and send to webview
 		getGitData().then(data => {
@@ -50,6 +56,57 @@ class GitGraphViewProvider implements vscode.WebviewViewProvider {
 			});
 		});
 	}
+
+	private getWebviewContent(webview: vscode.Webview): string {
+		const isDevelopment = process.env.NODE_ENV === 'development';
+		
+		if (isDevelopment) {
+			// In development, load from Vite dev server
+			return this.getViteWebviewContent();
+		} else {
+			// In production, load from built assets
+			return this.getProductionWebviewContent(webview);
+		}
+	}
+
+	private getViteWebviewContent(): string {
+		const nonce = getNonce();
+		
+		return `<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-eval' 'unsafe-inline' http://localhost:5173; style-src 'unsafe-inline' http://localhost:5173; connect-src http://localhost:5173; img-src data: https:;">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Git Graph</title>
+</head>
+<body>
+	<div id="app"></div>
+	<script type="module" src="http://localhost:5173/src/main.ts"></script>
+</body>
+</html>`;
+	}
+
+	private getProductionWebviewContent(webview: vscode.Webview): string {
+		const nonce = getNonce();
+		const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'dist', 'webview-ui', 'assets', 'index.js'));
+		const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'dist', 'webview-ui', 'assets', 'index.css'));
+		
+		return `<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; style-src ${webview.cspSource} 'unsafe-inline';">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Git Graph</title>
+	<link rel="stylesheet" href="${styleUri}">
+</head>
+<body>
+	<div id="app"></div>
+	<script nonce="${nonce}" src="${scriptUri}"></script>
+</body>
+</html>`;
+	}
 }
 
 async function getGitData(): Promise<GitGraphData> {
@@ -59,26 +116,7 @@ async function getGitData(): Promise<GitGraphData> {
 	return controller.getInitialData();
 }
 
-function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri): string {
-	const nonce = getNonce();
-	const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'dist', 'webview', 'main.js'));
-		const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'dist', 'webview', 'styles', 'main.css'));
-	
-	return `<!DOCTYPE html>
-<html lang="en">
-<head>
-	<meta charset="UTF-8">
-	<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; style-src ${webview.cspSource} 'unsafe-inline';">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>Git Graph</title>
-		<link rel="stylesheet" href="${styleUri}">
-</head>
-<body>
-	<div id="root">Loading Git log...</div>
-	<script nonce="${nonce}" src="${scriptUri}"></script>
-</body>
-</html>`;
-}
+
 
 function getNonce() {
 	let text = '';
@@ -88,6 +126,8 @@ function getNonce() {
 	}
 	return text;
 }
+
+
 
 // This method is called when your extension is deactivated
 export function deactivate() {}

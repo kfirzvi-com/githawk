@@ -55,10 +55,14 @@
   "scripts": {
     "vscode:prepublish": "npm run package",
     "compile": "npm run check-types && npm run lint && node esbuild.js",
+    "dev": "concurrently \"npm run dev:extension\" \"npm run dev:webview\"",
+    "dev:extension": "NODE_ENV=development node esbuild.js --watch",
+    "dev:webview": "cd src/webview-ui && npm run dev",
     "watch": "npm-run-all -p watch:*",
     "watch:esbuild": "node esbuild.js --watch",
     "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
-    "package": "npm run check-types && npm run lint && node esbuild.js --production",
+    "package": "npm run check-types && npm run lint && npm run build:webview && node esbuild.js --production",
+    "build:webview": "cd src/webview-ui && npm run build",
     "compile-tests": "tsc -p . --outDir out",
     "watch-tests": "tsc -p . -w --outDir out",
     "pretest": "npm run compile-tests && npm run compile && npm run lint",
@@ -67,6 +71,7 @@
     "test": "vscode-test"
   },
   "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^6.2.0",
     "@tailwindcss/postcss": "^4.1.13",
     "@tsconfig/svelte": "^5.0.5",
     "@types/mocha": "^10.0.10",
@@ -77,6 +82,8 @@
     "@vscode/test-cli": "^0.0.11",
     "@vscode/test-electron": "^2.5.2",
     "autoprefixer": "^10.4.21",
+    "chokidar": "^4.0.3",
+    "concurrently": "^9.2.1",
     "esbuild": "^0.25.9",
     "esbuild-postcss": "^0.0.4",
     "esbuild-svelte": "^0.9.3",
@@ -85,7 +92,8 @@
     "postcss": "^8.5.6",
     "svelte": "^5.39.5",
     "tailwindcss": "^4.1.13",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "vite": "^7.1.7"
   },
   "dependencies": {
     "@gitgraph/js": "^1.4.0",

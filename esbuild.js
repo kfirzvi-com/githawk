@@ -1,9 +1,8 @@
 const esbuild = require("esbuild");
-const postcss = require("esbuild-postcss");
-const sveltePlugin = require("esbuild-svelte");
 
 const production = process.argv.includes('--production');
 const watch = process.argv.includes('--watch');
+const isDevelopment = process.env.NODE_ENV === 'development';
 
 /**
  * @type {import('esbuild').Plugin}
@@ -26,7 +25,7 @@ const esbuildProblemMatcherPlugin = {
 };
 
 async function main() {
-	// Build extension
+	// Build extension with NODE_ENV support
 	const extensionCtx = await esbuild.context({
 		entryPoints: [
 			'src/extension.ts'
@@ -40,41 +39,20 @@ async function main() {
 		outfile: 'dist/extension.js',
 		external: ['vscode'],
 		logLevel: 'silent',
+		define: {
+			'process.env.NODE_ENV': JSON.stringify(isDevelopment ? 'development' : 'production')
+		},
 		plugins: [
-			esbuildProblemMatcherPlugin,
-		],
-	});
-
-		// Build webview
-	const webviewCtx = await esbuild.context({
-		entryPoints: ['src/webview/main.ts', 'src/webview/styles/main.css'],
-		bundle: true,
-		format: 'iife',
-		minify: production,
-		sourcemap: !production,
-		platform: 'browser',
-		target: 'es2020',
-		outdir: 'dist/webview',
-		logLevel: 'silent',
-		plugins: [
-			sveltePlugin({
-				compilerOptions: {
-					dev: !production,
-					css: 'injected'
-				}
-			}),
 			esbuildProblemMatcherPlugin,
 		],
 	});
 
 	if (watch) {
+		console.log(`👀 Watching extension for changes... (${isDevelopment ? 'development' : 'production'} mode)`);
 		await extensionCtx.watch();
-		await webviewCtx.watch();
 	} else {
 		await extensionCtx.rebuild();
-		await webviewCtx.rebuild();
 		await extensionCtx.dispose();
-		await webviewCtx.dispose();
 	}
 }
 

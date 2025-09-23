@@ -26,7 +26,7 @@
 
 <div class="branch-list">
   <div class="branch-section">
-    <div class="branch-section-title">Local</div>
+    <div class="branch-section-title">✅ Local (Hot Reload Works!)</div>
     {#each localBranches as branch}
       <div 
         class="branch-item" 

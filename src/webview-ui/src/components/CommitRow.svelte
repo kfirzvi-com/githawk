@@ -1,6 +1,5 @@
 <script lang="ts">
   export let commit: CommitDTO;
-  export let index: number;
   export let graphRow: any;
   export let isSelected: boolean = false;
 
@@ -34,7 +33,7 @@
       </svg>`;
     }
     
-    console.log('[DEBUG] CommitRow - Raw graphRow data:', graphRow);
+    console.log('[HOT RELOAD TEST] CommitRow - Raw graphRow data:', graphRow);
     console.log('[DEBUG] CommitRow - commitX:', graphRow.commitX, 'commitY:', graphRow.commitY);
     console.log('[DEBUG] CommitRow - branchLines:', graphRow.branchLines?.length);
     console.log('[DEBUG] CommitRow - connectionLines:', graphRow.connectionLines?.length);
