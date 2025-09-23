@@ -1,4 +1,5 @@
 const esbuild = require("esbuild");
+const postcss = require("esbuild-postcss");
 
 const production = process.argv.includes('--production');
 const watch = process.argv.includes('--watch');
@@ -43,7 +44,7 @@ async function main() {
 		],
 	});
 
-	// Build webview
+		// Build webview
 	const webviewCtx = await esbuild.context({
 		entryPoints: ['src/webview/main.ts', 'src/webview/styles/main.css'],
 		bundle: true,

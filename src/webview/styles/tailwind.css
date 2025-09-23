@@ -1,0 +1,165 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom component classes for VS Code extension */
+@layer components {
+  .vscode-button {
+    @apply px-3 py-1.5 rounded text-xs cursor-pointer border-none;
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    font-family: var(--vscode-font-family);
+  }
+  
+  .vscode-button:hover {
+    background: var(--vscode-button-hoverBackground);
+  }
+  
+  .vscode-button-secondary {
+    @apply vscode-button;
+    background: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+  }
+  
+  .vscode-button-secondary:hover {
+    background: var(--vscode-button-secondaryHoverBackground);
+  }
+
+  .git-container {
+    @apply flex flex-col h-screen w-full;
+    background: var(--vscode-editor-background);
+    color: var(--vscode-editor-foreground);
+    font-family: var(--vscode-font-family);
+  }
+
+  .toolbar {
+    @apply flex items-center px-3 py-2 gap-2;
+    background: var(--vscode-titleBar-activeBackground);
+    border-bottom: 1px solid var(--vscode-panel-border);
+  }
+
+  .main-content {
+    @apply flex flex-1 overflow-hidden;
+  }
+
+  .branch-list {
+    @apply min-w-[150px] w-[200px] max-w-[400px] overflow-y-auto py-2 relative;
+    background: var(--vscode-sideBar-background);
+    border-right: 1px solid var(--vscode-panel-border);
+  }
+
+  .branch-section {
+    @apply mb-4;
+  }
+
+  .branch-section-title {
+    @apply text-xs font-semibold uppercase px-3 py-1 mb-1;
+    color: var(--vscode-descriptionForeground);
+  }
+
+  .branch-item {
+    @apply flex items-center px-3 py-1 cursor-pointer text-sm;
+  }
+
+  .branch-item:hover {
+    background: var(--vscode-list-hoverBackground);
+  }
+
+  .branch-item.active {
+    background: var(--vscode-list-activeSelectionBackground);
+    color: var(--vscode-list-activeSelectionForeground);
+  }
+
+  .branch-icon {
+    @apply mr-1.5 opacity-80;
+  }
+
+  .branch-name {
+    @apply flex-1;
+  }
+
+  .commit-area {
+    @apply flex flex-1;
+  }
+
+  .commit-list {
+    @apply flex-1 overflow-y-auto;
+    border-right: 1px solid var(--vscode-panel-border);
+  }
+
+  .commit-row {
+    @apply flex items-center px-2 py-1 cursor-pointer text-xs;
+    border-bottom: 1px solid var(--vscode-list-inactiveSelectionBackground);
+  }
+
+  .commit-row:hover {
+    background: var(--vscode-list-hoverBackground);
+  }
+
+  .commit-row.selected {
+    background: var(--vscode-list-activeSelectionBackground);
+  }
+
+  .commit-graph {
+    @apply w-[120px] h-[35px] mr-2;
+  }
+
+  .commit-hash {
+    @apply w-[70px] mr-2;
+    font-family: var(--vscode-editor-font-family);
+    color: var(--vscode-textLink-foreground);
+  }
+
+  .commit-message {
+    @apply flex-1 mr-2 whitespace-nowrap overflow-hidden text-ellipsis;
+  }
+
+  .commit-author {
+    @apply w-20 mr-2;
+    color: var(--vscode-descriptionForeground);
+  }
+
+  .commit-date {
+    @apply w-25 text-xs;
+    color: var(--vscode-descriptionForeground);
+  }
+
+  .commit-details {
+    @apply min-w-[200px] w-[300px] max-w-[500px] p-2 overflow-y-auto relative;
+    background: var(--vscode-sideBar-background);
+  }
+
+  .details-section {
+    @apply mb-4;
+  }
+
+  .details-title {
+    @apply font-bold mb-1 text-sm;
+  }
+
+  .details-content {
+    @apply text-xs leading-relaxed;
+  }
+
+  .branch-ref {
+    @apply px-1.5 py-0.5 rounded text-xs ml-1;
+    background: var(--vscode-badge-background);
+    color: var(--vscode-badge-foreground);
+  }
+
+  .resize-handle {
+    @apply absolute top-0 w-1 h-full cursor-ew-resize bg-transparent z-10;
+  }
+
+  .resize-handle:hover {
+    background: var(--vscode-focusBorder);
+  }
+
+  .resize-handle-right {
+    @apply resize-handle -right-0.5;
+  }
+
+  .resize-handle-left {
+    @apply resize-handle -left-0.5;
+  }
+}

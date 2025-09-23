@@ -57,7 +57,7 @@ async function getGitData(): Promise<GitGraphData> {
 function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri): string {
 	const nonce = getNonce();
 	const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'dist', 'webview', 'main.js'));
-	const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'dist', 'webview', 'styles', 'main.css'));
+		const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'dist', 'webview', 'styles', 'main.css'));
 	
 	return `<!DOCTYPE html>
 <html lang="en">
@@ -66,7 +66,7 @@ function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri): s
 	<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; style-src ${webview.cspSource} 'unsafe-inline';">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>Git Graph</title>
-	<link rel="stylesheet" href="${styleUri}">
+		<link rel="stylesheet" href="${styleUri}">
 </head>
 <body>
 	<div id="root">Loading Git log...</div>
