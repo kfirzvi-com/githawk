@@ -1,5 +1,6 @@
 const esbuild = require("esbuild");
 const postcss = require("esbuild-postcss");
+const sveltePlugin = require("esbuild-svelte");
 
 const production = process.argv.includes('--production');
 const watch = process.argv.includes('--watch');
@@ -56,6 +57,12 @@ async function main() {
 		outdir: 'dist/webview',
 		logLevel: 'silent',
 		plugins: [
+			sveltePlugin({
+				compilerOptions: {
+					dev: !production,
+					css: 'injected'
+				}
+			}),
 			esbuildProblemMatcherPlugin,
 		],
 	});

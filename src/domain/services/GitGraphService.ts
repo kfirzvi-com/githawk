@@ -16,14 +16,19 @@ export class GitGraphService {
 
     generateGraph(repository: GitRepository): CommitRow[] {
         const commits = repository.commits;
+        console.log('[DEBUG] GitGraphService - Input commits:', commits.length);
+        console.log('[DEBUG] GitGraphService - First commit:', commits[0]?.hash);
+        
         const branchAssignments = this.branchLayoutService.assignBranchPositionsAndColors(repository.branches);
+        console.log('[DEBUG] GitGraphService - Branch assignments:', branchAssignments.length);
+        
         const branchPositions = new Map(branchAssignments.map(a => [a.branchName, a.column]));
         const branchColors = new Map(branchAssignments.map(a => [a.branchName, a.color]));
         
         const columnWidth = this.branchLayoutService.calculateColumnWidth();
         const rowHeight = this.branchLayoutService.calculateRowHeight();
         
-        return commits.map((commit, index) => {
+        const result = commits.map((commit, index) => {
             return this.createCommitRow(
                 commit,
                 index,
@@ -35,6 +40,11 @@ export class GitGraphService {
                 rowHeight
             );
         });
+        
+        console.log('[DEBUG] GitGraphService - Generated rows:', result.length);
+        console.log('[DEBUG] GitGraphService - First row:', result[0]);
+        
+        return result;
     }
 
     private createCommitRow(
@@ -261,6 +271,34 @@ export class GitGraphService {
             }
         });
         
-        return start === commits.length ? { start: -1, end: -1 } : { start, end };
+        // If no commits found, return invalid range
+        if (start === commits.length) {
+            return { start: -1, end: -1 };
+        }
+        
+        // For branches that originate from another branch, adjust the visual start
+        // to begin one row after the parent commit
+        if (start < commits.length) {
+            const firstCommit = commits[start];
+            
+            // Check if this branch's first commit has a parent from a different branch
+            if (firstCommit.parentHashes.length > 0) {
+                const parentHash = firstCommit.parentHashes[0]; // Take the first parent
+                const parentIndex = commits.findIndex(c => c.hash === parentHash);
+                
+                if (parentIndex !== -1) {
+                    const parentCommit = commits[parentIndex];
+                    const parentBranch = parentCommit.branchHint || 'main';
+                    
+                    // If the parent is from a different branch, start the visual line
+                    // one row after the parent (which means one row before the parent's index)
+                    if (parentBranch !== branchName && parentIndex > 0) {
+                        start = parentIndex - 1;
+                    }
+                }
+            }
+        }
+        
+        return { start, end };
     }
 }

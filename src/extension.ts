@@ -42,7 +42,12 @@ class GitGraphViewProvider implements vscode.WebviewViewProvider {
 
 		// Get Git data and send to webview
 		getGitData().then(data => {
-			webviewView.webview.postMessage({ type: 'init', commits: data.commits, branches: data.branches });
+			webviewView.webview.postMessage({ 
+				type: 'init', 
+				commits: data.commits, 
+				branches: data.branches,
+				graphRows: data.graphRows 
+			});
 		});
 	}
 }

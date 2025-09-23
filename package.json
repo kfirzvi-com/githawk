@@ -68,6 +68,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.13",
+    "@tsconfig/svelte": "^5.0.5",
     "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
     "@types/vscode": "^1.104.0",
@@ -78,9 +79,11 @@
     "autoprefixer": "^10.4.21",
     "esbuild": "^0.25.9",
     "esbuild-postcss": "^0.0.4",
+    "esbuild-svelte": "^0.9.3",
     "eslint": "^9.34.0",
     "npm-run-all": "^4.1.5",
     "postcss": "^8.5.6",
+    "svelte": "^5.39.5",
     "tailwindcss": "^4.1.13",
     "typescript": "^5.9.2"
   },
