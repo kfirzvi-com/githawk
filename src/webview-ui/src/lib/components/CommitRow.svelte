@@ -20,18 +20,7 @@
 
   // Pure display formatters
   const formatHash = (hash: string) => hash.slice(0, 8);
-  // Format date as relative or absolute
-  const formatDate = () => {
-    if (!commit.date) return '';
-    const date = new Date(commit.date);
-    const now = new Date();
-    const diff = (now.getTime() - date.getTime()) / 1000;
-    if (diff < 60) return `${Math.floor(diff)}s ago`;
-    if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
-    if (diff < 86400) return `${Math.floor(diff/3600)}h ago`;
-    if (diff < 604800) return `${Math.floor(diff/86400)}d ago`;
-    return date.toLocaleDateString();
-  };
+  const formatDate = () => '2 hours ago'; // TODO: Get from commit data
 
   // Simplified graph data processing - keep it simple and clear
   const getGraphData = (commit: GitCommit, graphRow: any) => {

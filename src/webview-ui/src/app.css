@@ -38,6 +38,7 @@ body {
 /* Custom scrollbar for dark theme */
 ::-webkit-scrollbar {
   width: 8px;
+  height: 4px;
 }
 
 ::-webkit-scrollbar-track {
@@ -47,6 +48,20 @@ body {
 ::-webkit-scrollbar-thumb {
   background: #555;
   border-radius: 4px;
+}
+
+/* Horizontal scrollbar for graph */
+.git-graph-container::-webkit-scrollbar {
+  height: 3px;
+}
+
+.git-graph-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.git-graph-container::-webkit-scrollbar-thumb {
+  background: #444;
+  border-radius: 2px;
 }
 
 /* Git graph styles */
@@ -81,36 +96,9 @@ body {
   transform-origin: left center;
 }
 
-/* Enhanced commit dots */
+/* Enhanced commit dots - no hover animations */
 .commit-dot {
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.3);
-  transition: all 0.2s ease;
-  position: relative;
-}
-
-.commit-dot:hover {
-  transform: scale(1.15);
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2), 0 2px 6px rgba(0, 0, 0, 0.4);
-}
-
-.commit-dot::before {
-  content: '';
-  position: absolute;
-  inset: -2px;
-  background: conic-gradient(from 0deg, transparent, currentColor, transparent);
-  border-radius: inherit;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  z-index: -1;
-}
-
-.commit-dot:hover::before {
-  opacity: 0.3;
-  animation: rotate 2s linear infinite;
-}
-
-@keyframes rotate {
-  to { transform: rotate(360deg); }
 }
 
 /* Arrow styles */

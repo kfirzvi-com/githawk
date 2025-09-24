@@ -1,8 +1,8 @@
 <script lang="ts">
-  import Toolbar from './components/Toolbar.svelte';
-  import BranchList from './components/BranchList.svelte';
-  import CommitRow from './components/CommitRow.svelte';
-  import CommitDetails from './components/CommitDetails.svelte';
+  import Toolbar from './lib/components/Toolbar.svelte';
+  import BranchList from './lib/components/BranchList.svelte';
+  import CommitDetails from './lib/components/CommitDetails.svelte';
+  import GitGraph from './lib/components/GitGraph.svelte';
 
   // @ts-ignore - acquireVsCodeApi is provided by VS Code webview context
   const vscode = window.acquireVsCodeApi?.() || { postMessage: () => {} };
@@ -24,12 +24,14 @@
     commit: string;
   };
 
-  // Display state - purely reactive
-  let commits: GitCommit[] = [];
-  let branches: GitBranch[] = [];
-  let graphRows: any[] = [];
+
+  // TEMP: Use mock data for default view
+  import { mockCommits, mockBranches, mockGraphRows } from './mock-git-data';
+  let commits: GitCommit[] = [...mockCommits].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  let branches: GitBranch[] = mockBranches;
+  let graphRows: any[] = mockGraphRows;
   let selectedCommit: GitCommit | null = null;
-  let isLoading = true;
+  let isLoading = false;
 
   // Pure event handlers - no business logic, just message passing
   const handleToolbarAction = (event: CustomEvent) => {
@@ -103,14 +105,16 @@
       <!-- Center: Commit Graph & List -->
       <div class="flex-1 flex flex-col overflow-hidden">
         <div class="flex-1 overflow-y-auto bg-gray-800">
-          {#each commits as commit, index}
-            <CommitRow 
-              {commit} 
-              graphRow={graphRows[index]}
-              isSelected={selectedCommit?.hash === commit.hash}
-              on:click={() => handleCommitSelect(commit)}
-            />
-          {/each}
+          <GitGraph {commits} colW={28} rowH={40}>
+            <svelte:fragment slot="row" let:commit let:row>
+              <div class="flex items-center gap-2">
+                <span class="font-mono text-xs text-blue-300">{commit.hash.slice(0,8)}</span>
+                <span class="truncate text-sm text-gray-100 font-medium">{commit.message}</span>
+                <span class="text-xs text-gray-400">{commit.author}</span>
+                <span class="text-xs text-gray-500">{commit.date ? (new Date(commit.date)).toLocaleDateString() : ''}</span>
+              </div>
+            </svelte:fragment>
+          </GitGraph>
         </div>
       </div>
       
