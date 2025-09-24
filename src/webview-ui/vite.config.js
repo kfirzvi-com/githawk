@@ -1,7 +1,8 @@
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 
 export default defineConfig({
+  resolve: process.env.VITEST ? { conditions: ['browser'] } : undefined,
   plugins: [svelte()],
   build: {
     outDir: '../../../dist/webview-ui',
