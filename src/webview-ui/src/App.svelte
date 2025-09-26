@@ -26,10 +26,9 @@
 
 
   // TEMP: Use mock data for default view
-  import { mockCommits, mockBranches, mockGraphRows } from './mock-git-data';
+  import { mockCommits } from './mock-git-data';
   let commits: GitCommit[] = [...mockCommits].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  let branches: GitBranch[] = mockBranches;
-  let graphRows: any[] = mockGraphRows;
+  let branches = [];
   let selectedCommit: GitCommit | null = null;
   let isLoading = false;
 
@@ -54,9 +53,6 @@
   // Pure message handler - only updates display state
   const handleMessage = (event: MessageEvent) => {
     const message = event.data;
-    
-    // Ignore hot-reload messages
-    if (message.type === 'hot-reload') return;
     
     // Pure data binding - no processing
     switch (message.type) {
