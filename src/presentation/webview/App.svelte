@@ -8,6 +8,7 @@
     import GitGraph from './components/GitGraph.svelte';
     import RefBadge from './components/RefBadge.svelte';
     import type { ComparisonDto } from '../../application/dto/ComparisonDto';
+    import ComparisonSummary from './components/ComparisonSummary.svelte';
     import {
         applySelection,
         emptySelection,
@@ -45,6 +46,14 @@
     const selectedHashes = $derived(new Set(selection.hashes));
     const selectionIsContiguous = $derived(
         isContiguous(rowOrder, selection.hashes)
+    );
+    /** The selected commits themselves, so the summary can list them. */
+    const selectedCommits = $derived(
+        graph
+            ? graph.commits.filter((commit) =>
+                  selectedHashes.has(commit.hash)
+              )
+            : []
     );
 
     $effect(() =>
@@ -90,18 +99,36 @@
             modifiers
         );
         selectedCommit = commit;
-
-        // Only a single selection asks for changes. Doing it per click while
-        // building a multi-selection would run a comparison for every click, and
-        // the results would race with the one the user actually wants.
-        if (selection.hashes.length === 1) {
-            postToHost({ type: 'commit:select', hash: commit.hash });
-        }
+        requestChangesForSelection();
     };
 
-    /** Combine the selection into one changeset. */
-    const reviewSelectionTogether = () => {
-        postToHost({ type: 'compare:commits', hashes: selection.hashes });
+    /**
+     * Selecting commits is the request: one commit shows its own changes, several
+     * show their combined effect. Debounced because building a selection is
+     * several clicks, and each intermediate state would otherwise start work — for
+     * a multi-commit selection that means spawning a worktree per click.
+     */
+    let pendingRequest: ReturnType<typeof setTimeout> | undefined;
+    const requestChangesForSelection = () => {
+        clearTimeout(pendingRequest);
+        const hashes = [...selection.hashes];
+
+        pendingRequest = setTimeout(() => {
+            if (hashes.length === 0) {
+                postToHost({ type: 'compare:clear' });
+                return;
+            }
+            if (hashes.length === 1) {
+                postToHost({ type: 'commit:select', hash: hashes[0] });
+                return;
+            }
+            postToHost({ type: 'compare:commits', hashes });
+        }, 180);
+    };
+
+    const clearSelection = () => {
+        selection = emptySelection;
+        requestChangesForSelection();
     };
 
     /**
@@ -109,7 +136,8 @@
      * together: this asks how two states differ, not what the two commits changed.
      */
     const compareTwoSelected = () => {
-        const [right, left] = selection.hashes; // rows are newest-first
+        // Rows are newest-first, so the second selected is the older side.
+        const [right, left] = [...selection.hashes];
         postToHost({ type: 'compare:twoCommits', left, right });
     };
 </script>
@@ -164,27 +192,21 @@
                 </span>
                 <div class="flex-1"></div>
                 {#if selection.hashes.length === 2}
+                    <!-- The combined effect is shown automatically; this asks the
+                         other question, how the two states differ. -->
                     <button
                         type="button"
                         class="rounded border border-amber-500/50 px-2 py-1 font-medium text-amber-100 hover:bg-amber-500/20"
                         onclick={compareTwoSelected}
                         title="How do these two commits differ?"
                     >
-                        Diff the two
+                        Diff the two instead
                     </button>
                 {/if}
                 <button
                     type="button"
-                    class="rounded bg-amber-500/80 px-2 py-1 font-medium text-gray-900 hover:bg-amber-400"
-                    onclick={reviewSelectionTogether}
-                    title="What do these commits change, together?"
-                >
-                    Review together
-                </button>
-                <button
-                    type="button"
                     class="text-amber-200/80 underline hover:text-amber-100"
-                    onclick={() => (selection = emptySelection)}
+                    onclick={clearSelection}
                 >
                     Clear
                 </button>
@@ -295,36 +317,14 @@
             <div
                 class="w-80 flex-shrink-0 border-l border-gray-700 bg-gray-850"
             >
-                <div class="flex h-full flex-col overflow-hidden">
-                    {#if comparison}
-                        <!-- A pointer to where the files actually are; the tree
-                             owns the list so it is not duplicated here. -->
-                        <div
-                            class="flex-shrink-0 border-b border-gray-700 bg-gray-800/60 px-4 py-2"
-                        >
-                            <p
-                                class="truncate text-xs font-medium text-gray-200"
-                                title={comparison.label}
-                            >
-                                {comparison.label}
-                            </p>
-                            <!-- One expression: a sentence split across
-                                 interpolations becomes separate text nodes,
-                                 which assistive tech and text matchers cannot
-                                 read as one phrase. -->
-                            <p class="mt-0.5 text-[11px] text-gray-400">
-                                {`${comparison.totals.files} ${
-                                    comparison.totals.files === 1
-                                        ? 'file'
-                                        : 'files'
-                                } changed — open the Changes view in the sidebar`}
-                            </p>
-                        </div>
-                    {/if}
-                    <div class="min-h-0 flex-1">
-                        <CommitDetails {selectedCommit} />
-                    </div>
-                </div>
+                {#if comparison}
+                    <ComparisonSummary
+                        {comparison}
+                        commits={selectedCommits}
+                    />
+                {:else}
+                    <CommitDetails {selectedCommit} />
+                {/if}
             </div>
         </div>
     {/if}

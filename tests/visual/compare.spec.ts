@@ -47,59 +47,74 @@ test('clearing a selection dismisses the bar', async ({ page }) => {
 
     await page.getByRole('button', { name: 'Clear' }).click();
     await expect(page.getByText(/commits selected/)).toBeHidden();
+    await expect(page.getByText('Commit Details')).toBeVisible();
 });
 
-test('reviewing a selection together points at the Changes view', async ({
+test('selecting several commits compares them automatically', async ({
     page,
 }) => {
     await rows(page).nth(1).click();
     await rows(page).nth(4).click({ modifiers: [MODIFIER] });
-    await page.getByRole('button', { name: 'Review together' }).click();
 
-    // The file list itself lives in the native sidebar tree, so the webview only
-    // confirms what was compared and says where to look.
+    // No button press: the selection itself is the request.
     await expect(page.getByText('2 selected commits')).toBeVisible();
-    await expect(page.getByText(/7 files changed/)).toBeVisible();
-    await expect(page.getByText(/Changes/).first()).toBeVisible();
+    await expect(page.getByText(/reconstructed/i).first()).toBeVisible();
+    await expect(page.getByText('Included commits (2)')).toBeVisible();
 });
 
-test('offers a two-commit diff only when exactly two are selected', async ({
+test('offers the two-commit diff only when exactly two are selected', async ({
     page,
 }) => {
     await rows(page).nth(1).click();
     await rows(page).nth(4).click({ modifiers: [MODIFIER] });
-    // Two selected: diffing them against each other is meaningful.
-    await expect(page.getByRole('button', { name: 'Diff the two' })).toBeVisible();
+    await expect(
+        page.getByRole('button', { name: 'Diff the two instead' })
+    ).toBeVisible();
 
     await rows(page).nth(7).click({ modifiers: [MODIFIER] });
     // Three selected: there is no "the two" any more.
-    await expect(page.getByRole('button', { name: 'Diff the two' })).toBeHidden();
-    await expect(page.getByRole('button', { name: 'Review together' })).toBeVisible();
+    await expect(
+        page.getByRole('button', { name: 'Diff the two instead' })
+    ).toBeHidden();
 });
 
-test('a two-commit diff reports the direct method', async ({ page }) => {
+test('the two-commit diff reports the direct method', async ({ page }) => {
     await rows(page).nth(1).click();
     await rows(page).nth(4).click({ modifiers: [MODIFIER] });
-    await page.getByRole('button', { name: 'Diff the two' }).click();
+    await page.getByRole('button', { name: 'Diff the two instead' }).click();
 
-    // An arrow between two revisions, not a merge-base range.
-    await expect(page.getByText(/→/).first()).toBeVisible();
+    await expect(page.getByText('Direct comparison').first()).toBeVisible();
 });
 
-test('clicking a single commit asks for its own changes', async ({ page }) => {
-    const requests: string[] = [];
+test('a message carrying selection state survives structured cloning', async ({
+    page,
+}) => {
+    // The regression: selection.hashes is a Svelte $state proxy, and the real
+    // postMessage structured-clones its payload, which throws on a Proxy. The
+    // harness now clones too, so a failure here would surface as a page error.
+    const failures: string[] = [];
+    page.on('pageerror', (error) => failures.push(error.message));
     page.on('console', (message) => {
-        if (message.text().includes('webview → host')) {
-            requests.push(message.text());
+        if (message.type() === 'error') {
+            failures.push(message.text());
         }
     });
 
-    await rows(page).nth(2).click();
+    await rows(page).nth(1).click();
+    await rows(page).nth(4).click({ modifiers: [MODIFIER] });
+    await rows(page).nth(7).click({ modifiers: [MODIFIER] });
+    await expect(page.getByText('Included commits (3)')).toBeVisible();
 
-    // Selecting a commit is what fills the Changes tree.
-    await expect
-        .poll(() => requests.some((line) => line.includes('commit:select')))
-        .toBe(true);
+    expect(failures).toEqual([]);
+});
+
+test('clearing the selection returns to commit details', async ({ page }) => {
+    await rows(page).nth(1).click();
+    await rows(page).nth(4).click({ modifiers: [MODIFIER] });
+    await expect(page.getByText('Included commits (2)')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Clear' }).click();
+    await expect(page.getByText('Commit Details')).toBeVisible();
 });
 
 test('looks right — multi-selection', async ({ page }) => {
@@ -107,8 +122,7 @@ test('looks right — multi-selection', async ({ page }) => {
     await rows(page).nth(1).click();
     await rows(page).nth(4).click({ modifiers: [MODIFIER] });
     await rows(page).nth(7).click({ modifiers: [MODIFIER] });
-    await page.getByRole('button', { name: 'Review together' }).click();
-    await expect(page.getByText(/7 files changed/)).toBeVisible();
+    await expect(page.getByText('Included commits (3)')).toBeVisible();
 
     await expect(page).toHaveScreenshot('multi-selection.png', {
         fullPage: true,

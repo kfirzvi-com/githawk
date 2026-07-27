@@ -31,8 +31,9 @@ Alpha. Reads real repositories and performs branch actions.
   - On the toolbar: fetch (with prune), pull, push.
   - Destructive actions require modal confirmation stating what will be lost, and
     the use case refuses to run one that was not confirmed.
-- Changed files appear as a folder tree in the primary sidebar. Clicking a commit
-  fills it; clicking a file opens VS Code's diff editor.
+- Changed files appear as a folder tree in the primary sidebar. Selecting commits
+  fills it automatically; clicking a file opens VS Code's diff editor. The graph
+  panel shows the same comparison's totals, method, and included commits.
 - Review a whole branch as one changeset, from a branch's context menu, measured
   **from the merge base** so work that landed on the base after you branched is
   not shown as though you had reverted it. Uncommitted work is included.
@@ -62,3 +63,5 @@ Alpha. Reads real repositories and performs branch actions.
 - Multi-root workspaces show the first folder's repository only.
 - A merge or rebase that conflicts leaves the repository mid-operation; GitHawk
   reports git's message but offers no conflict resolution or abort.
+- A reconstructed comparison's combined commit is unreferenced, so `git gc` can
+  eventually prune it and stale diffs may fail to open.

@@ -66,9 +66,10 @@ theming, and confirmation dialogs are the ones you already know.
 - **"Compare … with …"** on a branch or commit — any two revisions, directly.
   Neither side has to involve where you currently are, so you can sit on `main`
   and compare two other branches.
-- **Cmd/Ctrl-click** commits to select several, **Shift-click** for a run. Two
-  selected offers both *Diff the two* (how they differ) and *Review together*
-  (what they change combined); more than two offers only the latter.
+- **Cmd/Ctrl-click** commits to select several, **Shift-click** for a run. The
+  combined changeset appears automatically — selecting is the request, there is no
+  button to press. With exactly two selected, *Diff the two instead* answers the
+  other question: how those two states differ.
 
 Whichever route you take, the tree states how the comparison was made, because a
 merge-base diff, a direct diff, and a reconstruction answer different questions.
@@ -125,6 +126,7 @@ npx vite-node scripts/laneStats.ts   # measure lane count and gutter width
 
 ```bash
 npm test                    # Vitest — domain + application
+npm run test:integration    # a real VS Code driving the real extension host
 npm run test:visual         # Playwright — renders, interactions, screenshots
 npm run shots               # refresh the screenshots only
 npm run check               # tsc (host + webview) + svelte-check + eslint

@@ -11,6 +11,7 @@ import {
     OPEN_DIFF_COMMAND,
 } from './presentation/host/ChangedFilesTree';
 import { ComparisonController } from './presentation/host/ComparisonController';
+import { initialiseLog, log } from './presentation/host/log';
 import {
     GITHAWK_VIEW_ID,
     GitGraphViewProvider,
@@ -33,6 +34,9 @@ export class NoWorkspaceFolderError extends Error {
  * Composition root: the only place that picks concrete adapters.
  */
 export function activate(context: vscode.ExtensionContext): void {
+    context.subscriptions.push(initialiseLog());
+    log.info('GitHawk activated');
+
     const comparisons = new ComparisonController(
         createGitComparer,
         createGitRepository,
@@ -91,6 +95,26 @@ export function activate(context: vscode.ExtensionContext): void {
         vscode.commands.registerCommand('gitHawk.clearChanges', () =>
             changedFiles.clear()
         ),
+        // Scriptable comparison: usable from a keybinding or automation, and the
+        // hook the integration tests drive.
+        vscode.commands.registerCommand(
+            'gitHawk.compareCommits',
+            (hashes: string[]) => provider.compareCommitsForTesting(hashes ?? [])
+        ),
+        vscode.commands.registerCommand('gitHawk.showLog', () => log.show()),
+        // Returns the comparison currently in the Changes view. Lets the
+        // integration tests assert on real state instead of scraping logs.
+        vscode.commands.registerCommand('gitHawk.lastComparison', () => {
+            const current = changedFiles.current;
+            return current
+                ? {
+                      label: current.label,
+                      method: current.method,
+                      files: current.files.map((f) => f.path),
+                      skipped: current.skipped,
+                  }
+                : undefined;
+        }),
         // Serves file contents at a revision so vscode.diff can compare two
         // historical versions, not just files on disk.
         vscode.workspace.registerTextDocumentContentProvider(

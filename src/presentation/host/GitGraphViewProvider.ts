@@ -9,6 +9,7 @@ import type { IGitWriter } from '../../domain/repositories/IGitWriter';
 import { CompareRequest, GitActionMenu } from './GitActionMenu';
 import { ComparisonController } from './ComparisonController';
 import { CHANGED_FILES_VIEW_ID, ChangedFilesTree } from './ChangedFilesTree';
+import { log } from './log';
 
 /** Matches the `views` contribution id in package.json. */
 export const GITHAWK_VIEW_ID = 'gitHawkView';
@@ -80,6 +81,8 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
     }
 
     private handleMessage(message: WebviewToHostMessage): void {
+        log.debug(`webview → host: ${message.type}`, JSON.stringify(message));
+
         switch (message.type) {
             case 'graph:refresh':
                 void this.sendGraph();
@@ -188,12 +191,25 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
         );
     }
 
+    /**
+     * Exposed so the comparison path can be driven without the webview — by a
+     * keybinding, by automation, and by the integration tests, which is how the
+     * "nothing happens" bug was finally pinned down.
+     */
+    async compareCommitsForTesting(hashes: string[]): Promise<void> {
+        await this.compareCommits(hashes, 'focus');
+    }
+
     private async runComparison(
         spec: Parameters<ComparisonController['compare']>[0],
         reveal: RevealMode
     ): Promise<void> {
+        log.info(`comparing: ${JSON.stringify(spec)}`);
         try {
             const comparison = await this.comparisons.compare(spec);
+            log.info(
+                `compared "${comparison.label}" (${comparison.method}): ${comparison.files.length} files, ${comparison.skipped.length} skipped`
+            );
             this.changedFiles.show(comparison);
 
             // The webview needs telling too: without this the tree fills but the
@@ -204,9 +220,17 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
                 await this.revealChangedFiles();
             }
         } catch (error) {
+            log.error('comparison failed', error);
             this.changedFiles.clear();
             this.post({ type: 'comparison:cleared' });
-            vscode.window.showErrorMessage(describeError(error));
+            vscode.window.showErrorMessage(
+                `GitHawk could not compare: ${describeError(error)}`,
+                'Show log'
+            ).then((choice) => {
+                if (choice === 'Show log') {
+                    log.show();
+                }
+            });
         }
     }
 
