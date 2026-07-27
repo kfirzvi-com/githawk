@@ -1,0 +1,63 @@
+@import 'tailwindcss';
+
+/*
+ * Tailwind v4 theme extensions. Kept minimal on purpose: the dark-only grays
+ * below are inherited from the prototype and are scheduled to be replaced by
+ * VS Code theme tokens.
+ */
+@theme {
+    --color-gray-850: #1a1a1a;
+    --color-gray-900: #0d1117;
+    --font-sans: Inter, system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+/*
+ * VS Code injects --vscode-* variables into the webview's document. They must
+ * NOT be declared here: doing so overrides the user's real theme and pins the
+ * panel to dark. Consumers reference them with a fallback instead, which also
+ * lets the page render standalone in the dev harness.
+ */
+:root {
+    font-family: var(--vscode-font-family, Inter, system-ui, sans-serif);
+    line-height: 1.5;
+    font-weight: 400;
+}
+
+body {
+    margin: 0;
+    min-width: 320px;
+    background-color: var(--vscode-editor-background, #1e1e1e);
+    color: var(--vscode-editor-foreground, #cccccc);
+}
+
+#app {
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    text-align: left;
+}
+
+::-webkit-scrollbar {
+    width: 8px;
+    height: 4px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--vscode-scrollbarSlider-background, #2d2d2d);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--vscode-scrollbarSlider-activeBackground, #555);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--vscode-scrollbarSlider-hoverBackground, #777);
+}
+
+.commit-dot {
+    box-shadow:
+        0 0 0 1px rgb(255 255 255 / 0.1),
+        0 1px 3px rgb(0 0 0 / 0.3);
+}

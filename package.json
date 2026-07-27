@@ -1,33 +1,27 @@
 {
   "name": "y",
   "displayName": "Git Graph",
-  "description": "A VS Code extension for Git management with a graph visualization feature similar to JetBrains IDEs.",
+  "description": "A simple, fast git graph for VS Code. No AI, no telemetry.",
   "version": "0.0.1",
+  "license": "MIT",
   "engines": {
     "vscode": "^1.104.0"
   },
   "categories": [
-    "Other"
+    "SCM Providers"
   ],
-  "activationEvents": [
-    "onCommand:y.helloWorld",
-    "onCommand:y.openGitGraph"
-  ],
+  "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "y.helloWorld",
-        "title": "Hello World"
-      },
-      {
-        "command": "y.openGitGraph",
-        "title": "Open Git Graph"
+        "command": "gitGraph.open",
+        "title": "Git Graph: Open"
       }
     ],
     "keybindings": [
       {
-        "command": "y.openGitGraph",
+        "command": "gitGraph.open",
         "key": "cmd+9",
         "when": "!terminalFocus"
       }
@@ -53,50 +47,43 @@
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run package",
-    "compile": "npm run check-types && npm run lint && node esbuild.js",
-    "dev": "concurrently \"npm run dev:extension\" \"npm run dev:webview\"",
-    "dev:extension": "NODE_ENV=development node esbuild.js --watch",
-    "dev:webview": "cd src/webview-ui && npm run dev",
-    "watch": "npm-run-all -p watch:*",
-    "watch:esbuild": "node esbuild.js --watch",
-    "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
-    "package": "npm run check-types && npm run lint && npm run build:webview && node esbuild.js --production",
-    "build:webview": "cd src/webview-ui && npm run build",
-    "compile-tests": "tsc -p . --outDir out",
-    "watch-tests": "tsc -p . -w --outDir out",
-    "pretest": "npm run compile-tests && npm run compile && npm run lint",
-    "check-types": "tsc --noEmit",
+    "dev": "concurrently -n host,webview -c blue,magenta \"npm:dev:host\" \"npm:dev:webview\"",
+    "dev:host": "node esbuild.js --watch",
+    "dev:webview": "vite",
+    "dev:vscode": "concurrently -n host,webview -c blue,magenta \"npm:dev:host\" \"vite build --watch\"",
+    "build": "npm run build:webview && node esbuild.js --production",
+    "build:webview": "vite build",
+    "check": "npm run check:types && npm run check:svelte && npm run lint",
+    "check:types": "tsc -p tsconfig.host.json && tsc -p tsconfig.webview.json",
+    "check:svelte": "svelte-check --tsconfig tsconfig.webview.json",
     "lint": "eslint src",
-    "test": "vscode-test"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:visual": "playwright test",
+    "test:visual:update": "playwright test --update-snapshots",
+    "shots": "playwright test --grep \"looks right\" --update-snapshots",
+    "package": "npm run check && npm run test && npm run build && vsce package",
+    "vscode:prepublish": "npm run build"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.0",
     "@sveltejs/vite-plugin-svelte": "^6.2.0",
-    "@tailwindcss/postcss": "^4.1.13",
-    "@tsconfig/svelte": "^5.0.5",
-    "@types/mocha": "^10.0.10",
+    "@tailwindcss/vite": "^4.1.13",
     "@types/node": "22.x",
     "@types/vscode": "^1.104.0",
     "@typescript-eslint/eslint-plugin": "^8.42.0",
     "@typescript-eslint/parser": "^8.42.0",
-    "@vscode/test-cli": "^0.0.11",
-    "@vscode/test-electron": "^2.5.2",
-    "autoprefixer": "^10.4.21",
-    "chokidar": "^4.0.3",
+    "@vscode/vsce": "^3.2.0",
     "concurrently": "^9.2.1",
     "esbuild": "^0.25.9",
-    "esbuild-postcss": "^0.0.4",
-    "esbuild-svelte": "^0.9.3",
     "eslint": "^9.34.0",
-    "npm-run-all": "^4.1.5",
-    "postcss": "^8.5.6",
+    "eslint-import-resolver-typescript": "^4.4.5",
+    "eslint-plugin-boundaries": "^5.0.1",
     "svelte": "^5.39.5",
+    "svelte-check": "^4.1.5",
     "tailwindcss": "^4.1.13",
     "typescript": "^5.9.2",
-    "vite": "^7.1.7"
-  },
-  "dependencies": {
-    "@gitgraph/js": "^1.4.0",
-    "@vscode/webview-ui-toolkit": "^1.4.0"
+    "vite": "^7.1.7",
+    "vitest": "^3.2.4"
   }
 }

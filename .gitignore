@@ -1,5 +1,10 @@
-out
-dist
 node_modules
-.vscode-test/
+dist
+out
 *.vsix
+
+# Test + harness output
+artifacts/
+playwright-report/
+test-results/
+.vscode-test/

@@ -1,90 +1,90 @@
-# Git Graph VS Code Extension
+# Git Graph *(working title)*
 
-A VS Code extension for Git management with a graph visualization feature similar to JetBrains IDEs.
+A simple, fast git graph for VS Code.
 
-## Development Setup
+Built because the graph extension everyone used is no longer maintained, and the
+alternatives keep adding AI features to a tool whose whole job is to draw lines
+between commits.
 
-This extension uses a modern development setup with:
-- **Extension Host**: TypeScript + esbuild bundling
-- **Webview UI**: Svelte 5 + Vite with Hot Module Replacement (HMR)
-- **Styling**: Tailwind CSS with VS Code theme integration
+**Explicit non-goals:** no AI, no telemetry, no account, no cloud.
 
-### Quick Start
+> Status: pre-alpha. The graph renders from fixtures; the git adapter is not
+> written yet. Not installable as a useful extension.
 
-1. **Install dependencies**:
-   ```bash
-   npm install
-   cd src/webview-ui && npm install
-   ```
+## Architecture
 
-2. **Start development mode**:
-   ```bash
-   npm run dev
-   ```
-   This runs both:
-   - Extension build watcher (Node.js + esbuild)
-   - Vite dev server with HMR (http://localhost:5173)
+Four tiers, with the dependency rule enforced by `eslint-plugin-boundaries`
+rather than by convention:
 
-3. **Open VS Code and test**:
-   - Press `F5` to launch Extension Development Host
-   - Use `Cmd+9` to open the Git Graph panel
-   - Make changes to webview components and see instant HMR updates
+```
+src/
+  domain/          zero dependencies — entities, layout algorithm
+  application/     use cases + the host↔webview DTO and mappers
+  infrastructure/  adapters behind ports (fixtures now, git CLI next)
+  presentation/    host/ (VS Code plumbing) and webview/ (Svelte 5)
+```
 
-### Development vs Production
+`domain` and `application` are platform-free and are bundled into **both** the
+extension host and the webview. That is what lets the layout algorithm run
+client-side without existing twice, and lets it be tested with no VS Code and no
+browser.
 
-- **Development**: Webview loads from Vite dev server (localhost:5173) with HMR
-- **Production**: Webview loads from bundled assets in `dist/webview-ui/`
+Two rules worth knowing:
 
-## Extension Settings
+- **`vscode` may only be imported by `presentation/host` and `extension.ts`.**
+  Everything else stays runnable in Node and in a browser. Lint fails otherwise.
+- **Rows and lanes are domain concepts; pixels are not.** The layout emits
+  `{row, lane}` only. Coordinates live in
+  `presentation/webview/viewmodels/graphGeometry.ts`.
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
+## Development
 
-For example:
+```bash
+npm install
+```
 
-This extension contributes the following settings:
+### The fast loop — standalone webview harness
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+```bash
+npm run dev          # esbuild watch + Vite dev server on :5173
+```
 
-## Known Issues
+Open <http://localhost:5173>. The webview runs as an ordinary web page: when
+`acquireVsCodeApi` is absent, `devFixtureHost.ts` stands in for the extension
+host and posts the same DTO the real host sends. Pick a fixture with
+`?topology=linear`, `?topology=single-merge`, or `?topology=nested-branches`.
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
+This is where nearly all UI work happens — full HMR, no VS Code restart, and
+Playwright can drive it like any web app.
 
-## Release Notes
+### The real thing
 
-Users appreciate release notes as you update your extension.
+```bash
+npm run dev:vscode   # esbuild watch + vite build --watch into dist/
+```
 
-### 1.0.0
+Then press **F5**. The panel opens with `Cmd+9`.
 
-Initial release of ...
+### Checks
 
-### 1.0.1
+```bash
+npm test                    # Vitest — domain + application
+npm run test:visual         # Playwright — renders, interactions, screenshots
+npm run shots               # refresh the screenshots only
+npm run check               # tsc (host + webview) + svelte-check + eslint
+```
 
-Fixed issue #.
+Visual baselines live in `tests/visual/graph.spec.ts-snapshots/` and are
+committed. A layout change shows up as both a failing assertion and a diffable
+picture.
 
-### 1.1.0
+### Fixtures
 
-Added features X, Y, and Z.
+`src/infrastructure/fixtures/topologies.ts` holds named repository shapes, each
+recording what it is meant to stress. Adding a hard graph case means adding one
+entry there — it then flows into the harness, the unit tests, and the visual
+snapshots at once.
 
----
+## Licence
 
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+MIT — see [LICENSE](LICENSE).

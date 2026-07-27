@@ -1,19 +1,42 @@
+export interface CommitProps {
+    hash: string;
+    message: string;
+    author: string;
+    parentHashes: string[];
+    refs: string[];
+    timestamp: Date;
+    /**
+     * Which branch this commit was observed on, when the ref list alone is
+     * ambiguous. Fixture-only for now; real git derives this from refs and
+     * topology, so this is a candidate for removal once GitCliRepository lands.
+     */
+    branchHint?: string;
+}
+
 export class Commit {
-    constructor(
-        public readonly hash: string,
-        public readonly message: string,
-        public readonly author: string,
-        public readonly parentHashes: string[],
-        public readonly refs: string[],
-        public readonly branchHint?: string,
-        public readonly timestamp?: Date
-    ) {
-        if (!hash || hash.trim().length === 0) {
+    readonly hash: string;
+    readonly message: string;
+    readonly author: string;
+    readonly parentHashes: string[];
+    readonly refs: string[];
+    readonly timestamp: Date;
+    readonly branchHint?: string;
+
+    constructor(props: CommitProps) {
+        if (!props.hash || props.hash.trim().length === 0) {
             throw new Error('Commit hash cannot be empty');
         }
-        if (!message || message.trim().length === 0) {
-            throw new Error('Commit message cannot be empty');
-        }
+
+        // An empty message is intentionally allowed: git permits it via
+        // `git commit --allow-empty-message`, and rejecting it here would make
+        // the graph unrenderable for any repository that contains one.
+        this.hash = props.hash;
+        this.message = props.message;
+        this.author = props.author;
+        this.parentHashes = [...props.parentHashes];
+        this.refs = [...props.refs];
+        this.timestamp = props.timestamp;
+        this.branchHint = props.branchHint;
     }
 
     get shortHash(): string {
@@ -24,7 +47,7 @@ export class Commit {
         return this.parentHashes.length > 1;
     }
 
-    get isInitialCommit(): boolean {
+    get isRootCommit(): boolean {
         return this.parentHashes.length === 0;
     }
 

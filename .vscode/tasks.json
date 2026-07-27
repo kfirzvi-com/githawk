@@ -1,64 +1,39 @@
-// See https://go.microsoft.com/fwlink/?LinkId=733558
-// for the documentation about the tasks.json format
 {
 	"version": "2.0.0",
 	"tasks": [
 		{
-            "label": "watch",
-            "dependsOn": [
-                "npm: watch:tsc",
-                "npm: watch:esbuild"
-            ],
-            "presentation": {
-                "reveal": "never"
-            },
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            }
-        },
-        {
-            "type": "npm",
-            "script": "watch:esbuild",
-            "group": "build",
-            "problemMatcher": "$esbuild-watch",
-            "isBackground": true,
-            "label": "npm: watch:esbuild",
-            "presentation": {
-                "group": "watch",
-                "reveal": "never"
-            }
-        },
-		{
-            "type": "npm",
-            "script": "watch:tsc",
-            "group": "build",
-            "problemMatcher": "$tsc-watch",
-            "isBackground": true,
-            "label": "npm: watch:tsc",
-            "presentation": {
-                "group": "watch",
-                "reveal": "never"
-            }
-        },
-		{
+			"label": "build:dev",
+			"detail": "Watch the extension host and rebuild the webview into dist/ for F5 debugging.",
 			"type": "npm",
-			"script": "watch-tests",
-			"problemMatcher": "$tsc-watch",
+			"script": "dev:vscode",
 			"isBackground": true,
+			"problemMatcher": "$esbuild-watch",
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
 			"presentation": {
 				"reveal": "never",
-				"group": "watchers"
-			},
-			"group": "build"
+				"group": "watch"
+			}
 		},
 		{
-			"label": "tasks: watch-tests",
-			"dependsOn": [
-				"npm: watch",
-				"npm: watch-tests"
-			],
-			"problemMatcher": []
+			"label": "dev:harness",
+			"detail": "Vite dev server for the standalone webview harness (localhost:5173).",
+			"type": "npm",
+			"script": "dev:webview",
+			"isBackground": true,
+			"problemMatcher": [],
+			"presentation": {
+				"group": "watch"
+			}
+		},
+		{
+			"label": "check",
+			"type": "npm",
+			"script": "check",
+			"problemMatcher": "$tsc",
+			"group": "test"
 		}
 	]
 }
