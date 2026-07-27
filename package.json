@@ -1,18 +1,18 @@
 {
-  "name": "gitlibre",
-  "displayName": "GitLibre",
+  "name": "githawk",
+  "displayName": "GitHawk",
   "description": "A simple, fast git graph for VS Code. MIT licensed. No AI, no telemetry.",
   "version": "0.0.1",
   "license": "MIT",
   "publisher": "kfirzvi",
   "author": "Kfir Zvi",
-  "homepage": "https://gitlibre.dev",
+  "homepage": "https://githawk.dev",
   "repository": {
     "type": "git",
-    "url": "https://github.com/kfirzvi-com/gitlibre.git"
+    "url": "https://github.com/kfirzvi-com/githawk.git"
   },
   "bugs": {
-    "url": "https://github.com/kfirzvi-com/gitlibre/issues"
+    "url": "https://github.com/kfirzvi-com/githawk/issues"
   },
   "keywords": [
     "git",
@@ -32,13 +32,13 @@
   "contributes": {
     "commands": [
       {
-        "command": "gitLibre.open",
-        "title": "GitLibre: Open Git Graph"
+        "command": "gitHawk.open",
+        "title": "GitHawk: Open Git Graph"
       }
     ],
     "keybindings": [
       {
-        "command": "gitLibre.open",
+        "command": "gitHawk.open",
         "key": "cmd+9",
         "when": "!terminalFocus"
       }
@@ -46,18 +46,18 @@
     "viewsContainers": {
       "panel": [
         {
-          "id": "gitLibrePanel",
-          "title": "GitLibre",
+          "id": "gitHawkPanel",
+          "title": "GitHawk",
           "icon": "$(git-branch)"
         }
       ]
     },
     "views": {
-      "gitLibrePanel": [
+      "gitHawkPanel": [
         {
-          "id": "gitLibreView",
+          "id": "gitHawkView",
           "name": "Git Graph",
-          "contextualTitle": "GitLibre",
+          "contextualTitle": "GitHawk",
           "type": "webview",
           "icon": "$(git-branch)"
         }

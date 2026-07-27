@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to GitLibre are documented here, following
+All notable changes to GitHawk are documented here, following
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]

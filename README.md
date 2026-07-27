@@ -1,4 +1,4 @@
-# GitLibre
+# GitHawk
 
 A simple, fast git graph for VS Code. MIT licensed.
 
@@ -10,7 +10,7 @@ installs still depending on it. Its licence looks like MIT but removes the right
 to `publish, distribute, sublicense, and/or sell derivative works`, so it is not
 open source and nobody can legally ship a maintained fork.
 
-GitLibre is a clean-room replacement under a real MIT licence. Meanwhile the
+GitHawk is a clean-room replacement under a real MIT licence. Meanwhile the
 maintained alternatives keep bolting AI onto a tool whose entire job is drawing
 lines between commits.
 

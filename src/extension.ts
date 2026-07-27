@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { InMemoryGitRepository } from './infrastructure/fixtures/InMemoryGitRepository';
 import {
-    GITLIBRE_VIEW_ID,
+    GITHAWK_VIEW_ID,
     GitGraphViewProvider,
 } from './presentation/host/GitGraphViewProvider';
 
@@ -14,10 +14,10 @@ export function activate(context: vscode.ExtensionContext): void {
     const provider = new GitGraphViewProvider(context.extensionUri, gitRepository);
 
     context.subscriptions.push(
-        vscode.window.registerWebviewViewProvider(GITLIBRE_VIEW_ID, provider),
-        vscode.commands.registerCommand('gitLibre.open', () =>
+        vscode.window.registerWebviewViewProvider(GITHAWK_VIEW_ID, provider),
+        vscode.commands.registerCommand('gitHawk.open', () =>
             vscode.commands.executeCommand(
-                'workbench.view.extension.gitLibrePanel'
+                'workbench.view.extension.gitHawkPanel'
             )
         )
     );

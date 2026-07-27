@@ -7,7 +7,7 @@ import { LoadGitGraphUseCase } from '../../application/usecases/LoadGitGraphUseC
 import type { IGitRepository } from '../../domain/repositories/IGitRepository';
 
 /** Matches the `views` contribution id in package.json. */
-export const GITLIBRE_VIEW_ID = 'gitLibreView';
+export const GITHAWK_VIEW_ID = 'gitHawkView';
 
 export class GitGraphViewProvider implements vscode.WebviewViewProvider {
     private view?: vscode.WebviewView;
@@ -90,7 +90,7 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
 	<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} data:; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<link rel="stylesheet" href="${styleUri}">
-	<title>GitLibre</title>
+	<title>GitHawk</title>
 </head>
 <body>
 	<div id="app"></div>
