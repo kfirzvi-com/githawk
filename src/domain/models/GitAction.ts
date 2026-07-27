@@ -24,7 +24,21 @@ export type GitAction =
     | { type: 'reset'; hash: string; mode: ResetMode }
     | { type: 'fetch' }
     | { type: 'pull' }
-    | { type: 'push' };
+    | { type: 'push' }
+    /**
+     * Advances a local branch to its upstream without checking it out.
+     * Fast-forward only — git refuses anything else, which is the desired
+     * behaviour rather than a limitation to work around.
+     */
+    | {
+          type: 'updateBranchFromUpstream';
+          branch: string;
+          remote: string;
+          remoteBranch: string;
+      }
+    /** Deletes the branch on the server. Visible to everyone, not just you. */
+    | { type: 'deleteRemoteBranch'; remote: string; branch: string }
+    | { type: 'renameBranch'; from: string; to: string };
 
 export type GitActionType = GitAction['type'];
 
@@ -44,6 +58,8 @@ export function isDestructive(action: GitAction): boolean {
         case 'deleteTag':
             return true;
         case 'rebaseOnto':
+            return true;
+        case 'deleteRemoteBranch':
             return true;
         default:
             return false;
@@ -70,11 +86,28 @@ export function destructiveReason(action: GitAction): string | undefined {
                 : 'deletes the branch';
         case 'deleteTag':
             return 'deletes the tag locally';
+        case 'deleteRemoteBranch':
+            return `deletes ${action.branch} from ${action.remote}, for everyone — not just locally`;
         case 'rebaseOnto':
             return 'rewrites commits on the current branch';
         default:
             return undefined;
     }
+}
+
+/**
+ * Actions that reach the network. Worth distinguishing so the UI can say why an
+ * operation is slow, and so an offline failure reads as a connectivity problem
+ * rather than a git one.
+ */
+export function usesNetwork(action: GitAction): boolean {
+    return (
+        action.type === 'fetch' ||
+        action.type === 'pull' ||
+        action.type === 'push' ||
+        action.type === 'updateBranchFromUpstream' ||
+        action.type === 'deleteRemoteBranch'
+    );
 }
 
 /** Actions that only make sense with a branch checked out. */

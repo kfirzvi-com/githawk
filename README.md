@@ -57,6 +57,18 @@ Right-click a commit, or click a branch, and GitHawk opens a **native VS Code
 QuickPick** rather than a menu drawn inside the webview — so keyboard navigation,
 theming, and confirmation dialogs are the ones you already know.
 
+### Keeping branches current
+
+`main` behind the remote while you are on a feature branch is the common case, and
+it does not need a checkout: click the branch and choose **"Update from
+origin/main"**. That runs `git fetch origin main:main`, which moves the ref and
+leaves your working tree, index, and HEAD alone.
+
+There is deliberately no `--force`: git refuses anything that is not a
+fast-forward, so a diverged branch is reported rather than overwritten. The branch
+list shows ↓ behind, ↑ ahead, or "gone" for each branch, and
+`GitHawk: Update All Branches From Upstream` fast-forwards every eligible one.
+
 ### Seeing what changed
 
 - **Click a commit** — its files appear in the Changes tree. Click a file to open

@@ -68,6 +68,10 @@
       {
         "command": "gitHawk.compareCommits",
         "title": "GitHawk: Compare Commits"
+      },
+      {
+        "command": "gitHawk.updateAllBranches",
+        "title": "GitHawk: Update All Branches From Upstream"
       }
     ],
     "keybindings": [

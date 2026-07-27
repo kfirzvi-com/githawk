@@ -1,4 +1,8 @@
-import { Branch, BranchType } from '../../domain/models/Branch';
+import {
+    Branch,
+    BranchType,
+    UpstreamState,
+} from '../../domain/models/Branch';
 import { Commit } from '../../domain/models/Commit';
 import {
     Ref,
@@ -132,7 +136,8 @@ function parseDecorations(decorations: string): Ref[] {
 }
 
 function parseBranchLine(line: string): Branch | null {
-    const [refName, objectName, headMarker] = line.split(UNIT_SEPARATOR);
+    const [refName, objectName, headMarker, upstreamName, trackInfo] =
+        line.split(UNIT_SEPARATOR);
     if (!refName || !objectName) {
         return null;
     }
@@ -155,5 +160,34 @@ function parseBranchLine(line: string): Branch | null {
     }
 
     const type: BranchType = local ? 'local' : 'remote';
-    return new Branch(shortName, type, objectName, headMarker === '*');
+    return new Branch(
+        shortName,
+        type,
+        objectName,
+        headMarker === '*',
+        parseUpstream(upstreamName, trackInfo)
+    );
+}
+
+/**
+ * `%(upstream:track,nobracket)` produces "ahead 2, behind 3", "ahead 1",
+ * "behind 4", "gone", or nothing at all when the branch is level with its
+ * upstream. Absent output is not the same as no upstream, so the name is what
+ * decides whether tracking exists.
+ */
+function parseUpstream(
+    name: string | undefined,
+    track: string | undefined
+): UpstreamState | undefined {
+    if (!name) {
+        return undefined;
+    }
+
+    const text = track ?? '';
+    return {
+        name,
+        ahead: Number(/ahead (\d+)/.exec(text)?.[1] ?? 0),
+        behind: Number(/behind (\d+)/.exec(text)?.[1] ?? 0),
+        isGone: /\bgone\b/.test(text),
+    };
 }

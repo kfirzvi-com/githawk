@@ -103,11 +103,7 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
                 );
                 break;
             case 'branch:menu':
-                void this.createMenu().showForBranch({
-                    name: message.name,
-                    isRemote: message.isRemote,
-                    isCurrent: message.isCurrent,
-                });
+                void this.showBranchMenu(message.name, message.isRemote);
                 break;
             case 'remote:operation':
                 void this.createMenu().runRemoteOperation(message.operation);
@@ -280,6 +276,65 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
         } catch (error) {
             vscode.window.showErrorMessage(describeError(error));
         }
+    }
+
+    /**
+     * Upstream state is re-read from the repository rather than taken from the
+     * webview: ahead/behind counts go stale the moment anything fetches, and an
+     * offer to fast-forward a branch that has since diverged would fail.
+     */
+    private async showBranchMenu(
+        name: string,
+        isRemote: boolean
+    ): Promise<void> {
+        try {
+            const repository = await this.createRepository().getRepository();
+            const branch = repository.getBranch(
+                name,
+                isRemote ? 'remote' : 'local'
+            );
+
+            await this.createMenu().showForBranch({
+                name,
+                isRemote,
+                isCurrent: branch?.isCurrent ?? false,
+                upstream: branch?.upstream
+                    ? {
+                          ...branch.upstream,
+                          canFastForward: branch.canFastForwardToUpstream,
+                          hasDiverged: branch.hasDiverged,
+                      }
+                    : undefined,
+            });
+        } catch (error) {
+            vscode.window.showErrorMessage(describeError(error));
+        }
+    }
+
+    /** See gitHawk.branchMenuEntries: structure only, nothing shown. */
+    async branchMenuEntriesForTesting(
+        name: string,
+        isRemote: boolean
+    ): Promise<{
+        separators: string[];
+        labels: string[];
+        entries: { label: string; description?: string }[];
+    }> {
+        const repository = await this.createRepository().getRepository();
+        const branch = repository.getBranch(name, isRemote ? 'remote' : 'local');
+
+        return this.createMenu().entriesForBranch({
+            name,
+            isRemote,
+            isCurrent: branch?.isCurrent ?? false,
+            upstream: branch?.upstream
+                ? {
+                      ...branch.upstream,
+                      canFastForward: branch.canFastForwardToUpstream,
+                      hasDiverged: branch.hasDiverged,
+                  }
+                : undefined,
+        });
     }
 
     private createMenu(): GitActionMenu {

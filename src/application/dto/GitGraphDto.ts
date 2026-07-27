@@ -1,4 +1,4 @@
-import { BranchType } from '../../domain/models/Branch';
+import { BranchType, UpstreamState } from '../../domain/models/Branch';
 import { Ref } from '../../domain/models/Ref';
 
 /**
@@ -34,6 +34,7 @@ export interface BranchDto {
     type: BranchType;
     headCommitHash: string;
     isCurrent: boolean;
+    upstream?: UpstreamState;
 }
 
 export interface GitGraphDto {

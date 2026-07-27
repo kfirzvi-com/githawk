@@ -70,3 +70,49 @@ for (const topology of TOPOLOGIES) {
         }
     });
 }
+
+test.describe('upstream indicators', () => {
+    test.beforeEach(async ({ page }) => {
+        await page.goto('/?topology=nested-branches');
+        await page.getByTestId('git-graph').locator('button').first().waitFor();
+    });
+
+    // Scoped to the sidebar: graph rows mention the same branch names.
+    const branches = (page: import('@playwright/test').Page) =>
+        page.getByTestId('branch-list');
+
+    test('shows how far ahead or behind each branch is', async ({ page }) => {
+        // Which branches need updating is the question this list is asked most.
+        await expect(branches(page).getByText('↑2')).toBeVisible();
+        await expect(branches(page).getByText('↓3')).toBeVisible();
+    });
+
+    test('shows both counts for a diverged branch', async ({ page }) => {
+        const diverged = branches(page).getByRole('button', {
+            name: /feature5/,
+        });
+
+        await expect(diverged.getByText('↓4')).toBeVisible();
+        await expect(diverged.getByText('↑1')).toBeVisible();
+    });
+
+    test('marks a branch whose upstream was deleted as gone', async ({ page }) => {
+        await expect(
+            branches(page)
+                .getByRole('button', { name: /feature4/ })
+                .getByText('gone')
+        ).toBeVisible();
+    });
+
+    test('shows nothing for a branch that tracks nothing', async ({ page }) => {
+        // Scoped to the list, /feature1/ is unambiguous; the accessible name
+        // also carries the ○ marker, so an anchored regex would not match.
+        const untracked = branches(page).getByRole('button', {
+            name: /feature1/,
+        });
+
+        await expect(untracked).toBeVisible();
+        await expect(untracked.getByText('↑')).toBeHidden();
+        await expect(untracked.getByText('↓')).toBeHidden();
+    });
+});

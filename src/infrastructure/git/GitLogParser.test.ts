@@ -247,3 +247,72 @@ describe('GitLogParser.parseBranches', () => {
         expect(GitLogParser.parseBranches('')).toEqual([]);
     });
 });
+
+describe('GitLogParser upstream tracking', () => {
+    const refLineWithUpstream = (
+        refName: string,
+        objectName: string,
+        head: string,
+        upstreamName: string,
+        track: string
+    ) =>
+        [refName, objectName, head, upstreamName, track].join(UNIT_SEPARATOR);
+
+    test('parses ahead and behind counts', () => {
+        const [branch] = GitLogParser.parseBranches(
+            refLineWithUpstream(
+                'refs/heads/main',
+                'aaa',
+                '*',
+                'origin/main',
+                'ahead 2, behind 3'
+            )
+        );
+
+        expect(branch.upstream).toEqual({
+            name: 'origin/main',
+            ahead: 2,
+            behind: 3,
+            isGone: false,
+        });
+        expect(branch.hasDiverged).toBe(true);
+    });
+
+    test('reads a branch that is only behind', () => {
+        const [branch] = GitLogParser.parseBranches(
+            refLineWithUpstream('refs/heads/main', 'aaa', '', 'origin/main', 'behind 4')
+        );
+
+        expect(branch.upstream?.behind).toBe(4);
+        expect(branch.upstream?.ahead).toBe(0);
+        expect(branch.canFastForwardToUpstream).toBe(true);
+    });
+
+    test('treats empty track output as level, not as missing tracking', () => {
+        const [branch] = GitLogParser.parseBranches(
+            refLineWithUpstream('refs/heads/main', 'aaa', '', 'origin/main', '')
+        );
+
+        // git prints nothing when a branch is exactly level with its upstream.
+        expect(branch.upstream?.name).toBe('origin/main');
+        expect(branch.upstream?.ahead).toBe(0);
+        expect(branch.upstream?.behind).toBe(0);
+    });
+
+    test('records an upstream that has been deleted', () => {
+        const [branch] = GitLogParser.parseBranches(
+            refLineWithUpstream('refs/heads/old', 'aaa', '', 'origin/old', 'gone')
+        );
+
+        expect(branch.upstream?.isGone).toBe(true);
+        expect(branch.canFastForwardToUpstream).toBe(false);
+    });
+
+    test('leaves upstream undefined for a branch that tracks nothing', () => {
+        const [branch] = GitLogParser.parseBranches(
+            refLineWithUpstream('refs/heads/local-only', 'aaa', '', '', '')
+        );
+
+        expect(branch.upstream).toBeUndefined();
+    });
+});

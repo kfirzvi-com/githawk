@@ -5,6 +5,7 @@ import {
     destructiveReason,
     isDestructive,
     requiresCheckedOutBranch,
+    usesNetwork,
 } from '../../domain/models/GitAction';
 
 describe('argsFor', () => {
@@ -184,5 +185,66 @@ describe('requiresCheckedOutBranch', () => {
         expect(requiresCheckedOutBranch({ type: 'checkoutBranch', name: 'x' })).toBe(
             false
         );
+    });
+});
+
+describe('updating a branch you are not on', () => {
+    test('writes to the local ref with a refspec fetch', () => {
+        expect(
+            argsFor({
+                type: 'updateBranchFromUpstream',
+                branch: 'main',
+                remote: 'origin',
+                remoteBranch: 'main',
+            })
+        ).toEqual(['fetch', 'origin', 'main:main']);
+    });
+
+    test('handles an upstream whose name differs from the local branch', () => {
+        expect(
+            argsFor({
+                type: 'updateBranchFromUpstream',
+                branch: 'release',
+                remote: 'upstream',
+                remoteBranch: 'stable',
+            })
+        ).toEqual(['fetch', 'upstream', 'stable:release']);
+    });
+
+    test('never forces the update', () => {
+        const args = argsFor({
+            type: 'updateBranchFromUpstream',
+            branch: 'main',
+            remote: 'origin',
+            remoteBranch: 'main',
+        });
+
+        // A leading `+` on the refspec, or --force, would let a diverged branch be
+        // overwritten and lose commits. Git must be allowed to refuse.
+        expect(args).not.toContain('--force');
+        expect(args.some((arg) => arg.startsWith('+'))).toBe(false);
+    });
+
+    test('is not destructive, because git will not discard commits', () => {
+        expect(
+            isDestructive({
+                type: 'updateBranchFromUpstream',
+                branch: 'main',
+                remote: 'origin',
+                remoteBranch: 'main',
+            })
+        ).toBe(false);
+    });
+
+    test('is recognised as a network operation', () => {
+        expect(
+            usesNetwork({
+                type: 'updateBranchFromUpstream',
+                branch: 'main',
+                remote: 'origin',
+                remoteBranch: 'main',
+            })
+        ).toBe(true);
+        expect(usesNetwork({ type: 'checkoutBranch', name: 'x' })).toBe(false);
     });
 });

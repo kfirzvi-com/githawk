@@ -11,6 +11,7 @@ import {
     ChangedFilesTree,
     OPEN_DIFF_COMMAND,
 } from './presentation/host/ChangedFilesTree';
+import { PerformGitActionUseCase } from './application/usecases/PerformGitActionUseCase';
 import { ComparisonController } from './presentation/host/ComparisonController';
 import { initialiseLog, log } from './presentation/host/log';
 import {
@@ -105,6 +106,16 @@ export function activate(context: vscode.ExtensionContext): void {
             (hashes: string[]) => provider.compareCommitsForTesting(hashes ?? [])
         ),
         vscode.commands.registerCommand('gitHawk.showLog', () => log.show()),
+        // Returns a branch menu's structure without showing it, so the
+        // integration tests can assert the grouping.
+        vscode.commands.registerCommand(
+            'gitHawk.branchMenuEntries',
+            (name: string, isRemote = false) =>
+                provider.branchMenuEntriesForTesting(name, isRemote)
+        ),
+        vscode.commands.registerCommand('gitHawk.updateAllBranches', () =>
+            updateAllBranches(provider)
+        ),
         // Returns the comparison currently in the Changes view. Lets the
         // integration tests assert on real state instead of scraping logs.
         vscode.commands.registerCommand('gitHawk.lastComparison', () => {
@@ -164,6 +175,83 @@ function firstWorkspaceFolder(): string {
     // Multi-root workspaces show the first folder's repository. A repository
     // picker is separate work.
     return folders[0].uri.fsPath;
+}
+
+/**
+ * Fast-forwards every local branch that is purely behind its upstream, without
+ * checking any of them out.
+ *
+ * Deliberately skips diverged branches: advancing one needs a merge or rebase,
+ * which is a decision rather than a chore, and doing it silently across several
+ * branches is how people lose work.
+ */
+async function updateAllBranches(
+    provider: GitGraphViewProvider
+): Promise<void> {
+    const repository = await createGitRepository().getRepository();
+    const updatable = repository.localBranches.filter(
+        (branch) => branch.canFastForwardToUpstream && !branch.isCurrent
+    );
+    const diverged = repository.localBranches.filter(
+        (branch) => branch.hasDiverged
+    );
+
+    if (updatable.length === 0) {
+        vscode.window.showInformationMessage(
+            diverged.length > 0
+                ? `Nothing to fast-forward. ${diverged.length} branch(es) have diverged and need a merge or rebase.`
+                : 'Every branch is already up to date with its upstream.'
+        );
+        return;
+    }
+
+    const writer = createGitWriter();
+    const performAction = new PerformGitActionUseCase(writer);
+    const failures: string[] = [];
+
+    await vscode.window.withProgress(
+        {
+            location: vscode.ProgressLocation.Notification,
+            title: 'Updating branches from their upstreams…',
+        },
+        async (progress) => {
+            for (const branch of updatable) {
+                progress.report({ message: branch.name });
+                const upstream = branch.upstream!.name;
+                const slash = upstream.indexOf('/');
+                const outcome = await performAction.execute({
+                    type: 'updateBranchFromUpstream',
+                    branch: branch.name,
+                    remote: slash >= 0 ? upstream.slice(0, slash) : 'origin',
+                    remoteBranch:
+                        slash >= 0 ? upstream.slice(slash + 1) : upstream,
+                });
+                if (!outcome.succeeded) {
+                    failures.push(`${branch.name}: ${outcome.message ?? 'failed'}`);
+                }
+            }
+        }
+    );
+
+    provider.refresh();
+
+    const updated = updatable.length - failures.length;
+    if (failures.length === 0) {
+        vscode.window.showInformationMessage(
+            `Fast-forwarded ${updated} branch(es).`
+        );
+        return;
+    }
+
+    log.warn(`some branches could not be updated: ${failures.join('; ')}`);
+    vscode.window.showWarningMessage(
+        `Updated ${updated} of ${updatable.length} branches.`,
+        'Show log'
+    ).then((choice) => {
+        if (choice === 'Show log') {
+            log.show();
+        }
+    });
 }
 
 export function deactivate(): void {

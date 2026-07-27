@@ -99,10 +99,44 @@ stage src/spikes/graphql/schema.ts "export const schema = {};"
 commit "spike: try GraphQL for the reporting API"
 git checkout --quiet main
 
-# --- publish, so remote branches exist ---------------------------------
+# --- publish, with tracking, so upstream state is real ------------------
 git push --quiet --set-upstream origin main >/dev/null 2>&1
-git push --quiet origin feature/reporting >/dev/null 2>&1
+git push --quiet --set-upstream origin feature/reporting >/dev/null 2>&1
+git push --quiet --set-upstream origin feature/login >/dev/null 2>&1
+git push --quiet --set-upstream origin spike/graphql >/dev/null 2>&1
 git push --quiet origin --tags >/dev/null 2>&1
+
+# Acts as a colleague: commits to a branch on the remote and pushes.
+advance_remote() {
+  local branch="$1" message="$2"
+  local scratch
+  scratch="$(mktemp -d)"
+  git clone --quiet "${TARGET}-remote" "$scratch"
+  git -C "$scratch" config user.name "Colleague"
+  git -C "$scratch" config user.email "colleague@example.com"
+  git -C "$scratch" checkout --quiet "$branch"
+  printf 'their work\n' >> "$scratch/collab.txt"
+  git -C "$scratch" add collab.txt
+  git -C "$scratch" commit --quiet -m "$message"
+  git -C "$scratch" push --quiet origin "$branch"
+  rm -rf "$scratch"
+}
+
+# main is purely behind — the case that can be fast-forwarded without a checkout.
+advance_remote main "chore: tidy the changelog"
+
+# feature/login is behind AND ahead, so it has diverged and cannot be advanced.
+advance_remote feature/login "docs: note the login flow"
+git checkout --quiet feature/login
+stage src/features/login/form.ts "// local tweak"
+commit "style(login): tidy the form"
+git checkout --quiet main
+
+# spike/graphql's upstream is deleted, so it shows as gone.
+git push --quiet origin --delete spike/graphql >/dev/null 2>&1
+
+# One fetch so all of the above is visible locally.
+git fetch --quiet --all --prune >/dev/null 2>&1
 
 # --- the branch to review: several commits across many directories ------
 git checkout --quiet feature/reporting
@@ -162,6 +196,9 @@ echo "  directories: $(git ls-files | sed 's|/[^/]*$||' | sort -u | wc -l | tr -
 echo "  branches:    $(git for-each-ref --format='%(refname:short)' refs/heads refs/remotes | tr '\n' ' ')"
 echo "  tags:        $(git tag | tr '\n' ' ')"
 echo "  uncommitted: staged src/core/config.ts, unstaged schedule.ts, untracked notes/todo.md"
+echo
+echo "  upstream states, so every branch-menu path is reachable:"
+git for-each-ref --format='    %(refname:short) -> %(upstream:short) [%(upstream:track,nobracket)]' refs/heads
 echo
 echo "Try: click a branch → \"Review my work against main\" — 4 commits across"
 echo "     src/features/reporting, tests/, and docs/, plus a rename and a binary."

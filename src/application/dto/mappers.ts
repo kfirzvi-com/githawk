@@ -41,10 +41,17 @@ export const BranchMapper = {
             type: branch.type,
             headCommitHash: branch.headCommitHash,
             isCurrent: branch.isCurrent,
+            upstream: branch.upstream,
         };
     },
 
     fromDto(dto: BranchDto): Branch {
-        return new Branch(dto.name, dto.type, dto.headCommitHash, dto.isCurrent);
+        return new Branch(
+            dto.name,
+            dto.type,
+            dto.headCommitHash,
+            dto.isCurrent,
+            dto.upstream
+        );
     },
 };

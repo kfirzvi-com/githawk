@@ -73,5 +73,41 @@ export function argsFor(action: GitAction): string[] {
 
         case 'push':
             return ['push'];
+
+        case 'updateBranchFromUpstream':
+            /*
+             * A refspec fetch writes straight to the local branch ref, so the
+             * branch advances without being checked out and without touching the
+             * working tree or the index.
+             *
+             * No --force and no leading `+` on the refspec, deliberately: git then
+             * refuses anything that is not a fast-forward, which is exactly right.
+             * A diverged branch needs a merge or a rebase, and that is a decision
+             * for the user rather than something to silently overwrite.
+             *
+             * Note git also refuses to fetch into the *current* branch, which is
+             * why the menu offers a plain pull in that case instead.
+             */
+            return [
+                'fetch',
+                action.remote,
+                `${action.remoteBranch}:${action.branch}`,
+            ];
+
+        case 'deleteRemoteBranch':
+            /*
+             * `--delete` rather than the older `push remote :branch` colon form,
+             * which is easy to mistype into "push everything" and reads like a
+             * typo even when correct.
+             */
+            return ['push', action.remote, '--delete', action.branch];
+
+        case 'renameBranch':
+            /*
+             * Lower-case -m, not -M: -M overwrites an existing branch of that
+             * name, discarding it. Git refusing a name collision is the right
+             * outcome here.
+             */
+            return ['branch', '-m', action.from, action.to];
     }
 }

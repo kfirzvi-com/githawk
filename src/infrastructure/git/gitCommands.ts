@@ -52,7 +52,16 @@ export function logArgs({ limit }: LogOptions): string[] {
 export function branchArgs(): string[] {
     return [
         'for-each-ref',
-        `--format=%(refname)${UNIT_SEPARATOR}%(objectname)${UNIT_SEPARATOR}%(HEAD)`,
+        // `upstream:track,nobracket` yields "ahead 2, behind 3", "gone", or
+        // nothing — which is how a branch's relationship to its remote is read
+        // without a second command per branch.
+        [
+            '--format=%(refname)',
+            '%(objectname)',
+            '%(HEAD)',
+            '%(upstream:short)',
+            '%(upstream:track,nobracket)',
+        ].join(UNIT_SEPARATOR),
         'refs/heads',
         'refs/remotes',
     ];

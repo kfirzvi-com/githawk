@@ -1,4 +1,5 @@
-import { existsSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { afterEach, describe, expect, test } from 'vitest';
 import { GitActionFailedError, GitCliWriter } from './GitCliWriter';
 import { GitCliRepository } from './GitCliRepository';
@@ -21,6 +22,19 @@ afterEach(() => {
 
 const read = (repo: TemporaryRepository) =>
     new GitCliRepository({ cwd: repo.path }).getRepository();
+
+/** Writes a tracked file with known contents and commits it. */
+function commitFile(
+    repo: TemporaryRepository,
+    path: string,
+    contents: string,
+    message: string
+): string {
+    writeFileSync(join(repo.path, path), contents);
+    repo.git(['add', path]);
+    repo.git(['commit', '-m', message]);
+    return repo.head();
+}
 
 describe('GitCliWriter against real repositories', () => {
     test('checks out an existing branch', async () => {
@@ -278,5 +292,183 @@ describe('PerformGitActionUseCase', () => {
 
         expect(outcome.succeeded).toBe(false);
         expect(outcome.message).toBeTruthy();
+    });
+});
+
+describe('updating a branch you are not standing on', () => {
+    /** A repository where main is published and a colleague has moved it on. */
+    function repoWithRemoteAhead() {
+        const repo = TemporaryRepository.createWithRemote();
+        repos.push(repo);
+        commitFile(repo, 'base.txt', 'base\n', 'base');
+        repo.publish('main');
+
+        repo.branch('feature/mine');
+        commitFile(repo, 'mine.txt', 'mine\n', 'my work');
+
+        // Someone else pushes to main while we are on the feature branch.
+        repo.advanceRemote('main', 'their work');
+        repo.git(['fetch', '--quiet', 'origin']);
+        return repo;
+    }
+
+    test('reports main as behind once the remote moves ahead', async () => {
+        const repo = repoWithRemoteAhead();
+
+        const result = await read(repo);
+        const main = result.getBranch('main')!;
+
+        expect(main.upstream?.name).toBe('origin/main');
+        expect(main.upstream?.behind).toBe(1);
+        expect(main.upstream?.ahead).toBe(0);
+        expect(main.canFastForwardToUpstream).toBe(true);
+        expect(main.isCurrent).toBe(false);
+    });
+
+    test('fast-forwards main without checking it out', async () => {
+        const repo = repoWithRemoteAhead();
+        const featureHead = repo.head();
+
+        await new GitCliWriter(repo.path).perform({
+            type: 'updateBranchFromUpstream',
+            branch: 'main',
+            remote: 'origin',
+            remoteBranch: 'main',
+        });
+
+        const result = await read(repo);
+        // main advanced...
+        expect(result.getBranch('main')!.upstream?.behind).toBe(0);
+        // ...while we are still on the feature branch, at the same commit.
+        expect(result.currentBranch?.name).toBe('feature/mine');
+        expect(repo.head()).toBe(featureHead);
+    });
+
+    test('leaves the working tree and index untouched', async () => {
+        const repo = repoWithRemoteAhead();
+
+        // Uncommitted work that must survive an update of another branch.
+        writeFileSync(join(repo.path, 'wip.txt'), 'precious\n');
+        repo.git(['add', 'wip.txt']);
+        const statusBefore = repo.git(['status', '--porcelain']);
+
+        await new GitCliWriter(repo.path).perform({
+            type: 'updateBranchFromUpstream',
+            branch: 'main',
+            remote: 'origin',
+            remoteBranch: 'main',
+        });
+
+        expect(repo.git(['status', '--porcelain'])).toBe(statusBefore);
+    });
+
+    test('refuses to update a diverged branch rather than discarding commits', async () => {
+        const repo = TemporaryRepository.createWithRemote();
+        repos.push(repo);
+        commitFile(repo, 'base.txt', 'base\n', 'base');
+        repo.publish('main');
+
+        // Local main gains a commit...
+        commitFile(repo, 'local.txt', 'local\n', 'local only');
+        // ...and so does the remote, independently.
+        repo.advanceRemote('main', 'their work');
+        repo.git(['fetch', '--quiet', 'origin']);
+
+        repo.branch('feature/elsewhere');
+
+        const before = await read(repo);
+        const main = before.getBranch('main')!;
+        expect(main.hasDiverged).toBe(true);
+        expect(main.canFastForwardToUpstream).toBe(false);
+
+        // The absence of --force is what makes git refuse, which is the point.
+        await expect(
+            new GitCliWriter(repo.path).perform({
+                type: 'updateBranchFromUpstream',
+                branch: 'main',
+                remote: 'origin',
+                remoteBranch: 'main',
+            })
+        ).rejects.toThrow(GitActionFailedError);
+
+        // The local commit is still there.
+        expect((await read(repo)).getBranch('main')!.upstream?.ahead).toBe(1);
+    });
+});
+
+describe('remote branches and renaming', () => {
+    test('deletes a branch on the remote', async () => {
+        const repo = TemporaryRepository.createWithRemote();
+        repos.push(repo);
+        commitFile(repo, 'base.txt', 'base\n', 'base');
+        repo.publish('main');
+        repo.branch('feature/doomed');
+        commitFile(repo, 'doomed.txt', 'doomed\n', 'work');
+        repo.publish('feature/doomed');
+        repo.checkout('main');
+
+        expect(repo.remoteBranches()).toContain('feature/doomed');
+
+        await new GitCliWriter(repo.path).perform({
+            type: 'deleteRemoteBranch',
+            remote: 'origin',
+            branch: 'feature/doomed',
+        });
+
+        expect(repo.remoteBranches()).not.toContain('feature/doomed');
+        // The local branch is untouched: deleting on the remote is not deleting here.
+        expect((await read(repo)).getBranch('feature/doomed')).toBeDefined();
+    });
+
+    test('renames a local branch, keeping its commits', async () => {
+        const repo = newRepo();
+        commitFile(repo, 'base.txt', 'base\n', 'base');
+        repo.branch('feature/old-name');
+        const head = commitFile(repo, 'work.txt', 'work\n', 'work');
+        repo.checkout('main');
+
+        await new GitCliWriter(repo.path).perform({
+            type: 'renameBranch',
+            from: 'feature/old-name',
+            to: 'feature/new-name',
+        });
+
+        const result = await read(repo);
+        expect(result.getBranch('feature/old-name')).toBeUndefined();
+        expect(result.getBranch('feature/new-name')?.headCommitHash).toBe(head);
+    });
+
+    test('renames the branch currently checked out', async () => {
+        const repo = newRepo();
+        commitFile(repo, 'base.txt', 'base\n', 'base');
+        repo.branch('feature/current');
+
+        await new GitCliWriter(repo.path).perform({
+            type: 'renameBranch',
+            from: 'feature/current',
+            to: 'feature/renamed',
+        });
+
+        expect((await read(repo)).currentBranch?.name).toBe('feature/renamed');
+    });
+
+    test('refuses to rename over an existing branch', async () => {
+        const repo = newRepo();
+        commitFile(repo, 'base.txt', 'base\n', 'base');
+        repo.branch('feature/a');
+        repo.checkout('main');
+        repo.branch('feature/b');
+        repo.checkout('main');
+
+        // -m rather than -M, so git protects the existing branch.
+        await expect(
+            new GitCliWriter(repo.path).perform({
+                type: 'renameBranch',
+                from: 'feature/a',
+                to: 'feature/b',
+            })
+        ).rejects.toThrow(GitActionFailedError);
+
+        expect((await read(repo)).getBranch('feature/a')).toBeDefined();
     });
 });

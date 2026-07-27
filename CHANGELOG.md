@@ -52,6 +52,15 @@ Alpha. Reads real repositories and performs branch actions.
   effect is reconstructed by replaying the commits onto their common ancestor in a
   temporary worktree. Which method was used is always stated, and commits that
   could not be combined are listed rather than silently dropped.
+- Update a branch you are not standing on. A branch behind its upstream offers
+  "Update from origin/…", which fast-forwards the ref via a refspec fetch —
+  without checking it out and without touching your working tree. Diverged
+  branches say so instead, since advancing one needs a merge or rebase.
+  `GitHawk: Update All Branches From Upstream` does every eligible branch at once.
+- Ahead/behind indicators in the branch list (↓3, ↑2, or "gone"), so which
+  branches need attention is visible without opening anything.
+- Delete a remote branch, and rename a local one.
+- Branch and commit menus are grouped by topic rather than being one flat list.
 - Branch filter, shown once a repository has more than eight branches.
 - `gitHawk.commitLimit` setting (default 500) and a truncation notice when older
   history exists.

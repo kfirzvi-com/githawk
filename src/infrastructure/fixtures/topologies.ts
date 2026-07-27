@@ -110,13 +110,34 @@ const nestedBranches: Topology = {
                 { hash: 'f19', message: 'Work on feature5', author: 'Fae', parentHashes: ['f12'], timestamp: '2023-09-19T12:00:00Z' }
             ),
             [
-                new Branch('main', 'local', 'm13', true),
-                new Branch('feature', 'local', 'c3'),
+                // Upstream state so the harness shows ahead/behind indicators.
+                new Branch('main', 'local', 'm13', true, {
+                    name: 'origin/main',
+                    ahead: 2,
+                    behind: 0,
+                    isGone: false,
+                }),
+                new Branch('feature', 'local', 'c3', false, {
+                    name: 'origin/feature',
+                    ahead: 0,
+                    behind: 3,
+                    isGone: false,
+                }),
                 new Branch('feature1', 'local', 'f6'),
                 new Branch('feature2', 'local', 'f8'),
                 new Branch('feature3', 'local', 'f12'),
-                new Branch('feature4', 'local', 'f14'),
-                new Branch('feature5', 'local', 'f20'),
+                new Branch('feature5', 'local', 'f20', false, {
+                    name: 'origin/feature5',
+                    ahead: 1,
+                    behind: 4,
+                    isGone: false,
+                }),
+                new Branch('feature4', 'local', 'f14', false, {
+                    name: 'origin/feature4',
+                    ahead: 0,
+                    behind: 0,
+                    isGone: true,
+                }),
                 new Branch('origin/main', 'remote', 'm13'),
             ]
         ),

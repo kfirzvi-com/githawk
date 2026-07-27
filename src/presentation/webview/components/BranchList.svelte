@@ -28,7 +28,10 @@
     const hiddenCount = $derived(branches.length - matching.length);
 </script>
 
-<div class="flex h-full flex-col overflow-hidden bg-gray-850">
+<div
+    class="flex h-full flex-col overflow-hidden bg-gray-850"
+    data-testid="branch-list"
+>
     <div class="space-y-2 border-b border-gray-700 px-4 py-3">
         <div class="flex items-baseline justify-between gap-2">
             <h2
@@ -78,12 +81,40 @@
                         >
                             {branch.isCurrent ? '★' : '○'}
                         </span>
-                        <span class="flex-1 truncate text-sm font-medium">
+                        <span class="min-w-0 flex-1 truncate text-sm font-medium">
                             {branch.name}
                         </span>
+                        <!-- Ahead/behind at a glance: which branches need
+                             updating is the question this list is asked most. -->
+                        {#if branch.upstream?.isGone}
+                            <span
+                                class="flex-shrink-0 text-[11px] text-amber-400"
+                                title={`${branch.upstream.name} no longer exists on the remote`}
+                            >
+                                gone
+                            </span>
+                        {:else if branch.isAhead || branch.isBehind}
+                            <span
+                                class="flex-shrink-0 text-[11px] tabular-nums"
+                                title={`${branch.upstream?.ahead ?? 0} ahead, ${
+                                    branch.upstream?.behind ?? 0
+                                } behind ${branch.upstream?.name ?? 'upstream'}`}
+                            >
+                                {#if branch.isBehind}
+                                    <span class="text-blue-300">
+                                        ↓{branch.upstream?.behind}
+                                    </span>
+                                {/if}
+                                {#if branch.isAhead}
+                                    <span class="text-green-300">
+                                        ↑{branch.upstream?.ahead}
+                                    </span>
+                                {/if}
+                            </span>
+                        {/if}
                         {#if branch.isCurrent}
                             <span
-                                class="rounded bg-blue-600/30 px-2 py-0.5 text-xs text-blue-300"
+                                class="flex-shrink-0 rounded bg-blue-600/30 px-2 py-0.5 text-xs text-blue-300"
                             >
                                 current
                             </span>
