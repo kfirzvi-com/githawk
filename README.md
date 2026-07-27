@@ -134,6 +134,22 @@ npm run shot:real artifacts/real.png # screenshot it, and count what was drawn
 npx vite-node scripts/laneStats.ts   # measure lane count and gutter width
 ```
 
+### Screenshotting the real thing
+
+The harness cannot reach anything outside the webview — QuickPick menus, the
+sidebar tree, the diff editor. VS Code is Electron, so Playwright can drive the
+actual application:
+
+```bash
+npm run shot:vscode artifacts/vscode
+```
+
+That launches a real VS Code with the extension loaded against the sample
+repository, opens the panel, and captures the graph, the Changes tree, the grouped
+branch and commit menus, and a multi-commit aggregate. It is also how the
+documentation screenshots are produced, so they show the real UI rather than a
+mock.
+
 ### Checks
 
 ```bash

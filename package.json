@@ -160,7 +160,8 @@
     "shot:real": "node scripts/shotReal.mjs",
     "package": "npm run check && npm run test && npm run build && vsce package",
     "vscode:prepublish": "npm run build",
-    "test:integration": "npm run build && vite-node tests/integration/runTest.ts"
+    "test:integration": "npm run build && vite-node tests/integration/runTest.ts",
+    "shot:vscode": "npm run build && node scripts/shotVscode.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.0",
