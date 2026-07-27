@@ -7,9 +7,15 @@
     interface Props {
         currentBranchName?: string | null;
         onAction?: (action: ToolbarAction) => void;
+        onCompareBranch?: (includeWorkingTree: boolean) => void;
     }
 
-    let { currentBranchName = null, onAction }: Props = $props();
+    let { currentBranchName = null, onAction, onCompareBranch }: Props =
+        $props();
+
+    // Including uncommitted work is the common case when reviewing your own
+    // in-progress branch, so it is the default.
+    let includeWorkingTree = $state(true);
 </script>
 
 <div
@@ -23,6 +29,27 @@
     </div>
 
     <div class="flex-1"></div>
+
+    <label
+        class="flex cursor-pointer items-center gap-1.5 text-xs text-gray-400 select-none"
+        title="Include changes you have not committed yet"
+    >
+        <input
+            type="checkbox"
+            bind:checked={includeWorkingTree}
+            class="h-3 w-3 accent-blue-500"
+        />
+        uncommitted
+    </label>
+
+    <button
+        type="button"
+        class="flex items-center gap-2 rounded-md border border-gray-600 bg-gray-700 px-3 py-1.5 text-xs font-medium text-gray-200 hover:bg-gray-600"
+        onclick={() => onCompareBranch?.(includeWorkingTree)}
+        title="Review this whole branch against another one"
+    >
+        Review branch…
+    </button>
 
     <div class="flex items-center gap-2">
         {#each toolbarActions as action (action.id)}

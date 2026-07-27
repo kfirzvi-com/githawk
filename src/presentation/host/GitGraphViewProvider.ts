@@ -7,6 +7,7 @@ import { LoadGitGraphUseCase } from '../../application/usecases/LoadGitGraphUseC
 import type { IGitRepository } from '../../domain/repositories/IGitRepository';
 import type { IGitWriter } from '../../domain/repositories/IGitWriter';
 import { GitActionMenu } from './GitActionMenu';
+import { ComparisonController } from './ComparisonController';
 
 /** Matches the `views` contribution id in package.json. */
 export const GITHAWK_VIEW_ID = 'gitHawkView';
@@ -24,7 +25,8 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
     constructor(
         private readonly extensionUri: vscode.Uri,
         private readonly createRepository: GitRepositoryFactory,
-        private readonly createWriter: GitWriterFactory
+        private readonly createWriter: GitWriterFactory,
+        private readonly comparisons: ComparisonController
     ) {}
 
     resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -83,6 +85,62 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
             case 'remote:operation':
                 void this.createMenu().runRemoteOperation(message.operation);
                 break;
+            case 'compare:branch':
+                void this.compareBranch(message.base, message.includeWorkingTree);
+                break;
+            case 'compare:commits':
+                void this.compareCommits(message.hashes);
+                break;
+            case 'compare:clear':
+                this.post({ type: 'comparison:cleared' });
+                break;
+            case 'compare:openFile':
+                void this.comparisons
+                    .openFile(message)
+                    .catch((error) =>
+                        vscode.window.showErrorMessage(describeError(error))
+                    );
+                break;
+        }
+    }
+
+    private async compareBranch(
+        base: string | undefined,
+        includeWorkingTree: boolean
+    ): Promise<void> {
+        const resolved = await this.comparisons.resolveBaseBranch(base);
+        if (!resolved) {
+            return;
+        }
+
+        await this.runComparison({
+            kind: 'branchAgainstBase',
+            base: resolved,
+            includeWorkingTree,
+        });
+    }
+
+    private async compareCommits(hashes: string[]): Promise<void> {
+        if (hashes.length === 0) {
+            this.post({ type: 'comparison:cleared' });
+            return;
+        }
+
+        await this.runComparison({ kind: 'commitSet', hashes });
+    }
+
+    private async runComparison(
+        spec: Parameters<ComparisonController['compare']>[0]
+    ): Promise<void> {
+        this.post({ type: 'comparison:loading' });
+        try {
+            const comparison = await this.comparisons.compare(spec);
+            this.post({ type: 'comparison:loaded', comparison });
+        } catch (error) {
+            this.post({
+                type: 'comparison:error',
+                message: describeError(error),
+            });
         }
     }
 

@@ -3,11 +3,17 @@ import {
     DEFAULT_COMMIT_LIMIT,
     GitCliRepository,
 } from './infrastructure/git/GitCliRepository';
+import { GitCliComparer } from './infrastructure/git/GitCliComparer';
 import { GitCliWriter } from './infrastructure/git/GitCliWriter';
+import { ComparisonController } from './presentation/host/ComparisonController';
 import {
     GITHAWK_VIEW_ID,
     GitGraphViewProvider,
 } from './presentation/host/GitGraphViewProvider';
+import {
+    REVISION_SCHEME,
+    RevisionContentProvider,
+} from './presentation/host/RevisionContentProvider';
 
 export const CONFIG_SECTION = 'gitHawk';
 
@@ -22,10 +28,17 @@ export class NoWorkspaceFolderError extends Error {
  * Composition root: the only place that picks concrete adapters.
  */
 export function activate(context: vscode.ExtensionContext): void {
+    const comparisons = new ComparisonController(
+        createGitComparer,
+        createGitRepository,
+        firstWorkspaceFolder
+    );
+
     const provider = new GitGraphViewProvider(
         context.extensionUri,
         createGitRepository,
-        createGitWriter
+        createGitWriter,
+        comparisons
     );
 
     context.subscriptions.push(
@@ -41,6 +54,12 @@ export function activate(context: vscode.ExtensionContext): void {
         ),
         vscode.commands.registerCommand('gitHawk.refresh', () =>
             provider.refresh()
+        ),
+        // Serves file contents at a revision so vscode.diff can compare two
+        // historical versions, not just files on disk.
+        vscode.workspace.registerTextDocumentContentProvider(
+            REVISION_SCHEME,
+            new RevisionContentProvider(createGitComparer)
         ),
         // A new folder or a changed limit both invalidate what is on screen.
         vscode.workspace.onDidChangeWorkspaceFolders(() => provider.refresh()),
@@ -67,6 +86,10 @@ function createGitRepository(): GitCliRepository {
 
 function createGitWriter(): GitCliWriter {
     return new GitCliWriter(firstWorkspaceFolder());
+}
+
+function createGitComparer(): GitCliComparer {
+    return new GitCliComparer(firstWorkspaceFolder());
 }
 
 function firstWorkspaceFolder(): string {

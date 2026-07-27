@@ -21,11 +21,21 @@ export const isHostedInVsCode = typeof acquire === 'function';
  * `acquireVsCodeApi` may only be called once per page, so the handle is
  * memoised. Standalone, it degrades to a logger so the UI stays interactive.
  */
+/** Dispatched instead of posting, so the dev harness can answer requests. */
+export const HARNESS_TO_HOST_EVENT = 'githawk:to-host';
+
 const api: VsCodeApi = isHostedInVsCode
     ? acquire!()
     : {
-          postMessage: (message) =>
-              console.info('[harness] webview → host', message),
+          postMessage: (message) => {
+              console.info('[harness] webview → host', message);
+              // Re-emitted as a DOM event rather than window.postMessage, which
+              // the webview's own host-message listener would pick up as if the
+              // host had sent it.
+              window.dispatchEvent(
+                  new CustomEvent(HARNESS_TO_HOST_EVENT, { detail: message })
+              );
+          },
           getState: () => undefined,
           setState: () => undefined,
       };

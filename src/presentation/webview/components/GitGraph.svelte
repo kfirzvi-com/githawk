@@ -11,14 +11,17 @@
         nodeCenter,
         type GraphMetrics,
     } from '../viewmodels/graphGeometry';
+    import type { SelectModifiers } from '../viewmodels/selection';
 
     interface Props {
         /** Pre-computed topology. This component renders; it does not lay out. */
         graph: GitGraph;
         metrics?: GraphMetrics;
         selectedHash?: string | null;
+        /** Additional hashes highlighted as part of a multi-selection. */
+        comparedHashes?: ReadonlySet<string>;
         row: Snippet<[Commit, number]>;
-        onSelect?: (commit: Commit) => void;
+        onSelect?: (commit: Commit, modifiers: SelectModifiers) => void;
         onContextMenu?: (commit: Commit) => void;
     }
 
@@ -26,6 +29,7 @@
         graph,
         metrics = defaultMetrics,
         selectedHash = null,
+        comparedHashes = new Set<string>(),
         row,
         onSelect,
         onContextMenu,
@@ -75,16 +79,24 @@
         {#each graph.commits as commit, index (commit.hash)}
             <button
                 type="button"
-                class="flex w-full items-center text-left hover:bg-gray-700/40 {selectedHash ===
-                commit.hash
-                    ? 'bg-blue-600/20'
-                    : ''}"
+                class="flex w-full items-center text-left hover:bg-gray-700/40 {comparedHashes.has(
+                    commit.hash
+                )
+                    ? 'bg-amber-500/15 ring-1 ring-inset ring-amber-500/40'
+                    : selectedHash === commit.hash
+                      ? 'bg-blue-600/20'
+                      : ''}"
                 style="height:{metrics.rowH}px;"
-                onclick={() => onSelect?.(commit)}
+                onclick={(event) =>
+                    onSelect?.(commit, {
+                        // Cmd on macOS, Ctrl elsewhere.
+                        toggle: event.metaKey || event.ctrlKey,
+                        range: event.shiftKey,
+                    })}
                 oncontextmenu={(event) => {
                     // The native VS Code menu replaces the browser one.
                     event.preventDefault();
-                    onSelect?.(commit);
+                    onSelect?.(commit, { toggle: false, range: false });
                     onContextMenu?.(commit);
                 }}
             >

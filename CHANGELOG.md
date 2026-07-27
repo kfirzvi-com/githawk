@@ -31,6 +31,19 @@ Alpha. Reads real repositories and performs branch actions.
   - On the toolbar: fetch (with prune), pull, push.
   - Destructive actions require modal confirmation stating what will be lost, and
     the use case refuses to run one that was not confirmed.
+- Review a whole branch as one changeset. "Review branch…" compares the current
+  branch against a base you pick, measured **from the merge base**, so work that
+  landed on the base after you branched is not shown as though you had reverted
+  it. A checkbox includes uncommitted work, so an in-progress feature is
+  reviewable too.
+- Review several selected commits together. Cmd/Ctrl-click to pick individual
+  commits, Shift-click for a contiguous run. A contiguous run is a true range
+  diff; a scattered selection has no single "before" state in git, so its combined
+  effect is reconstructed by replaying the commits onto their common ancestor in a
+  temporary worktree. Which method was used is always stated, and commits that
+  could not be combined are listed rather than silently dropped.
+- Changed files open in VS Code's own diff editor, via a content provider that
+  serves file contents at a revision.
 - Branch filter, shown once a repository has more than eight branches.
 - `gitHawk.commitLimit` setting (default 500) and a truncation notice when older
   history exists.
@@ -44,8 +57,6 @@ Alpha. Reads real repositories and performs branch actions.
 
 ### Known limitations
 
-- No way yet to review a whole branch as one changeset, or to aggregate the diff
-  of several selected commits.
 - Colours are dark-theme oriented and do not yet follow the active VS Code theme.
 - No row virtualisation, so a large `commitLimit` will be slow to render.
 - Multi-root workspaces show the first folder's repository only.
