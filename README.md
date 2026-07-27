@@ -16,8 +16,8 @@ lines between commits.
 
 **Explicit non-goals:** no AI, no telemetry, no account, no cloud.
 
-> Status: alpha. Reads real repositories and draws the graph correctly. Branch
-> actions (checkout, merge, rebase…) are not implemented yet.
+> Status: alpha. Reads real repositories, draws the graph correctly, and performs
+> branch and commit actions. Reviewing a whole branch as one changeset is next.
 
 ## Architecture
 
@@ -44,6 +44,18 @@ Two rules worth knowing:
 - **Rows and lanes are domain concepts; pixels are not.** The layout emits
   `{row, lane}` only. Coordinates live in
   `presentation/webview/viewmodels/graphGeometry.ts`.
+
+## Actions
+
+Right-click a commit, or click a branch, and GitHawk opens a **native VS Code
+QuickPick** rather than a menu drawn inside the webview — so keyboard navigation,
+theming, and confirmation dialogs are the ones you already know.
+
+Destructive actions (reset, delete, rebase) require a modal confirmation that
+states what will be lost, and `PerformGitActionUseCase` refuses to run one that
+was not explicitly confirmed. Intent is mapped to git flags by a single pure
+function, `argsFor`, which is where the tests are heaviest: this is the file where
+a wrong flag costs someone their working tree.
 
 ## Development
 

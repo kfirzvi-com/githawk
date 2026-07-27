@@ -19,6 +19,7 @@
         selectedHash?: string | null;
         row: Snippet<[Commit, number]>;
         onSelect?: (commit: Commit) => void;
+        onContextMenu?: (commit: Commit) => void;
     }
 
     let {
@@ -27,6 +28,7 @@
         selectedHash = null,
         row,
         onSelect,
+        onContextMenu,
     }: Props = $props();
 
     const maxLane = $derived(
@@ -79,6 +81,12 @@
                     : ''}"
                 style="height:{metrics.rowH}px;"
                 onclick={() => onSelect?.(commit)}
+                oncontextmenu={(event) => {
+                    // The native VS Code menu replaces the browser one.
+                    event.preventDefault();
+                    onSelect?.(commit);
+                    onContextMenu?.(commit);
+                }}
             >
                 <div style="width:{gutterWidth}px; min-width:60px;"></div>
                 <div class="min-w-0 flex-1 pl-2">

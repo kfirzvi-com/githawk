@@ -3,6 +3,7 @@ import {
     DEFAULT_COMMIT_LIMIT,
     GitCliRepository,
 } from './infrastructure/git/GitCliRepository';
+import { GitCliWriter } from './infrastructure/git/GitCliWriter';
 import {
     GITHAWK_VIEW_ID,
     GitGraphViewProvider,
@@ -23,7 +24,8 @@ export class NoWorkspaceFolderError extends Error {
 export function activate(context: vscode.ExtensionContext): void {
     const provider = new GitGraphViewProvider(
         context.extensionUri,
-        createGitRepository
+        createGitRepository,
+        createGitWriter
     );
 
     context.subscriptions.push(
@@ -61,6 +63,10 @@ function createGitRepository(): GitCliRepository {
         .get<number>('commitLimit', DEFAULT_COMMIT_LIMIT);
 
     return new GitCliRepository({ cwd: folder, limit });
+}
+
+function createGitWriter(): GitCliWriter {
+    return new GitCliWriter(firstWorkspaceFolder());
 }
 
 function firstWorkspaceFolder(): string {

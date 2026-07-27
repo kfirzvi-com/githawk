@@ -3,11 +3,11 @@
 
     interface Props {
         branches: Branch[];
-        onSwitchBranch?: (name: string) => void;
-        onCheckoutRemote?: (name: string) => void;
+        /** Opens the native action menu; checkout is one item within it. */
+        onOpenMenu?: (branch: Branch) => void;
     }
 
-    let { branches, onSwitchBranch, onCheckoutRemote }: Props = $props();
+    let { branches, onOpenMenu }: Props = $props();
 
     let filter = $state('');
 
@@ -69,7 +69,7 @@
                         class="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left transition-colors duration-150 {branch.isCurrent
                             ? 'border border-blue-500/30 bg-blue-600/20 text-blue-200'
                             : 'text-gray-300 hover:bg-gray-700'}"
-                        onclick={() => onSwitchBranch?.(branch.name)}
+                        onclick={() => onOpenMenu?.(branch)}
                     >
                         <span
                             class="text-sm {branch.isCurrent
@@ -114,7 +114,7 @@
                         <button
                             type="button"
                             class="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-gray-300 transition-colors duration-150 hover:bg-gray-700"
-                            onclick={() => onCheckoutRemote?.(branch.name)}
+                            onclick={() => onOpenMenu?.(branch)}
                         >
                             <span class="text-sm text-orange-400">◊</span>
                             <span class="flex-1 truncate text-sm">

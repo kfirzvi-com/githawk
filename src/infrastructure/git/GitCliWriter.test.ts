@@ -1,0 +1,282 @@
+import { existsSync } from 'node:fs';
+import { afterEach, describe, expect, test } from 'vitest';
+import { GitActionFailedError, GitCliWriter } from './GitCliWriter';
+import { GitCliRepository } from './GitCliRepository';
+import { TemporaryRepository } from './testing/temporaryRepository';
+import { PerformGitActionUseCase } from '../../application/usecases/PerformGitActionUseCase';
+
+const repos: TemporaryRepository[] = [];
+
+function newRepo(defaultBranch = 'main'): TemporaryRepository {
+    const repo = TemporaryRepository.create(defaultBranch);
+    repos.push(repo);
+    return repo;
+}
+
+afterEach(() => {
+    while (repos.length) {
+        repos.pop()!.dispose();
+    }
+});
+
+const read = (repo: TemporaryRepository) =>
+    new GitCliRepository({ cwd: repo.path }).getRepository();
+
+describe('GitCliWriter against real repositories', () => {
+    test('checks out an existing branch', async () => {
+        const repo = newRepo();
+        repo.commit('base');
+        repo.branch('feature');
+        repo.commit('feature work');
+        repo.checkout('main');
+
+        await new GitCliWriter(repo.path).perform({
+            type: 'checkoutBranch',
+            name: 'feature',
+        });
+
+        expect((await read(repo)).currentBranch?.name).toBe('feature');
+    });
+
+    test('creates a branch at a specific commit without checking it out', async () => {
+        const repo = newRepo();
+        const first = repo.commit('first');
+        repo.commit('second');
+
+        await new GitCliWriter(repo.path).perform({
+            type: 'createBranch',
+            name: 'from-first',
+            at: first,
+            checkout: false,
+        });
+
+        const result = await read(repo);
+        expect(result.getBranch('from-first')?.headCommitHash).toBe(first);
+        expect(result.currentBranch?.name).toBe('main');
+    });
+
+    test('creates and checks out a branch in one step', async () => {
+        const repo = newRepo();
+        const first = repo.commit('first');
+
+        await new GitCliWriter(repo.path).perform({
+            type: 'createBranch',
+            name: 'here',
+            at: first,
+            checkout: true,
+        });
+
+        expect((await read(repo)).currentBranch?.name).toBe('here');
+    });
+
+    test('detaches HEAD when checking out a commit', async () => {
+        const repo = newRepo();
+        const first = repo.commit('first');
+        repo.commit('second');
+
+        await new GitCliWriter(repo.path).perform({
+            type: 'checkoutCommit',
+            hash: first,
+        });
+
+        const result = await read(repo);
+        expect(result.currentBranch).toBeUndefined();
+        expect(repo.head()).toBe(first);
+    });
+
+    test('creates and deletes a tag', async () => {
+        const repo = newRepo();
+        const base = repo.commit('base');
+        const writer = new GitCliWriter(repo.path);
+
+        await writer.perform({ type: 'createTag', name: 'v1.0.0', at: base });
+        expect((await read(repo)).getCommit(base)!.tagNames).toEqual(['v1.0.0']);
+
+        await writer.perform({ type: 'deleteTag', name: 'v1.0.0' });
+        expect((await read(repo)).getCommit(base)!.tagNames).toEqual([]);
+    });
+
+    test('merges a branch, creating a merge commit with --no-ff', async () => {
+        const repo = newRepo();
+        repo.commit('base');
+        repo.branch('feature');
+        repo.commit('feature work');
+        repo.checkout('main');
+
+        await new GitCliWriter(repo.path).perform({
+            type: 'mergeBranch',
+            name: 'feature',
+            noFastForward: true,
+        });
+
+        const result = await read(repo);
+        const head = result.getCommit(repo.head())!;
+        expect(head.isMergeCommit).toBe(true);
+    });
+
+    test('reverts a commit by adding a new one', async () => {
+        const repo = newRepo();
+        repo.commit('base');
+        const bad = repo.commit('bad change');
+
+        await new GitCliWriter(repo.path).perform({ type: 'revert', hash: bad });
+
+        const result = await read(repo);
+        // A revert adds history rather than removing it.
+        expect(result.commits).toHaveLength(3);
+        expect(result.getCommit(bad)).toBeDefined();
+    });
+
+    test('cherry-picks a commit onto another branch', async () => {
+        const repo = newRepo();
+        repo.commit('base');
+        repo.branch('feature');
+        const wanted = repo.commit('wanted change');
+        repo.checkout('main');
+
+        await new GitCliWriter(repo.path).perform({
+            type: 'cherryPick',
+            hash: wanted,
+        });
+
+        const result = await read(repo);
+        expect(result.getCommit(repo.head())!.message).toBe('wanted change');
+        // The change is now reachable from main, and feature still has it.
+        expect(result.getBranch('feature')?.headCommitHash).toBe(wanted);
+        // Note: the new commit's hash can legitimately equal `wanted`. Both share
+        // a parent, tree, message, author, and second, and git hashes commits
+        // deterministically, so an identical commit gets an identical hash.
+    });
+
+    test('resets the branch pointer while keeping files with --soft', async () => {
+        const repo = newRepo();
+        const first = repo.commit('first');
+        repo.commit('second');
+
+        await new GitCliWriter(repo.path).perform({
+            type: 'reset',
+            hash: first,
+            mode: 'soft',
+        });
+
+        expect(repo.head()).toBe(first);
+        // The second commit's file survives, staged.
+        expect(repo.git(['status', '--porcelain'])).toContain('file-1.txt');
+    });
+
+    test('discards the working tree with --hard', async () => {
+        const repo = newRepo();
+        const first = repo.commit('first');
+        repo.commit('second');
+
+        await new GitCliWriter(repo.path).perform({
+            type: 'reset',
+            hash: first,
+            mode: 'hard',
+        });
+
+        expect(repo.head()).toBe(first);
+        expect(repo.git(['status', '--porcelain']).trim()).toBe('');
+    });
+
+    test('refuses to delete an unmerged branch without force, and obeys with it', async () => {
+        const repo = newRepo();
+        repo.commit('base');
+        repo.branch('feature');
+        repo.commit('unmerged work');
+        repo.checkout('main');
+        const writer = new GitCliWriter(repo.path);
+
+        await expect(
+            writer.perform({ type: 'deleteBranch', name: 'feature', force: false })
+        ).rejects.toThrow(GitActionFailedError);
+
+        // The branch is still there, which is the point of -d.
+        expect((await read(repo)).getBranch('feature')).toBeDefined();
+
+        await writer.perform({ type: 'deleteBranch', name: 'feature', force: true });
+        expect((await read(repo)).getBranch('feature')).toBeUndefined();
+    });
+
+    test('surfaces git’s own explanation when it refuses', async () => {
+        const repo = newRepo();
+        repo.commit('base');
+
+        try {
+            await new GitCliWriter(repo.path).perform({
+                type: 'checkoutBranch',
+                name: 'no-such-branch',
+            });
+            throw new Error('expected the checkout to fail');
+        } catch (error) {
+            expect(error).toBeInstanceOf(GitActionFailedError);
+            expect((error as GitActionFailedError).gitMessage).toMatch(
+                /did not match|not found|pathspec/i
+            );
+        }
+    });
+
+    test('treats shell metacharacters in a branch name as text', async () => {
+        const repo = newRepo();
+        const base = repo.commit('base');
+
+        // A valid ref name that is also a shell payload. Git forbids spaces in
+        // refs, so the metacharacters are packed without any: under a shell this
+        // would create /tmp/githawk-pwned, and via execFile it is just a name.
+        const hostile = 'feature/;$(touch$IFS/tmp/githawk-pwned)&&echo|x';
+
+        await new GitCliWriter(repo.path).perform({
+            type: 'createBranch',
+            name: hostile,
+            at: base,
+            checkout: false,
+        });
+
+        expect((await read(repo)).getBranch(hostile)).toBeDefined();
+        expect(existsSync('/tmp/githawk-pwned')).toBe(false);
+    });
+});
+
+describe('PerformGitActionUseCase', () => {
+    test('refuses a destructive action that was not confirmed', async () => {
+        const repo = newRepo();
+        const first = repo.commit('first');
+        repo.commit('second');
+
+        const useCase = new PerformGitActionUseCase(new GitCliWriter(repo.path));
+
+        await expect(
+            useCase.execute({ type: 'reset', hash: first, mode: 'hard' })
+        ).rejects.toThrow(/without explicit confirmation/);
+
+        // Nothing happened.
+        expect(repo.head()).not.toBe(first);
+    });
+
+    test('runs a destructive action once confirmed', async () => {
+        const repo = newRepo();
+        const first = repo.commit('first');
+        repo.commit('second');
+
+        const useCase = new PerformGitActionUseCase(new GitCliWriter(repo.path));
+        const outcome = await useCase.execute(
+            { type: 'reset', hash: first, mode: 'hard' },
+            { confirmed: true }
+        );
+
+        expect(outcome.succeeded).toBe(true);
+        expect(repo.head()).toBe(first);
+    });
+
+    test('reports failure rather than throwing for non-destructive actions', async () => {
+        const repo = newRepo();
+        repo.commit('base');
+
+        const outcome = await new PerformGitActionUseCase(
+            new GitCliWriter(repo.path)
+        ).execute({ type: 'checkoutBranch', name: 'missing' });
+
+        expect(outcome.succeeded).toBe(false);
+        expect(outcome.message).toBeTruthy();
+    });
+});

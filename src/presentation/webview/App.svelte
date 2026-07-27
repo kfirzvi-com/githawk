@@ -54,8 +54,10 @@
         if (action === 'refresh') {
             isLoading = true;
             postToHost({ type: 'graph:refresh' });
+            return;
         }
-        // fetch / pull / push are wired once the git adapter exists.
+
+        postToHost({ type: 'remote:operation', operation: action });
     };
 
     const handleSelectCommit = (commit: Commit) => {
@@ -104,10 +106,13 @@
             >
                 <BranchList
                     {branches}
-                    onSwitchBranch={(name) =>
-                        postToHost({ type: 'branch:switch', name })}
-                    onCheckoutRemote={(name) =>
-                        postToHost({ type: 'branch:checkoutRemote', name })}
+                    onOpenMenu={(branch) =>
+                        postToHost({
+                            type: 'branch:menu',
+                            name: branch.name,
+                            isRemote: branch.isRemote,
+                            isCurrent: branch.isCurrent,
+                        })}
                 />
             </div>
 
@@ -118,6 +123,11 @@
                             {graph}
                             selectedHash={selectedCommit?.hash ?? null}
                             onSelect={handleSelectCommit}
+                            onContextMenu={(commit) =>
+                                postToHost({
+                                    type: 'commit:menu',
+                                    hash: commit.hash,
+                                })}
                         >
                             {#snippet row(commit: Commit)}
                                 <!-- Fixed-width metadata columns with the

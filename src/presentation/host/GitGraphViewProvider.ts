@@ -5,22 +5,26 @@ import type {
 } from '../../application/dto/messages';
 import { LoadGitGraphUseCase } from '../../application/usecases/LoadGitGraphUseCase';
 import type { IGitRepository } from '../../domain/repositories/IGitRepository';
+import type { IGitWriter } from '../../domain/repositories/IGitWriter';
+import { GitActionMenu } from './GitActionMenu';
 
 /** Matches the `views` contribution id in package.json. */
 export const GITHAWK_VIEW_ID = 'gitHawkView';
 
 /**
- * Resolves a repository adapter on demand. A factory rather than an instance so
- * the workspace folder and commit limit are re-read on every load.
+ * Resolves adapters on demand. Factories rather than instances so the workspace
+ * folder and commit limit are re-read on every load.
  */
 export type GitRepositoryFactory = () => IGitRepository;
+export type GitWriterFactory = () => IGitWriter;
 
 export class GitGraphViewProvider implements vscode.WebviewViewProvider {
     private view?: vscode.WebviewView;
 
     constructor(
         private readonly extensionUri: vscode.Uri,
-        private readonly createRepository: GitRepositoryFactory
+        private readonly createRepository: GitRepositoryFactory,
+        private readonly createWriter: GitWriterFactory
     ) {}
 
     resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -64,16 +68,53 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
                 void this.sendGraph();
                 break;
             case 'commit:select':
-                // Commit detail loading is separate work; the webview already
-                // has everything it needs to fill the panel.
+                // The webview already holds everything the details panel needs.
                 break;
-            case 'branch:switch':
-            case 'branch:checkoutRemote':
-                vscode.window.showInformationMessage(
-                    `Branch actions are not wired up yet: ${message.name}`
-                );
+            case 'commit:menu':
+                void this.showCommitMenu(message.hash);
+                break;
+            case 'branch:menu':
+                void this.createMenu().showForBranch({
+                    name: message.name,
+                    isRemote: message.isRemote,
+                    isCurrent: message.isCurrent,
+                });
+                break;
+            case 'remote:operation':
+                void this.createMenu().runRemoteOperation(message.operation);
                 break;
         }
+    }
+
+    /**
+     * The menu needs the commit's refs to offer tag deletion, and the webview's
+     * copy could be stale, so it is re-read from the repository.
+     */
+    private async showCommitMenu(hash: string): Promise<void> {
+        try {
+            const repository = await this.createRepository().getRepository();
+            const commit = repository.getCommit(hash);
+            if (!commit) {
+                vscode.window.showWarningMessage(
+                    'That commit is no longer in the loaded history. Refresh and try again.'
+                );
+                return;
+            }
+
+            await this.createMenu().showForCommit({
+                hash: commit.hash,
+                shortHash: commit.shortHash,
+                subject: commit.message,
+                branchNames: commit.branchNames,
+                tagNames: commit.tagNames,
+            });
+        } catch (error) {
+            vscode.window.showErrorMessage(describeError(error));
+        }
+    }
+
+    private createMenu(): GitActionMenu {
+        return new GitActionMenu(this.createWriter(), () => this.refresh());
     }
 
     private post(message: HostToWebviewMessage): void {
