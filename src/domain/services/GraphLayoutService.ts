@@ -2,20 +2,6 @@ import { Commit } from '../models/Commit';
 import { GitGraph, GraphEdge, GraphNode } from '../models/GitGraph';
 import { orderTopologically } from './commitOrdering';
 
-type LaneAssignment = Map<string, number>;
-
-/**
- * Assigns each commit a row and a lane, and derives the line segments that
- * connect them.
- *
- * Stateless by design: every method takes what it needs and returns a value, so
- * a layout can be computed on the extension host or inside the webview with
- * identical results and no shared mutable state.
- *
- * Rows are newest-first (row 0 is the newest commit, at the top of the view),
- * ordered topologically so a parent is never placed above its child. See
- * commitOrdering.ts for why a date sort is not sufficient.
- */
 export interface LayoutOptions {
     /**
      * Which branch should claim lane 0 and read as the spine. Supply the
@@ -28,56 +14,66 @@ export interface LayoutOptions {
 /** Tried in order when no primary branch is supplied. */
 const FALLBACK_PRIMARY_BRANCHES = ['main', 'master', 'trunk', 'develop'];
 
+/**
+ * Assigns each commit a row and a lane, and derives the line segments that
+ * connect them.
+ *
+ * Stateless by design: every method takes what it needs and returns a value, so
+ * a layout can be computed on the extension host or inside the webview with
+ * identical results and no shared mutable state.
+ *
+ * Rows are newest-first (row 0 is the newest commit, at the top of the view),
+ * ordered topologically so a parent is never placed above its child. See
+ * commitOrdering.ts for why a date sort is not sufficient.
+ *
+ * Lanes come from a single downward sweep that tracks, per lane, the commit that
+ * lane is still waiting to reach. A lane is released the moment it delivers, and
+ * a new branch takes the lowest free lane — so the lane count tracks how many
+ * branches are open *at the same row*, not how many the repository has ever had.
+ * Allocating monotonically instead made a 49-branch repository 23 lanes wide and
+ * pushed every commit message off screen.
+ */
 export class GraphLayoutService {
     layout(commits: Commit[], options: LayoutOptions = {}): GitGraph {
-        const ordered = this.orderNewestFirst(commits);
+        const ordered = orderTopologically(commits);
         const byHash = new Map(ordered.map((c) => [c.hash, c]));
 
-        const lanes = this.assignLanes(ordered, byHash, options);
+        const primaryChain = this.primaryFirstParentChain(
+            ordered,
+            byHash,
+            options.primaryBranchName
+        );
 
-        const nodes: GraphNode[] = ordered.map((commit, row) => ({
-            hash: commit.hash,
-            row,
-            lane: lanes.get(commit.hash) ?? 0,
-        }));
-
-        const rowByHash = new Map(nodes.map((n) => [n.hash, n.row]));
-        const edges = this.buildEdges(ordered, byHash, lanes, rowByHash);
+        const { nodes, carryLanes } = this.sweepLanes(
+            ordered,
+            byHash,
+            primaryChain
+        );
+        const edges = this.buildEdges(ordered, byHash, nodes, carryLanes);
 
         return { commits: ordered, nodes, edges };
     }
 
-    private orderNewestFirst(commits: Commit[]): Commit[] {
-        return orderTopologically(commits);
-    }
-
     /**
-     * The primary branch tip claims lane 0 so the mainline reads as a straight
-     * spine. Every other unclaimed commit opens the next free lane, and each
-     * lane is then extended backwards along its first-parent path.
+     * The primary branch's first-parent path. These commits own lane 0
+     * exclusively, which is what makes the mainline read as one straight spine
+     * rather than drifting sideways as side branches come and go.
      */
-    private assignLanes(
+    private primaryFirstParentChain(
         ordered: Commit[],
         byHash: Map<string, Commit>,
-        options: LayoutOptions
-    ): LaneAssignment {
-        const lanes: LaneAssignment = new Map();
-        let nextLane = 0;
+        primaryBranchName?: string
+    ): Set<string> {
+        const chain = new Set<string>();
+        let current = this.findPrimaryTip(ordered, primaryBranchName);
 
-        const primaryTip = this.findPrimaryTip(ordered, options.primaryBranchName);
-        if (primaryTip) {
-            lanes.set(primaryTip.hash, nextLane++);
-            this.extendLaneAlongFirstParents(primaryTip, lanes, byHash);
+        while (current && !chain.has(current.hash)) {
+            chain.add(current.hash);
+            const firstParent = current.primaryParentHash;
+            current = firstParent ? byHash.get(firstParent) : undefined;
         }
 
-        for (const commit of ordered) {
-            if (!lanes.has(commit.hash)) {
-                lanes.set(commit.hash, nextLane++);
-                this.extendLaneAlongFirstParents(commit, lanes, byHash);
-            }
-        }
-
-        return lanes;
+        return chain;
     }
 
     /**
@@ -106,74 +102,165 @@ export class GraphLayoutService {
         return ordered[0];
     }
 
-    private extendLaneAlongFirstParents(
-        start: Commit,
-        lanes: LaneAssignment,
-        byHash: Map<string, Commit>
-    ): void {
-        // `seen` only guards against malformed input; a git DAG cannot cycle.
-        const seen = new Set<string>();
-        let current: Commit | undefined = start;
+    /**
+     * One pass down the rows. `pending[lane]` holds the hash that lane is waiting
+     * to reach; `null` means the lane is free and may be reused immediately.
+     */
+    private sweepLanes(
+        ordered: Commit[],
+        byHash: Map<string, Commit>,
+        primaryChain: Set<string>
+    ): { nodes: GraphNode[]; carryLanes: Map<string, number> } {
+        const pending: (string | null)[] = [];
+        const nodes: GraphNode[] = [];
+        /** `child->parent` to the lane carrying that connection between them. */
+        const carryLanes = new Map<string, number>();
 
-        while (current && !seen.has(current.hash)) {
-            seen.add(current.hash);
+        // Lane 0 is reserved for the spine whenever there is one, so a side
+        // branch can never squat in it and force the mainline sideways.
+        const firstFreeForBranches = primaryChain.size > 0 ? 1 : 0;
 
-            const lane = lanes.get(current.hash) ?? 0;
-            const firstParentHash = current.primaryParentHash;
-            if (firstParentHash === undefined) {
-                return;
+        const ensureLane = (lane: number): void => {
+            while (pending.length <= lane) {
+                pending.push(null);
+            }
+        };
+
+        const allocate = (): number => {
+            for (let lane = firstFreeForBranches; lane < pending.length; lane++) {
+                if (pending[lane] === null) {
+                    return lane;
+                }
+            }
+            // Growing must still respect the reservation: appending to an empty
+            // array would otherwise hand out lane 0 and displace the spine.
+            const lane = Math.max(pending.length, firstFreeForBranches);
+            ensureLane(lane);
+            return lane;
+        };
+
+        ordered.forEach((commit, row) => {
+            const arriving: number[] = [];
+            for (let lane = 0; lane < pending.length; lane++) {
+                if (pending[lane] === commit.hash) {
+                    arriving.push(lane);
+                }
             }
 
-            if (!lanes.has(firstParentHash)) {
-                lanes.set(firstParentHash, lane);
+            let lane: number;
+            if (primaryChain.has(commit.hash)) {
+                lane = 0;
+            } else if (arriving.length > 0) {
+                // Prefer the leftmost lane already heading here; the others
+                // converge into it and are released.
+                lane = arriving[0];
+            } else {
+                lane = allocate();
             }
+            ensureLane(lane);
 
-            current = byHash.get(firstParentHash);
-        }
+            // Every lane that was waiting for this commit has now delivered.
+            for (const delivered of arriving) {
+                pending[delivered] = null;
+            }
+            pending[lane] = null;
+
+            nodes.push({ hash: commit.hash, row, lane });
+
+            commit.parentHashes.forEach((parentHash, index) => {
+                if (!byHash.has(parentHash)) {
+                    // Parent lies outside the loaded window: nothing to carry.
+                    return;
+                }
+
+                let carry: number;
+                if (index === 0) {
+                    // The first parent continues straight down this lane.
+                    carry = lane;
+                } else {
+                    // A merged-in branch reuses a lane already heading for that
+                    // parent, otherwise takes the lowest free one.
+                    const existing = pending.indexOf(parentHash);
+                    carry = existing >= 0 ? existing : allocate();
+                }
+
+                ensureLane(carry);
+                pending[carry] = parentHash;
+                carryLanes.set(edgeKey(commit.hash, parentHash), carry);
+            });
+        });
+
+        return { nodes, carryLanes };
     }
 
     /**
-     * One segment per row between a commit and each of its parents: a joining
-     * segment at the parent's row, plus vertical carries for every row in
-     * between so the line is continuous down the view.
+     * Exactly one segment per row-gap per connection, so a line is continuous
+     * and never doubled. Gap `k` spans row `k` (older, below) up to row `k - 1`.
      */
     private buildEdges(
         ordered: Commit[],
         byHash: Map<string, Commit>,
-        lanes: LaneAssignment,
-        rowByHash: Map<string, number>
+        nodes: GraphNode[],
+        carryLanes: Map<string, number>
     ): GraphEdge[] {
+        const rowOf = new Map(nodes.map((n) => [n.hash, n.row]));
+        const laneOf = new Map(nodes.map((n) => [n.hash, n.lane]));
         const edges: GraphEdge[] = [];
 
         for (const commit of ordered) {
-            const commitLane = lanes.get(commit.hash) ?? 0;
-            const commitRow = rowByHash.get(commit.hash) ?? 0;
-            const joiningSegments: GraphEdge[] = [];
+            const childRow = rowOf.get(commit.hash) ?? 0;
+            const childLane = laneOf.get(commit.hash) ?? 0;
 
             for (const parentHash of commit.parentHashes) {
-                const parent = byHash.get(parentHash);
-                if (!parent) {
-                    // Parent lies outside the loaded page of history.
+                if (!byHash.has(parentHash)) {
                     continue;
                 }
 
-                const parentLane = lanes.get(parent.hash) ?? 0;
-                const parentRow = rowByHash.get(parent.hash) ?? 0;
+                const parentRow = rowOf.get(parentHash) ?? 0;
+                const parentLane = laneOf.get(parentHash) ?? 0;
+                const carryLane =
+                    carryLanes.get(edgeKey(commit.hash, parentHash)) ?? childLane;
 
-                joiningSegments.push({
+                if (parentRow <= childRow) {
+                    // Topological ordering rules this out; skipping beats
+                    // emitting a segment that would draw upside down.
+                    continue;
+                }
+
+                if (parentRow === childRow + 1) {
+                    edges.push({
+                        row: parentRow,
+                        fromLane: parentLane,
+                        toLane: childLane,
+                    });
+                    continue;
+                }
+
+                // Leaving the parent, joining the carry lane.
+                edges.push({
                     row: parentRow,
                     fromLane: parentLane,
-                    toLane: commitLane,
+                    toLane: carryLane,
                 });
 
-                for (let row = parentRow - 1; row > commitRow; row--) {
-                    edges.push({ row, fromLane: commitLane, toLane: commitLane });
+                // Straight run down the carry lane.
+                for (let row = parentRow - 1; row > childRow + 1; row--) {
+                    edges.push({ row, fromLane: carryLane, toLane: carryLane });
                 }
-            }
 
-            edges.push(...joiningSegments);
+                // Final gap, arriving at the child.
+                edges.push({
+                    row: childRow + 1,
+                    fromLane: carryLane,
+                    toLane: childLane,
+                });
+            }
         }
 
         return edges;
     }
+}
+
+function edgeKey(childHash: string, parentHash: string): string {
+    return `${childHash}->${parentHash}`;
 }

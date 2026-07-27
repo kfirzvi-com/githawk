@@ -16,10 +16,8 @@ lines between commits.
 
 **Explicit non-goals:** no AI, no telemetry, no account, no cloud.
 
-> Status: alpha. Reads real repositories and draws the graph. Branch actions
-> (checkout, merge, rebase…) are not implemented, and the layout still allocates
-> one lane per branch without reusing freed lanes, so repositories with many
-> branches render wider than they should.
+> Status: alpha. Reads real repositories and draws the graph correctly. Branch
+> actions (checkout, merge, rebase…) are not implemented yet.
 
 ## Architecture
 

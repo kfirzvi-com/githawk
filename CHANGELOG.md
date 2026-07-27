@@ -28,10 +28,14 @@ Alpha. Reads real repositories; branch actions are not implemented.
 - Playwright coverage: render counts, commit selection, and committed screenshot
   baselines at two widths.
 
+- Lane reuse: a lane is released as soon as its branch delivers, so lane count
+  follows how many branches are open at the same row rather than how many the
+  repository has. On a 49-branch repository this went from 23 lanes to 4, and the
+  graph gutter from 644px to 112px.
+- Branch filter, shown once a repository has more than eight branches.
+
 ### Known limitations
 
-- Lanes are never reused after a branch ends, so a repository with many branches
-  renders far wider than it needs to and pushes commit messages off screen.
 - Branch and tag refs appear only in the details panel, not inline on the graph.
 - Colours are dark-theme oriented and do not yet follow the active VS Code theme.
 - Branch actions (checkout, merge, rebase, cherry-pick…) show a placeholder.

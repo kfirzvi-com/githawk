@@ -119,22 +119,29 @@
                             onSelect={handleSelectCommit}
                         >
                             {#snippet row(commit: Commit)}
-                                <div class="flex items-center gap-2">
+                                <!-- Fixed-width metadata columns with the
+                                     message absorbing the slack, so the author
+                                     never wraps and the date never shifts. -->
+                                <div class="flex items-center gap-3">
                                     <span
-                                        class="font-mono text-xs text-blue-300"
+                                        class="w-16 flex-shrink-0 font-mono text-xs whitespace-nowrap text-blue-300"
                                     >
                                         {commit.shortHash}
                                     </span>
                                     <span
-                                        class="truncate text-sm font-medium text-gray-100"
+                                        class="min-w-0 flex-1 truncate text-sm font-medium text-gray-100"
+                                        title={commit.message}
                                     >
                                         {commit.message}
                                     </span>
-                                    <span class="text-xs text-gray-400">
+                                    <span
+                                        class="w-32 flex-shrink-0 truncate text-right text-xs whitespace-nowrap text-gray-400"
+                                        title={commit.author}
+                                    >
                                         {commit.author}
                                     </span>
                                     <span
-                                        class="ml-auto flex-shrink-0 pr-3 text-xs text-gray-500"
+                                        class="w-20 flex-shrink-0 pr-3 text-right text-xs whitespace-nowrap tabular-nums text-gray-500"
                                     >
                                         {commit.timestamp.toLocaleDateString()}
                                     </span>
