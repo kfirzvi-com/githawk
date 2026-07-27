@@ -5,23 +5,35 @@ All notable changes to GitHawk are documented here, following
 
 ## [Unreleased]
 
-Pre-alpha. The graph renders from fixtures; there is no git adapter yet, so this
-is not yet usable against a real repository.
+Alpha. Reads real repositories; branch actions are not implemented.
 
 ### Added
 
+- Reads real repositories through the git CLI: commits across all refs, parent
+  topology, branches, tags, and the checked-out branch.
+- Topological commit ordering with date as the tiebreaker, so rebased and
+  cherry-picked history no longer draws a parent above its child.
+- The checked-out branch claims lane 0, so repositories on `master` or any other
+  default get a spine.
+- `gitHawk.commitLimit` setting (default 500) and a truncation notice when older
+  history exists.
+- `GitHawk: Refresh Git Graph` command; the graph also reloads when the
+  workspace folders or the setting change.
 - Commit graph with lane assignment and merge rendering, laid out in a
   dependency-free domain service.
 - Branch list, commit details panel, and toolbar shell.
-- Standalone webview harness with named repository topologies, so the UI can be
-  developed and screenshotted without launching VS Code.
+- Standalone webview harness with named repository topologies, plus a mode that
+  renders a dump of a real repository, so the UI can be developed and
+  screenshotted without launching VS Code.
 - Playwright coverage: render counts, commit selection, and committed screenshot
   baselines at two widths.
 
 ### Known limitations
 
-- Commits are ordered by timestamp rather than topologically, so histories
-  containing rebases or skewed clocks can draw a parent above its child.
+- Lanes are never reused after a branch ends, so a repository with many branches
+  renders far wider than it needs to and pushes commit messages off screen.
 - Branch and tag refs appear only in the details panel, not inline on the graph.
 - Colours are dark-theme oriented and do not yet follow the active VS Code theme.
-- No commit paging or row virtualisation; large histories will be slow.
+- Branch actions (checkout, merge, rebase, cherry-pick…) show a placeholder.
+- No row virtualisation, so a large `commitLimit` will be slow to render.
+- Multi-root workspaces show the first folder's repository only.

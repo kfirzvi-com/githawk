@@ -1,5 +1,6 @@
 import { Commit } from '../models/Commit';
 import { GitGraph, GraphEdge, GraphNode } from '../models/GitGraph';
+import { orderTopologically } from './commitOrdering';
 
 type LaneAssignment = Map<string, number>;
 
@@ -11,19 +12,28 @@ type LaneAssignment = Map<string, number>;
  * a layout can be computed on the extension host or inside the webview with
  * identical results and no shared mutable state.
  *
- * Rows are newest-first (row 0 is the newest commit, at the top of the view).
- *
- * Known limitation: ordering is by commit timestamp alone. Git timestamps are
- * not monotonic across rebases, cherry-picks, and skewed clocks, so a parent
- * can carry a later date than its child. Topological ordering with date as the
- * tiebreaker is tracked separately.
+ * Rows are newest-first (row 0 is the newest commit, at the top of the view),
+ * ordered topologically so a parent is never placed above its child. See
+ * commitOrdering.ts for why a date sort is not sufficient.
  */
+export interface LayoutOptions {
+    /**
+     * Which branch should claim lane 0 and read as the spine. Supply the
+     * repository's checked-out or default branch; a hardcoded 'main' leaves
+     * every repository on 'master' or a custom default without a spine.
+     */
+    primaryBranchName?: string;
+}
+
+/** Tried in order when no primary branch is supplied. */
+const FALLBACK_PRIMARY_BRANCHES = ['main', 'master', 'trunk', 'develop'];
+
 export class GraphLayoutService {
-    layout(commits: Commit[]): GitGraph {
+    layout(commits: Commit[], options: LayoutOptions = {}): GitGraph {
         const ordered = this.orderNewestFirst(commits);
         const byHash = new Map(ordered.map((c) => [c.hash, c]));
 
-        const lanes = this.assignLanes(ordered, byHash);
+        const lanes = this.assignLanes(ordered, byHash, options);
 
         const nodes: GraphNode[] = ordered.map((commit, row) => ({
             hash: commit.hash,
@@ -38,27 +48,26 @@ export class GraphLayoutService {
     }
 
     private orderNewestFirst(commits: Commit[]): Commit[] {
-        return [...commits].sort(
-            (a, b) => b.timestamp.getTime() - a.timestamp.getTime()
-        );
+        return orderTopologically(commits);
     }
 
     /**
-     * The tip of `main` claims lane 0 so the mainline reads as a straight spine.
-     * Every other unclaimed commit opens the next free lane, and each lane is
-     * then extended backwards along its first-parent path.
+     * The primary branch tip claims lane 0 so the mainline reads as a straight
+     * spine. Every other unclaimed commit opens the next free lane, and each
+     * lane is then extended backwards along its first-parent path.
      */
     private assignLanes(
         ordered: Commit[],
-        byHash: Map<string, Commit>
+        byHash: Map<string, Commit>,
+        options: LayoutOptions
     ): LaneAssignment {
         const lanes: LaneAssignment = new Map();
         let nextLane = 0;
 
-        const mainTip = ordered.find((c) => c.refs.includes('main'));
-        if (mainTip) {
-            lanes.set(mainTip.hash, nextLane++);
-            this.extendLaneAlongFirstParents(mainTip, lanes, byHash);
+        const primaryTip = this.findPrimaryTip(ordered, options.primaryBranchName);
+        if (primaryTip) {
+            lanes.set(primaryTip.hash, nextLane++);
+            this.extendLaneAlongFirstParents(primaryTip, lanes, byHash);
         }
 
         for (const commit of ordered) {
@@ -69,6 +78,32 @@ export class GraphLayoutService {
         }
 
         return lanes;
+    }
+
+    /**
+     * Falls back through the conventional default-branch names, then to the
+     * newest commit — so an unnamed or detached history still gets a spine
+     * rather than every commit opening its own lane.
+     */
+    private findPrimaryTip(
+        ordered: Commit[],
+        primaryBranchName?: string
+    ): Commit | undefined {
+        if (primaryBranchName) {
+            const named = ordered.find((c) => c.hasBranch(primaryBranchName));
+            if (named) {
+                return named;
+            }
+        }
+
+        for (const candidate of FALLBACK_PRIMARY_BRANCHES) {
+            const match = ordered.find((c) => c.refs.includes(candidate));
+            if (match) {
+                return match;
+            }
+        }
+
+        return ordered[0];
     }
 
     private extendLaneAlongFirstParents(

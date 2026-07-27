@@ -16,8 +16,10 @@ lines between commits.
 
 **Explicit non-goals:** no AI, no telemetry, no account, no cloud.
 
-> Status: pre-alpha. The graph renders from fixtures; the git adapter is not
-> written yet. Not yet useful against a real repository.
+> Status: alpha. Reads real repositories and draws the graph. Branch actions
+> (checkout, merge, rebase…) are not implemented, and the layout still allocates
+> one lane per branch without reusing freed lanes, so repositories with many
+> branches render wider than they should.
 
 ## Architecture
 
@@ -72,6 +74,20 @@ npm run dev:vscode   # esbuild watch + vite build --watch into dist/
 ```
 
 Then press **F5**. The panel opens with `Cmd+9`.
+
+### Rendering a real repository in the harness
+
+Fixtures only prove the code agrees with fixtures. To see real history without
+launching VS Code:
+
+```bash
+npm run dump -- ../some/repo 500     # writes dev-graph.json via the real adapter
+npm run dev:webview                  # in another terminal
+open 'http://localhost:5173/?topology=real'
+
+npm run shot:real artifacts/real.png # screenshot it, and count what was drawn
+npx vite-node scripts/laneStats.ts   # measure lane count and gutter width
+```
 
 ### Checks
 

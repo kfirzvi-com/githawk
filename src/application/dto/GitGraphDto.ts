@@ -32,4 +32,8 @@ export interface BranchDto {
 export interface GitGraphDto {
     commits: CommitDto[];
     branches: BranchDto[];
+    /** True when history was truncated by the commit limit. */
+    hasMoreHistory: boolean;
+    /** Branch that should claim lane 0. Absent on a detached HEAD. */
+    primaryBranchName?: string;
 }

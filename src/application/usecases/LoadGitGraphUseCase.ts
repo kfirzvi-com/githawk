@@ -15,6 +15,11 @@ export class LoadGitGraphUseCase {
         return {
             commits: repository.commits.map(CommitMapper.toDto),
             branches: repository.branches.map(BranchMapper.toDto),
+            hasMoreHistory: repository.hasMoreHistory,
+            // The checked-out branch is the one the reader is oriented around,
+            // so it earns the spine. Undefined on a detached HEAD, which lets
+            // the layout fall back to conventional default names.
+            primaryBranchName: repository.currentBranch?.name,
         };
     }
 }

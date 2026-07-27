@@ -5,6 +5,7 @@
 node_modules/**
 src/**
 tests/**
+scripts/**
 artifacts/**
 playwright-report/**
 test-results/**

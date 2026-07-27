@@ -21,6 +21,14 @@ export async function startFixtureHost(): Promise<void> {
     const requestedId = new URLSearchParams(window.location.search).get(
         'topology'
     );
+
+    // ?topology=real renders a dump of an actual repository produced by
+    // scripts/dumpGraph.ts, which is the only way to see real history without
+    // launching VS Code.
+    if (requestedId === 'real') {
+        await loadRealDump();
+        return;
+    }
     const topology =
         (requestedId ? topologyById(requestedId) : undefined) ?? defaultTopology;
 
@@ -32,13 +40,37 @@ export async function startFixtureHost(): Promise<void> {
         );
     }
 
-    const useCase = new LoadGitGraphUseCase(new InMemoryGitRepository(topology));
+    const useCase = new LoadGitGraphUseCase(
+        new InMemoryGitRepository(topology)
+    );
 
     try {
         const graph = await useCase.execute();
         post({ type: 'graph:loaded', graph });
         console.info(
             `[harness] loaded "${topology.id}" — ${graph.commits.length} commits, ${graph.branches.length} branches`
+        );
+    } catch (error) {
+        post({
+            type: 'graph:error',
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+}
+
+async function loadRealDump(): Promise<void> {
+    try {
+        const response = await fetch('/dev-graph.json');
+        if (!response.ok) {
+            throw new Error(
+                'No dump found. Run: npx vite-node scripts/dumpGraph.ts -- <repo-path>'
+            );
+        }
+
+        const graph = await response.json();
+        post({ type: 'graph:loaded', graph });
+        console.info(
+            `[harness] real repository — ${graph.commits.length} commits, ${graph.branches.length} branches`
         );
     } catch (error) {
         post({

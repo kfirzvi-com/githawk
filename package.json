@@ -30,10 +30,26 @@
   "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
+    "configuration": {
+      "title": "GitHawk",
+      "properties": {
+        "gitHawk.commitLimit": {
+          "type": "number",
+          "default": 500,
+          "minimum": 1,
+          "maximum": 100000,
+          "description": "How many commits to read from history. Higher values show more of the graph and take longer to load."
+        }
+      }
+    },
     "commands": [
       {
         "command": "gitHawk.open",
         "title": "GitHawk: Open Git Graph"
+      },
+      {
+        "command": "gitHawk.refresh",
+        "title": "GitHawk: Refresh Git Graph"
       }
     ],
     "keybindings": [
@@ -80,6 +96,8 @@
     "test:visual": "playwright test",
     "test:visual:update": "playwright test --update-snapshots",
     "shots": "playwright test --grep \"looks right\" --update-snapshots",
+    "dump": "vite-node scripts/dumpGraph.ts --",
+    "shot:real": "node scripts/shotReal.mjs",
     "package": "npm run check && npm run test && npm run build && vsce package",
     "vscode:prepublish": "npm run build"
   },

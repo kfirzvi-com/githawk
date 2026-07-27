@@ -9,16 +9,19 @@ import type { IGitRepository } from '../../domain/repositories/IGitRepository';
 /** Matches the `views` contribution id in package.json. */
 export const GITHAWK_VIEW_ID = 'gitHawkView';
 
+/**
+ * Resolves a repository adapter on demand. A factory rather than an instance so
+ * the workspace folder and commit limit are re-read on every load.
+ */
+export type GitRepositoryFactory = () => IGitRepository;
+
 export class GitGraphViewProvider implements vscode.WebviewViewProvider {
     private view?: vscode.WebviewView;
-    private readonly loadGitGraph: LoadGitGraphUseCase;
 
     constructor(
         private readonly extensionUri: vscode.Uri,
-        gitRepository: IGitRepository
-    ) {
-        this.loadGitGraph = new LoadGitGraphUseCase(gitRepository);
-    }
+        private readonly createRepository: GitRepositoryFactory
+    ) {}
 
     resolveWebviewView(webviewView: vscode.WebviewView): void {
         this.view = webviewView;
@@ -39,16 +42,19 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
         void this.sendGraph();
     }
 
+    /** Re-reads the repository and pushes it to the webview, if one is open. */
+    refresh(): void {
+        if (this.view) {
+            void this.sendGraph();
+        }
+    }
+
     private async sendGraph(): Promise<void> {
         try {
-            const graph = await this.loadGitGraph.execute();
-            this.post({ type: 'graph:loaded', graph });
+            const useCase = new LoadGitGraphUseCase(this.createRepository());
+            this.post({ type: 'graph:loaded', graph: await useCase.execute() });
         } catch (error) {
-            this.post({
-                type: 'graph:error',
-                message:
-                    error instanceof Error ? error.message : String(error),
-            });
+            this.post({ type: 'graph:error', message: describeError(error) });
         }
     }
 
@@ -58,7 +64,8 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
                 void this.sendGraph();
                 break;
             case 'commit:select':
-                // Commit detail loading arrives with the git adapter.
+                // Commit detail loading is separate work; the webview already
+                // has everything it needs to fill the panel.
                 break;
             case 'branch:switch':
             case 'branch:checkoutRemote':
@@ -77,7 +84,12 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
         const nonce = createNonce();
         const asset = (...segments: string[]) =>
             webview.asWebviewUri(
-                vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview', ...segments)
+                vscode.Uri.joinPath(
+                    this.extensionUri,
+                    'dist',
+                    'webview',
+                    ...segments
+                )
             );
 
         const scriptUri = asset('assets', 'main.js');
@@ -87,7 +99,7 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
 <html lang="en">
 <head>
 	<meta charset="UTF-8">
-	<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} data:; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
+	<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} data:; style-src ${webview.cspSource}; font-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<link rel="stylesheet" href="${styleUri}">
 	<title>GitHawk</title>
@@ -98,6 +110,14 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
 </body>
 </html>`;
     }
+}
+
+/**
+ * Errors reach the user inside the panel, so they must read as guidance rather
+ * than as a stack trace. The named error types carry usable messages already.
+ */
+function describeError(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
 }
 
 function createNonce(): string {

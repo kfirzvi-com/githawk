@@ -17,10 +17,14 @@
     let selectedCommit = $state<Commit | null>(null);
     let errorMessage = $state<string | null>(null);
     let isLoading = $state(true);
+    let hasMoreHistory = $state(false);
+    let primaryBranchName = $state<string | undefined>(undefined);
 
     /** Layout is derived, never stored: one source of truth for the graph. */
     const graph = $derived(
-        commits.length > 0 ? layoutService.layout(commits) : null
+        commits.length > 0
+            ? layoutService.layout(commits, { primaryBranchName })
+            : null
     );
     const currentBranchName = $derived(
         branches.find((b) => b.isCurrent)?.name ?? null
@@ -32,6 +36,8 @@
                 case 'graph:loaded':
                     commits = message.graph.commits.map(CommitMapper.fromDto);
                     branches = message.graph.branches.map(BranchMapper.fromDto);
+                    hasMoreHistory = message.graph.hasMoreHistory;
+                    primaryBranchName = message.graph.primaryBranchName;
                     errorMessage = null;
                     isLoading = false;
                     break;
@@ -135,6 +141,17 @@
                                 </div>
                             {/snippet}
                         </GitGraph>
+                        {#if hasMoreHistory}
+                            <div
+                                class="border-t border-gray-700 px-3 py-2 text-center text-xs text-gray-500"
+                            >
+                                Older history not shown — raise
+                                <code class="text-gray-400">
+                                    gitHawk.commitLimit
+                                </code>
+                                to load more.
+                            </div>
+                        {/if}
                     {:else}
                         <div
                             class="flex h-full items-center justify-center text-sm text-gray-400"

@@ -1,107 +1,89 @@
-import { Commit } from './Commit';
 import { Branch } from './Branch';
+import { Commit } from './Commit';
 
+/**
+ * A loaded window of a repository's history.
+ *
+ * "Window" is the important word: history is read in pages, so a repository is
+ * routinely incomplete in two normal ways —
+ *
+ *  - the oldest loaded commits reference parents that were not loaded, and
+ *  - a branch tip can sit outside the window entirely.
+ *
+ * Neither is an error. Treating them as one made the previous version throw on
+ * any real repository large enough to need a limit.
+ */
 export class GitRepository {
-    private readonly commitsMap: Map<string, Commit>;
-    private readonly branchesMap: Map<string, Branch>;
+    private readonly commitsByHash: Map<string, Commit>;
+    private readonly branchesByKey: Map<string, Branch>;
 
-    constructor(commits: Commit[], branches: Branch[]) {
-        this.commitsMap = new Map(commits.map(c => [c.hash, c]));
-        this.branchesMap = new Map(branches.map(b => [`${b.type}:${b.name}`, b]));
-        this.validateRepository();
+    constructor(
+        commits: Commit[],
+        branches: Branch[],
+        /** True when history was truncated, i.e. older commits exist upstream. */
+        readonly hasMoreHistory: boolean = false
+    ) {
+        this.commitsByHash = new Map(commits.map((c) => [c.hash, c]));
+        this.branchesByKey = new Map(
+            branches.map((b) => [`${b.type}:${b.name}`, b])
+        );
     }
 
     get commits(): Commit[] {
-        return Array.from(this.commitsMap.values());
+        return Array.from(this.commitsByHash.values());
     }
 
     get branches(): Branch[] {
-        return Array.from(this.branchesMap.values());
+        return Array.from(this.branchesByKey.values());
     }
 
     get localBranches(): Branch[] {
-        return this.branches.filter(b => b.isLocal);
+        return this.branches.filter((b) => b.isLocal);
     }
 
     get remoteBranches(): Branch[] {
-        return this.branches.filter(b => b.isRemote);
+        return this.branches.filter((b) => b.isRemote);
     }
 
     get currentBranch(): Branch | undefined {
-        return this.branches.find(b => b.isCurrent);
+        return this.branches.find((b) => b.isCurrent);
     }
 
-    getCommit(hash: string): Commit | undefined {
-        return this.commitsMap.get(hash);
+    get isEmpty(): boolean {
+        return this.commitsByHash.size === 0;
     }
 
-    getBranch(name: string, type: 'local' | 'remote' = 'local'): Branch | undefined {
-        return this.branchesMap.get(`${type}:${name}`);
-    }
+    /**
+     * Parent hashes referenced by loaded commits but not themselves loaded —
+     * the ragged edge of the window. Useful for drawing a "history continues"
+     * affordance and for deciding what a "load more" would fetch.
+     */
+    get boundaryParentHashes(): string[] {
+        const boundary = new Set<string>();
 
-    getCommitParents(commit: Commit): Commit[] {
-        return commit.parentHashes
-            .map(hash => this.getCommit(hash))
-            .filter((c): c is Commit => c !== undefined);
-    }
-
-    getCommitsByBranch(branchName: string): Commit[] {
-        return this.commits.filter(c => c.hasBranch(branchName));
-    }
-
-    getBranchCommits(branchName: string): Commit[] {
-        const visited = new Set<string>();
-        const result: Commit[] = [];
-        
-        // Find head commit for the branch
-        const branch = this.branches.find(b => b.name === branchName || b.shortName === branchName);
-        if (!branch) {
-            return [];
-        }
-
-        const headCommit = this.getCommit(branch.headCommitHash);
-        if (!headCommit) {
-            return [];
-        }
-
-        // Traverse back from head commit
-        this.collectBranchCommits(headCommit, visited, result, branchName);
-        return result.reverse(); // Reverse to get chronological order
-    }
-
-    private collectBranchCommits(commit: Commit, visited: Set<string>, result: Commit[], branchName: string): void {
-        if (visited.has(commit.hash)) {
-            return;
-        }
-        visited.add(commit.hash);
-
-        // Add commit if it belongs to this branch or is a merge target
-        if (commit.hasBranch(branchName)) {
-            result.push(commit);
-        }
-
-        // Continue with parents
-        const parents = this.getCommitParents(commit);
-        for (const parent of parents) {
-            this.collectBranchCommits(parent, visited, result, branchName);
-        }
-    }
-
-    private validateRepository(): void {
-        // Ensure all parent hashes reference existing commits
-        for (const commit of this.commits) {
+        for (const commit of this.commitsByHash.values()) {
             for (const parentHash of commit.parentHashes) {
-                if (!this.commitsMap.has(parentHash)) {
-                    throw new Error(`Commit ${commit.shortHash} references non-existent parent ${parentHash.substring(0, 8)}`);
+                if (!this.commitsByHash.has(parentHash)) {
+                    boundary.add(parentHash);
                 }
             }
         }
 
-        // Ensure all branch head commits exist
-        for (const branch of this.branches) {
-            if (!this.commitsMap.has(branch.headCommitHash)) {
-                throw new Error(`Branch ${branch.name} references non-existent commit ${branch.headCommitHash.substring(0, 8)}`);
-            }
-        }
+        return Array.from(boundary);
+    }
+
+    getCommit(hash: string): Commit | undefined {
+        return this.commitsByHash.get(hash);
+    }
+
+    getBranch(name: string, type: 'local' | 'remote' = 'local'): Branch | undefined {
+        return this.branchesByKey.get(`${type}:${name}`);
+    }
+
+    /** Only the parents present in this window; boundary parents are omitted. */
+    getLoadedParents(commit: Commit): Commit[] {
+        return commit.parentHashes
+            .map((hash) => this.getCommit(hash))
+            .filter((c): c is Commit => c !== undefined);
     }
 }

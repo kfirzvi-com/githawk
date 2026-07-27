@@ -8,3 +8,6 @@ artifacts/
 playwright-report/
 test-results/
 .vscode-test/
+
+# Harness dump of a real repository
+src/presentation/webview/dev-graph.json
