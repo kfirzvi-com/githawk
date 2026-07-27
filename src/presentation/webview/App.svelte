@@ -47,6 +47,24 @@
     const selectionIsContiguous = $derived(
         isContiguous(rowOrder, selection.hashes)
     );
+    /**
+     * A single commit still runs a comparison — that is what fills the Changes
+     * tree — but its details belong in this panel, not a one-file summary. Only a
+     * genuine aggregate (a selection, a branch review, a two-ref diff) replaces
+     * them. Keying on the method rather than on the selection covers comparisons
+     * that did not come from the graph at all.
+     */
+    const showAggregate = $derived(
+        comparison !== null && comparison.method !== 'singleCommit'
+    );
+
+    /** Stats for the selected commit, shown alongside its details. */
+    const selectedCommitTotals = $derived(
+        comparison && comparison.method === 'singleCommit'
+            ? comparison.totals
+            : undefined
+    );
+
     /** The selected commits themselves, so the summary can list them. */
     const selectedCommits = $derived(
         graph
@@ -325,7 +343,7 @@
             <div
                 class="w-80 flex-shrink-0 border-l border-gray-700 bg-gray-850"
             >
-                {#if comparison}
+                {#if showAggregate && comparison}
                     <ComparisonSummary
                         {comparison}
                         commits={selectedCommits}
@@ -333,6 +351,7 @@
                 {:else}
                     <CommitDetails
                         {selectedCommit}
+                        totals={selectedCommitTotals}
                         onCopyHash={(hash) =>
                             postToHost({ type: 'commit:copyHash', hash })}
                         onSelectParent={selectParentByHash}

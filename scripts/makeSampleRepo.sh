@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #
-# Builds a throwaway repository with topology worth looking at: several branches,
-# merges, tags, a long-running branch, a stale branch, a fake remote, and
-# uncommitted work.
+# Builds a throwaway repository worth looking at: a nested source tree, several
+# branches, merges, tags, a stale branch, a fake remote, multi-line commit
+# messages, a binary file, a rename, and uncommitted work.
 #
-# Purpose-built rather than pointing at a real repository, because GitHawk can now
+# Purpose-built rather than pointing at a real repository, because GitHawk can
 # reset --hard, delete branches, and rebase. Break this one freely.
 #
 #   ./scripts/makeSampleRepo.sh [target-dir]
@@ -16,8 +16,8 @@ TARGET="${1:-/tmp/githawk-sample}"
 rm -rf "$TARGET" "${TARGET}-remote"
 mkdir -p "$TARGET"
 
-# A bare repository stands in for a remote, so remote branches and ahead/behind
-# states are real rather than simulated.
+# A bare repository stands in for a remote, so remote branches are real rather
+# than simulated.
 git init --quiet --bare "${TARGET}-remote"
 
 cd "$TARGET"
@@ -27,48 +27,76 @@ git config user.email "sample@example.com"
 git config commit.gpgsign false
 git remote add origin "${TARGET}-remote"
 
-commit() {
-  local file="$1" message="$2" body="${3:-}"
-  printf '%s\n' "${body:-$message}" >> "$file"
-  git add "$file"
-  git commit --quiet -m "$message"
+# Writes a file, creating its directories, then stages it.
+stage() {
+  local path="$1" contents="$2"
+  mkdir -p "$(dirname "$path")"
+  printf '%s\n' "$contents" >> "$path"
+  git add "$path"
 }
 
-# --- mainline ------------------------------------------------------------
-commit README.md "Initial commit" "# Sample project"
-commit README.md "docs: describe the project"
-commit src.txt "feat: add the core module" "core module"
+commit() {
+  git commit --quiet -m "$1"
+}
+
+# A multi-line message, so the details panel has a body to render.
+commit_with_body() {
+  git commit --quiet -F -
+}
+
+# --- mainline: a nested source tree, so the Changes view has depth ------
+stage README.md "# Sample project"
+stage src/core/index.ts "export const version = '0.1.0';"
+stage src/core/config.ts "export const defaults = {};"
+commit "Initial commit"
+
+stage src/core/request.ts "export function request() {}"
+stage src/core/response.ts "export function respond() {}"
+stage docs/architecture.md "## Architecture"
+commit "feat(core): add the request pipeline"
 git tag v0.1.0
 
-# --- a feature branch that merged ---------------------------------------
+# --- a feature branch that merged, touching several directories --------
 git checkout --quiet -b feature/login
-commit login.txt "feat(login): add the login form"
-commit login.txt "feat(login): validate the password field"
-commit login.txt "test(login): cover the empty password case"
+stage src/features/login/form.ts "export const LoginForm = {};"
+stage src/features/login/validate.ts "export function validate() {}"
+stage tests/features/login/form.test.ts "test('renders', () => {});"
+commit "feat(login): add the login form"
+
+stage src/features/login/validate.ts "export function validatePassword() {}"
+stage docs/guides/login.md "## Signing in"
+commit "feat(login): validate the password field"
+
 git checkout --quiet main
 git merge --quiet --no-ff -m "Merge branch 'feature/login'" feature/login
 
-commit src.txt "refactor: extract the request helper"
+stage src/core/request.ts "// retries"
+commit "refactor(core): extract the retry helper"
 git tag v0.2.0
 
-# --- two branches alive at the same time, so lanes overlap --------------
+# --- two branches alive at once, so lanes overlap ----------------------
 git checkout --quiet -b feature/reporting
-commit reporting.txt "feat(reporting): scaffold the report builder"
-commit reporting.txt "feat(reporting): add CSV output"
+stage src/features/reporting/builder.ts "export const ReportBuilder = {};"
+stage src/features/reporting/formats/csv.ts "export function toCsv() {}"
+stage tests/features/reporting/builder.test.ts "test('builds', () => {});"
+commit "feat(reporting): scaffold the report builder"
 
 git checkout --quiet main
 git checkout --quiet -b bugfix/timezone
-commit timezone.txt "fix(timezone): stop assuming UTC"
+stage src/core/time.ts "export function nowUtc() {}"
+commit "fix(timezone): stop assuming UTC"
 
 git checkout --quiet main
 git merge --quiet --no-ff -m "Merge branch 'bugfix/timezone'" bugfix/timezone
 git branch --quiet -d bugfix/timezone
 
-commit src.txt "chore: bump dependencies"
+stage package.json '{ "name": "sample" }'
+commit "chore: bump dependencies"
 
 # --- a stale branch left behind ----------------------------------------
 git checkout --quiet -b spike/graphql
-commit spike.txt "spike: try GraphQL for the reporting API"
+stage src/spikes/graphql/schema.ts "export const schema = {};"
+commit "spike: try GraphQL for the reporting API"
 git checkout --quiet main
 
 # --- publish, so remote branches exist ---------------------------------
@@ -76,25 +104,64 @@ git push --quiet --set-upstream origin main >/dev/null 2>&1
 git push --quiet origin feature/reporting >/dev/null 2>&1
 git push --quiet origin --tags >/dev/null 2>&1
 
-# --- an in-progress feature: several commits plus uncommitted work ------
-# This is the branch to try "Review branch…" on.
+# --- the branch to review: several commits across many directories ------
 git checkout --quiet feature/reporting
-commit reporting.txt "feat(reporting): add PDF output"
-commit reporting.txt "refactor(reporting): share the column formatter"
-commit README.md "docs: mention the reporting module"
 
-# Uncommitted: one staged change, one unstaged, one untracked.
-printf 'work in progress\n' >> reporting.txt
-printf 'staged change\n' >> src.txt
-git add src.txt
-printf 'scratch notes\n' > notes.txt
+stage src/features/reporting/formats/pdf.ts "export function toPdf() {}"
+stage src/features/reporting/formats/html.ts "export function toHtml() {}"
+commit "feat(reporting): add PDF and HTML output"
+
+# A rename and a deletion of files that existed BEFORE this branch, so the diff
+# against main shows R and D badges. Renaming a file created on this same branch
+# would net out as a plain addition, which is not what we want to demonstrate.
+git mv src/core/response.ts src/core/httpResponse.ts
+# architecture.md predates this branch, unlike time.ts which arrived on main via
+# a merge after the branch point and so is not present here at all.
+git rm --quiet docs/architecture.md
+git mv src/features/reporting/builder.ts src/features/reporting/reportBuilder.ts
+stage src/features/reporting/columns.ts "export function widths() {}"
+commit "refactor: rename response, drop the stale architecture note"
+
+# A binary file, so the tree shows one with no line counts.
+mkdir -p docs/images
+printf '\x89PNG\r\n\x1a\n\x00\x01\x02\x03\xff\xfe' > docs/images/screenshot.png
+git add docs/images/screenshot.png
+stage docs/guides/reporting.md "## Reports"
+commit "docs(reporting): document the formats"
+
+stage src/features/reporting/schedule.ts "export function schedule() {}"
+stage tests/features/reporting/schedule.test.ts "test('schedules', () => {});"
+commit_with_body <<'MSG'
+feat(reporting): add scheduled exports
+
+Adds a scheduler so reports can be emailed on a cadence:
+
+  - daily and weekly cadences
+  - a per-recipient timezone
+  - retries with backoff when SMTP is unavailable
+
+The scheduler deliberately does not persist state yet; a restart
+re-reads the configuration and rebuilds the queue.
+
+Reviewed-by: Someone Else
+Refs: #412
+MSG
+
+# --- uncommitted work: staged, unstaged, and untracked ------------------
+printf 'work in progress\n' >> src/features/reporting/schedule.ts
+printf 'staged change\n' >> src/core/config.ts
+git add src/core/config.ts
+mkdir -p notes
+printf 'scratch notes\n' > notes/todo.md
 
 echo
 echo "Sample repository ready at $TARGET"
 echo "  branch:      $(git rev-parse --abbrev-ref HEAD)"
 echo "  commits:     $(git rev-list --count --all)"
+echo "  directories: $(git ls-files | sed 's|/[^/]*$||' | sort -u | wc -l | tr -d ' ') distinct"
 echo "  branches:    $(git for-each-ref --format='%(refname:short)' refs/heads refs/remotes | tr '\n' ' ')"
 echo "  tags:        $(git tag | tr '\n' ' ')"
-echo "  uncommitted: staged src.txt, unstaged reporting.txt, untracked notes.txt"
+echo "  uncommitted: staged src/core/config.ts, unstaged schedule.ts, untracked notes/todo.md"
 echo
-echo "Try: Review branch… against main (feature/reporting is 3 commits ahead)"
+echo "Try: click a branch → \"Review my work against main\" — 4 commits across"
+echo "     src/features/reporting, tests/, and docs/, plus a rename and a binary."

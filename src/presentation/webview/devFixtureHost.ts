@@ -101,6 +101,18 @@ function answerRequests(): void {
         const message = (event as CustomEvent<WebviewToHostMessage>).detail;
 
         switch (message.type) {
+            case 'commit:select':
+                // The real host answers this by comparing the commit, which is
+                // what fills the Changes tree. The harness must answer too, or it
+                // cannot reproduce what the panel does once that reply lands.
+                post({
+                    type: 'comparison:loaded',
+                    comparison: fixtureComparison(
+                        message.hash.slice(0, 8),
+                        'singleCommit'
+                    ),
+                });
+                break;
             case 'compare:twoCommits':
                 post({
                     type: 'comparison:loaded',
@@ -134,6 +146,7 @@ function answerRequests(): void {
 }
 
 const explanations = {
+    singleCommit: 'Changes introduced by this commit alone.',
     mergeBase:
         'Compared from where the branches diverged, so work that landed on the base branch afterwards is excluded.',
     direct:
@@ -144,9 +157,21 @@ const explanations = {
 
 function fixtureComparison(
     label: string,
-    method: 'mergeBase' | 'replay' | 'direct'
+    method: 'mergeBase' | 'replay' | 'direct' | 'singleCommit'
 ): ComparisonDto {
-    const files: ComparisonDto['files'] = [
+    // One commit changes one file; anything else gets the fuller set.
+    const files: ComparisonDto['files'] =
+        method === 'singleCommit'
+            ? [
+                  {
+                      path: 'src/domain/models/Commit.ts',
+                      status: 'modified',
+                      insertions: 12,
+                      deletions: 3,
+                      isBinary: false,
+                  },
+              ]
+            : [
         { path: 'src/domain/services/GraphLayoutService.ts', status: 'modified', insertions: 84, deletions: 39, isBinary: false },
         { path: 'src/presentation/webview/components/GitGraph.svelte', status: 'modified', insertions: 31, deletions: 12, isBinary: false },
         { path: 'src/domain/services/commitOrdering.ts', status: 'added', insertions: 96, deletions: 0, isBinary: false },
@@ -154,7 +179,7 @@ function fixtureComparison(
         { path: 'src/infrastructure/MockGitRepository.ts', status: 'deleted', insertions: 0, deletions: 167, isBinary: false },
         { path: 'src/presentation/webview/components/RefBadge.svelte', status: 'renamed', previousPath: 'src/presentation/webview/components/Badge.svelte', insertions: 8, deletions: 3, isBinary: false },
         { path: 'docs/screenshot.png', status: 'added', insertions: 0, deletions: 0, isBinary: true },
-    ];
+              ];
 
     return {
         label,

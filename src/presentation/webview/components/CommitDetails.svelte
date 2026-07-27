@@ -1,14 +1,22 @@
 <script lang="ts">
     import type { Commit } from '../../../domain/models/Commit';
+    import type { ComparisonTotals } from '../../../domain/models/FileChange';
     import RefBadge from './RefBadge.svelte';
 
     interface Props {
         selectedCommit?: Commit | null;
+        /** What this commit changed, once the host has worked it out. */
+        totals?: ComparisonTotals;
         onCopyHash?: (hash: string) => void;
         onSelectParent?: (hash: string) => void;
     }
 
-    let { selectedCommit = null, onCopyHash, onSelectParent }: Props = $props();
+    let {
+        selectedCommit = null,
+        totals = undefined,
+        onCopyHash,
+        onSelectParent,
+    }: Props = $props();
 
     const absolute = (date: Date) =>
         date.toLocaleString(undefined, {
@@ -109,6 +117,27 @@
                     {#each selectedCommit.sortedRefs as ref (ref.kind + ref.name)}
                         <RefBadge {ref} />
                     {/each}
+                </div>
+            {/if}
+
+            {#if totals}
+                <!-- The files themselves are in the Changes tree; this is the
+                     shape of the change, next to the message that explains it. -->
+                <div
+                    class="flex items-baseline gap-3 border-t border-gray-700/70 pt-4 text-xs tabular-nums"
+                >
+                    <span class="text-gray-200">
+                        {`${totals.files} ${
+                            totals.files === 1 ? 'file changed' : 'files changed'
+                        }`}
+                    </span>
+                    <span class="text-green-400">+{totals.insertions}</span>
+                    <span class="text-red-400">−{totals.deletions}</span>
+                    {#if totals.binaryFiles > 0}
+                        <span class="text-gray-500">
+                            {`${totals.binaryFiles} binary`}
+                        </span>
+                    {/if}
                 </div>
             {/if}
 

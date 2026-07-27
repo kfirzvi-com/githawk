@@ -121,3 +121,54 @@ test('looks right — commit details', async ({ page }) => {
         fullPage: true,
     });
 });
+
+/*
+ * Regression: clicking one commit runs a comparison to fill the Changes tree, and
+ * that reply used to replace this panel with a one-file summary — details appeared,
+ * then vanished. A single commit must keep its details.
+ */
+test('a single commit keeps its details when the comparison arrives', async ({
+    page,
+}) => {
+    await selectMultiLineCommit(page);
+
+    const panel = details(page);
+    await expect(panel).toBeVisible();
+
+    // Give the comparison reply time to land and, previously, to clobber this.
+    await expect(panel.getByText('1 file changed')).toBeVisible();
+
+    // Still the details panel, not the aggregate summary.
+    await expect(panel.getByText('Reviewed-by: Zoe')).toBeVisible();
+    await expect(panel.getByText('Commit hash')).toBeVisible();
+    await expect(
+        page.getByText('The changed files are in the Changes view in the sidebar.')
+    ).toBeHidden();
+});
+
+test('shows what the commit changed alongside its message', async ({ page }) => {
+    await selectMultiLineCommit(page);
+
+    const panel = details(page);
+    await expect(panel.getByText('1 file changed')).toBeVisible();
+    await expect(panel.getByText('+12')).toBeVisible();
+    await expect(panel.getByText('−3')).toBeVisible();
+});
+
+test('an aggregate replaces the details, but a single commit does not', async ({
+    page,
+}) => {
+    await selectMultiLineCommit(page);
+    await expect(details(page)).toBeVisible();
+
+    // Add a second commit: now it is an aggregate, so the summary takes over.
+    const modifier = process.platform === 'darwin' ? 'Meta' : 'Control';
+    await page
+        .getByTestId('git-graph')
+        .locator('button')
+        .nth(6)
+        .click({ modifiers: [modifier] });
+
+    await expect(page.getByText('Included commits (2)')).toBeVisible();
+    await expect(details(page)).toBeHidden();
+});
