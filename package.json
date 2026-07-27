@@ -1,9 +1,26 @@
 {
-  "name": "y",
-  "displayName": "Git Graph",
-  "description": "A simple, fast git graph for VS Code. No AI, no telemetry.",
+  "name": "gitlibre",
+  "displayName": "GitLibre",
+  "description": "A simple, fast git graph for VS Code. MIT licensed. No AI, no telemetry.",
   "version": "0.0.1",
   "license": "MIT",
+  "publisher": "kfirzvi",
+  "author": "Kfir Zvi",
+  "homepage": "https://gitlibre.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kfirzvi-com/gitlibre.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kfirzvi-com/gitlibre/issues"
+  },
+  "keywords": [
+    "git",
+    "git graph",
+    "git history",
+    "source control",
+    "open source"
+  ],
   "engines": {
     "vscode": "^1.104.0"
   },
@@ -15,13 +32,13 @@
   "contributes": {
     "commands": [
       {
-        "command": "gitGraph.open",
-        "title": "Git Graph: Open"
+        "command": "gitLibre.open",
+        "title": "GitLibre: Open Git Graph"
       }
     ],
     "keybindings": [
       {
-        "command": "gitGraph.open",
+        "command": "gitLibre.open",
         "key": "cmd+9",
         "when": "!terminalFocus"
       }
@@ -29,17 +46,18 @@
     "viewsContainers": {
       "panel": [
         {
-          "id": "gitGraphPanel",
-          "title": "Git Graph",
+          "id": "gitLibrePanel",
+          "title": "GitLibre",
           "icon": "$(git-branch)"
         }
       ]
     },
     "views": {
-      "gitGraphPanel": [
+      "gitLibrePanel": [
         {
-          "id": "gitGraphView",
+          "id": "gitLibreView",
           "name": "Git Graph",
+          "contextualTitle": "GitLibre",
           "type": "webview",
           "icon": "$(git-branch)"
         }

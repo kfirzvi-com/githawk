@@ -1,15 +1,23 @@
-# Git Graph *(working title)*
+# GitLibre
 
-A simple, fast git graph for VS Code.
+A simple, fast git graph for VS Code. MIT licensed.
 
-Built because the graph extension everyone used is no longer maintained, and the
-alternatives keep adding AI features to a tool whose whole job is to draw lines
-between commits.
+The extension most people used for this — [Git
+Graph](https://github.com/mhutchie/vscode-git-graph) — has been abandoned
+([#913](https://github.com/mhutchie/vscode-git-graph/issues/913),
+[#838](https://github.com/mhutchie/vscode-git-graph/issues/838)) with millions of
+installs still depending on it. Its licence looks like MIT but removes the rights
+to `publish, distribute, sublicense, and/or sell derivative works`, so it is not
+open source and nobody can legally ship a maintained fork.
+
+GitLibre is a clean-room replacement under a real MIT licence. Meanwhile the
+maintained alternatives keep bolting AI onto a tool whose entire job is drawing
+lines between commits.
 
 **Explicit non-goals:** no AI, no telemetry, no account, no cloud.
 
 > Status: pre-alpha. The graph renders from fixtures; the git adapter is not
-> written yet. Not installable as a useful extension.
+> written yet. Not yet useful against a real repository.
 
 ## Architecture
 

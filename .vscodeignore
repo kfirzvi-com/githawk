@@ -1,15 +1,27 @@
+# Everything not needed at runtime. Verified with `vsce ls`.
 .vscode/**
 .vscode-test/**
 .github/**
 node_modules/**
 src/**
-dist/**/*.map
-.gitignore
+tests/**
+artifacts/**
+playwright-report/**
+test-results/**
+
+# Build + tooling config
 esbuild.js
 vite.config.ts
+playwright.config.ts
 svelte.config.js
 eslint.config.mjs
-vsc-extension-quickstart.md
 **/tsconfig*.json
+
+# Sources and maps
 **/*.ts
-**/.vscode-test.*
+dist/**/*.map
+
+*.vsix
+
+# Repo housekeeping
+.gitignore
