@@ -29,51 +29,101 @@ export class ComparisonController {
         private readonly workspaceRootFor: () => string
     ) {}
 
-    /** Prompts for a base branch when one was not supplied. */
-    async resolveBaseBranch(supplied?: string): Promise<string | undefined> {
-        if (supplied) {
-            return supplied;
+    /**
+     * Lets the user pick any revision to compare against: a branch, a tag, the
+     * working tree, or a hash typed in. Deliberately not limited to branches, and
+     * not limited to things related to HEAD — comparing two unrelated branches
+     * while sitting on a third is a normal thing to want.
+     */
+    async pickRevision(
+        title: string,
+        options: { includeWorkingTree?: boolean } = {}
+    ): Promise<{ rev: string; isWorkingTree: boolean } | undefined> {
+        const repository = await this.repositoryFor().getRepository();
+
+        interface RevisionItem extends vscode.QuickPickItem {
+            rev?: string;
+            isWorkingTree?: boolean;
         }
 
-        const repository = await this.repositoryFor().getRepository();
-        const current = repository.currentBranch?.name;
+        const items: RevisionItem[] = [];
 
-        const candidates = repository.branches
-            .filter((branch) => branch.name !== current)
-            // Local branches first: comparing against a local base is the common
-            // case, and a long remote list would bury them.
-            .sort((a, b) => {
-                if (a.isLocal !== b.isLocal) {
-                    return a.isLocal ? -1 : 1;
-                }
-                return a.name.localeCompare(b.name);
-            })
-            .map((branch) => ({
-                label: branch.name,
-                description: branch.isRemote ? 'remote' : undefined,
-            }));
+        if (options.includeWorkingTree !== false) {
+            items.push({
+                label: '$(edit) Working tree',
+                description: 'including uncommitted changes',
+                rev: 'WORKTREE',
+                isWorkingTree: true,
+            });
+        }
 
-        if (candidates.length === 0) {
-            vscode.window.showInformationMessage(
-                'There is no other branch to compare against.'
-            );
+        items.push({
+            label: '$(git-commit) HEAD',
+            description: repository.currentBranch?.name ?? 'detached',
+            rev: 'HEAD',
+        });
+
+        const branches = repository.branches.slice().sort((a, b) => {
+            if (a.isLocal !== b.isLocal) {
+                return a.isLocal ? -1 : 1;
+            }
+            return a.name.localeCompare(b.name);
+        });
+
+        if (branches.length > 0) {
+            items.push({
+                label: 'Branches',
+                kind: vscode.QuickPickItemKind.Separator,
+            });
+            for (const branch of branches) {
+                items.push({
+                    label: branch.name,
+                    description: branch.isRemote ? 'remote' : undefined,
+                    rev: branch.name,
+                });
+            }
+        }
+
+        const tags = [
+            ...new Set(repository.commits.flatMap((commit) => commit.tagNames)),
+        ].sort();
+        if (tags.length > 0) {
+            items.push({
+                label: 'Tags',
+                kind: vscode.QuickPickItemKind.Separator,
+            });
+            for (const tag of tags) {
+                items.push({ label: tag, rev: tag });
+            }
+        }
+
+        const chosen = await vscode.window.showQuickPick(items, {
+            title,
+            placeHolder: 'Choose a branch, tag, or revision',
+            matchOnDescription: true,
+        });
+
+        if (!chosen?.rev) {
             return undefined;
         }
 
-        const chosen = await vscode.window.showQuickPick(candidates, {
-            title: current
-                ? `Compare ${current} against…`
-                : 'Compare the working tree against…',
-            placeHolder: 'Choose the base branch',
-        });
-
-        return chosen?.label;
+        return {
+            rev: chosen.rev,
+            isWorkingTree: chosen.isWorkingTree === true,
+        };
     }
 
     async compare(spec: ComparisonSpec): Promise<ComparisonDto> {
+        // A single commit's diff is fast and happens on every click, so it
+        // reports in the status bar. Only the slow reconstruction, which spawns a
+        // worktree, is worth a notification.
+        const isQuick = spec.kind === 'singleCommit';
+
         return vscode.window.withProgress(
             {
-                location: vscode.ProgressLocation.Notification,
+                location: isQuick
+                    ? vscode.ProgressLocation.Window
+                    : vscode.ProgressLocation.Notification,
                 title:
                     spec.kind === 'commitSet'
                         ? 'Combining the selected commits…'

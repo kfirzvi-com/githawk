@@ -20,6 +20,13 @@ export type ComparisonSpec =
           /** Include uncommitted work, so in-progress changes are reviewable too. */
           includeWorkingTree: boolean;
       }
+    /**
+     * Any two revisions, directly. Unlike `branchAgainstBase` this does not use
+     * the merge base: the question is "how do these two states differ?", not
+     * "what did I do on top of that one?". Either side may be a branch, tag,
+     * commit, or the working tree, and neither has to involve HEAD.
+     */
+    | { kind: 'twoRefs'; left: string; right: string; rightIsWorkingTree?: boolean }
     | { kind: 'commitRange'; oldest: string; newest: string }
     | { kind: 'singleCommit'; hash: string }
     | { kind: 'commitSet'; hashes: string[] };
@@ -27,6 +34,8 @@ export type ComparisonSpec =
 /** How a comparison's "before" side was established, which the UI must disclose. */
 export type ComparisonMethod =
     | 'mergeBase'
+    /** Direct comparison of two revisions. */
+    | 'direct'
     | 'range'
     | 'singleCommit'
     /** Selection replayed onto its common ancestor in a scratch worktree. */

@@ -1,0 +1,21 @@
+<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <!--
+        Activity-bar icon. VS Code recolours it, so everything uses currentColor
+        and there are no fills that would fight the theme. Drawn as a commit graph
+        rather than a bird: at 24px a hawk silhouette reads as a smudge, while
+        lanes and nodes read as what the extension does.
+    -->
+    <g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+        <!-- mainline -->
+        <path d="M6 3.5 V20.5" />
+        <!-- branch out and back -->
+        <path d="M6 8 C6 11, 15 10, 15 13" />
+        <path d="M15 15.5 C15 18.5, 6 17.5, 6 20.5" />
+    </g>
+    <g fill="currentColor">
+        <circle cx="6" cy="4" r="2.1" />
+        <circle cx="6" cy="12" r="2.1" />
+        <circle cx="15" cy="14" r="2.1" />
+        <circle cx="6" cy="20" r="2.1" />
+    </g>
+</svg>

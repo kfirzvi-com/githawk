@@ -29,6 +29,8 @@ export class GitCliComparer implements IComparisonReader {
         switch (spec.kind) {
             case 'branchAgainstBase':
                 return this.compareBranchAgainstBase(spec);
+            case 'twoRefs':
+                return this.compareTwoRefs(spec);
             case 'singleCommit':
                 return this.compareSingleCommit(spec);
             case 'commitRange':
@@ -76,6 +78,35 @@ export class GitCliComparer implements IComparisonReader {
             files,
             baseRev: mergeBase,
             targetRev: spec.includeWorkingTree ? undefined : 'HEAD',
+        };
+    }
+
+    /**
+     * A direct comparison of two revisions, with no merge base involved.
+     *
+     * Deliberately two-dot: the question here is how two states differ, so an
+     * unrelated commit on either side should show as a difference rather than be
+     * excluded. That is the opposite of what a branch review wants, which is why
+     * they are separate specs rather than one with a flag.
+     */
+    private async compareTwoRefs(
+        spec: Extract<ComparisonSpec, { kind: 'twoRefs' }>
+    ): Promise<Comparison> {
+        const revisions = spec.rightIsWorkingTree
+            ? [spec.left]
+            : [spec.left, spec.right];
+
+        const files = await this.readChanges(revisions);
+
+        return {
+            spec,
+            method: 'direct',
+            label: `${shorten(spec.left)} → ${
+                spec.rightIsWorkingTree ? 'working tree' : shorten(spec.right)
+            }`,
+            files,
+            baseRev: spec.left,
+            targetRev: spec.rightIsWorkingTree ? undefined : spec.right,
         };
     }
 
@@ -174,6 +205,11 @@ export class GitCliComparer implements IComparisonReader {
             return EMPTY_TREE_OBJECT;
         }
     }
+}
+
+/** Full hashes are unreadable in a label; refs are left as they are. */
+function shorten(rev: string): string {
+    return /^[0-9a-f]{40}$/i.test(rev) ? rev.slice(0, 8) : rev;
 }
 
 /** git's well-known empty tree hash, valid in every repository. */

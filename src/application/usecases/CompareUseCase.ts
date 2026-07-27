@@ -37,6 +37,8 @@ function explain(method: ComparisonMethod): string {
     switch (method) {
         case 'mergeBase':
             return 'Compared from where the branches diverged, so work that landed on the base branch afterwards is excluded.';
+        case 'direct':
+            return 'A direct comparison of two revisions. Everything that differs is shown, including work done on either side independently.';
         case 'range':
             return 'Compared across a contiguous run of commits.';
         case 'singleCommit':

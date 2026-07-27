@@ -49,7 +49,17 @@
       },
       {
         "command": "gitHawk.refresh",
-        "title": "GitHawk: Refresh Git Graph"
+        "title": "GitHawk: Refresh Git Graph",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "gitHawk.openChangedFile",
+        "title": "GitHawk: Open Changes"
+      },
+      {
+        "command": "gitHawk.clearChanges",
+        "title": "GitHawk: Clear Changes",
+        "icon": "$(clear-all)"
       }
     ],
     "keybindings": [
@@ -60,6 +70,13 @@
       }
     ],
     "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "gitHawkSidebar",
+          "title": "GitHawk",
+          "icon": "media/githawk.svg"
+        }
+      ],
       "panel": [
         {
           "id": "gitHawkPanel",
@@ -69,6 +86,14 @@
       ]
     },
     "views": {
+      "gitHawkSidebar": [
+        {
+          "id": "gitHawkChanges",
+          "name": "Changes",
+          "contextualTitle": "GitHawk",
+          "icon": "$(git-compare)"
+        }
+      ],
       "gitHawkPanel": [
         {
           "id": "gitHawkView",
@@ -76,6 +101,25 @@
           "contextualTitle": "GitHawk",
           "type": "webview",
           "icon": "$(git-branch)"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "gitHawk.clearChanges",
+          "when": "view == gitHawkChanges",
+          "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "gitHawk.openChangedFile",
+          "when": "false"
+        },
+        {
+          "command": "gitHawk.clearChanges",
+          "when": "false"
         }
       ]
     }

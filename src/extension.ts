@@ -5,6 +5,11 @@ import {
 } from './infrastructure/git/GitCliRepository';
 import { GitCliComparer } from './infrastructure/git/GitCliComparer';
 import { GitCliWriter } from './infrastructure/git/GitCliWriter';
+import {
+    CHANGED_FILES_VIEW_ID,
+    ChangedFilesTree,
+    OPEN_DIFF_COMMAND,
+} from './presentation/host/ChangedFilesTree';
 import { ComparisonController } from './presentation/host/ComparisonController';
 import {
     GITHAWK_VIEW_ID,
@@ -34,11 +39,19 @@ export function activate(context: vscode.ExtensionContext): void {
         firstWorkspaceFolder
     );
 
+    const changedFiles = new ChangedFilesTree();
+    const changesView = vscode.window.createTreeView(CHANGED_FILES_VIEW_ID, {
+        treeDataProvider: changedFiles,
+        showCollapseAll: true,
+    });
+    changedFiles.attach(changesView);
+
     const provider = new GitGraphViewProvider(
         context.extensionUri,
         createGitRepository,
         createGitWriter,
-        comparisons
+        comparisons,
+        changedFiles
     );
 
     context.subscriptions.push(
@@ -52,8 +65,31 @@ export function activate(context: vscode.ExtensionContext): void {
                 'workbench.view.extension.gitHawkPanel'
             )
         ),
+        changesView,
         vscode.commands.registerCommand('gitHawk.refresh', () =>
             provider.refresh()
+        ),
+        // Clicking a file in the Changes tree opens the native diff editor.
+        vscode.commands.registerCommand(OPEN_DIFF_COMMAND, (change) => {
+            const comparison = changedFiles.current;
+            if (!comparison || !change) {
+                return;
+            }
+            void comparisons
+                .openFile({
+                    path: change.path,
+                    previousPath: change.previousPath,
+                    baseRev: comparison.baseRev,
+                    targetRev: comparison.targetRev,
+                })
+                .catch((error: unknown) =>
+                    vscode.window.showErrorMessage(
+                        error instanceof Error ? error.message : String(error)
+                    )
+                );
+        }),
+        vscode.commands.registerCommand('gitHawk.clearChanges', () =>
+            changedFiles.clear()
         ),
         // Serves file contents at a revision so vscode.diff can compare two
         // historical versions, not just files on disk.

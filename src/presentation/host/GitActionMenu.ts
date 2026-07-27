@@ -15,6 +15,12 @@ export interface CommitContext {
     tagNames: string[];
 }
 
+/** What the menu asks for; resolving and running it belongs elsewhere. */
+export type CompareRequest =
+    | { kind: 'myWorkAgainst'; base: string }
+    | { kind: 'pickAgainst'; left: string; leftLabel: string }
+    | { kind: 'againstWorkingTree'; left: string; leftLabel: string };
+
 export interface BranchContext {
     name: string;
     isRemote: boolean;
@@ -40,13 +46,40 @@ export class GitActionMenu {
 
     constructor(
         writer: IGitWriter,
-        private readonly onCompleted: () => void
+        private readonly onCompleted: () => void,
+        /** Comparisons are owned by ComparisonController; the menu only asks. */
+        private readonly onCompareRequested?: (
+            request: CompareRequest
+        ) => Promise<void>
     ) {
         this.performAction = new PerformGitActionUseCase(writer);
     }
 
     async showForCommit(commit: CommitContext): Promise<void> {
         const items: ActionItem[] = [
+            {
+                label: '$(diff) Compare with…',
+                description: 'another branch, tag, or commit',
+                build: async () => {
+                    await this.onCompareRequested?.({
+                        kind: 'pickAgainst',
+                        left: commit.hash,
+                        leftLabel: commit.shortHash,
+                    });
+                    return undefined;
+                },
+            },
+            {
+                label: '$(git-compare) Compare with my working tree',
+                build: async () => {
+                    await this.onCompareRequested?.({
+                        kind: 'againstWorkingTree',
+                        left: commit.hash,
+                        leftLabel: commit.shortHash,
+                    });
+                    return undefined;
+                },
+            },
             {
                 label: '$(git-branch) Create branch here…',
                 build: async () => {
@@ -139,6 +172,29 @@ export class GitActionMenu {
         if (!branch.isCurrent) {
             items.push(
                 {
+                    label: `$(diff) Review my work against ${branch.name}`,
+                    description: 'from where the branches diverged',
+                    build: async () => {
+                        await this.onCompareRequested?.({
+                            kind: 'myWorkAgainst',
+                            base: branch.name,
+                        });
+                        return undefined;
+                    },
+                },
+                {
+                    label: `$(git-compare) Compare ${branch.name} with…`,
+                    description: 'any other branch, tag, or commit',
+                    build: async () => {
+                        await this.onCompareRequested?.({
+                            kind: 'pickAgainst',
+                            left: branch.name,
+                            leftLabel: branch.name,
+                        });
+                        return undefined;
+                    },
+                },
+                {
                     label: `$(git-merge) Merge ${branch.name} into current branch`,
                     build: async () => ({
                         type: 'mergeBranch',
@@ -165,9 +221,24 @@ export class GitActionMenu {
             });
         }
 
+        if (branch.isCurrent) {
+            items.push({
+                label: '$(diff) Compare this branch with…',
+                description: 'any other branch, tag, or commit',
+                build: async () => {
+                    await this.onCompareRequested?.({
+                        kind: 'pickAgainst',
+                        left: branch.name,
+                        leftLabel: branch.name,
+                    });
+                    return undefined;
+                },
+            });
+        }
+
         if (items.length === 0) {
             vscode.window.showInformationMessage(
-                `${branch.name} is already checked out.`
+                `${branch.name} has no available actions.`
             );
             return;
         }

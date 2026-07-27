@@ -7,7 +7,6 @@
     import CommitDetails from './components/CommitDetails.svelte';
     import GitGraph from './components/GitGraph.svelte';
     import RefBadge from './components/RefBadge.svelte';
-    import ComparisonPanel from './components/ComparisonPanel.svelte';
     import type { ComparisonDto } from '../../application/dto/ComparisonDto';
     import {
         applySelection,
@@ -30,9 +29,8 @@
     let hasMoreHistory = $state(false);
     let primaryBranchName = $state<string | undefined>(undefined);
     let selection = $state<SelectionState>(emptySelection);
+    /** Files live in the Changes tree; this is kept only for the summary line. */
     let comparison = $state<ComparisonDto | null>(null);
-    let comparisonLoading = $state(false);
-    let comparisonError = $state<string | null>(null);
 
     /** Layout is derived, never stored: one source of truth for the graph. */
     const graph = $derived(
@@ -64,23 +62,11 @@
                     errorMessage = message.message;
                     isLoading = false;
                     break;
-                case 'comparison:loading':
-                    comparisonLoading = true;
-                    comparisonError = null;
-                    break;
                 case 'comparison:loaded':
                     comparison = message.comparison;
-                    comparisonLoading = false;
-                    comparisonError = null;
-                    break;
-                case 'comparison:error':
-                    comparisonError = message.message;
-                    comparisonLoading = false;
                     break;
                 case 'comparison:cleared':
                     comparison = null;
-                    comparisonLoading = false;
-                    comparisonError = null;
                     break;
             }
         })
@@ -104,19 +90,27 @@
             modifiers
         );
         selectedCommit = commit;
-        postToHost({ type: 'commit:select', hash: commit.hash });
+
+        // Only a single selection asks for changes. Doing it per click while
+        // building a multi-selection would run a comparison for every click, and
+        // the results would race with the one the user actually wants.
+        if (selection.hashes.length === 1) {
+            postToHost({ type: 'commit:select', hash: commit.hash });
+        }
     };
 
-    const compareSelection = () => {
+    /** Combine the selection into one changeset. */
+    const reviewSelectionTogether = () => {
         postToHost({ type: 'compare:commits', hashes: selection.hashes });
     };
 
-    const compareBranch = (includeWorkingTree: boolean) => {
-        postToHost({ type: 'compare:branch', includeWorkingTree });
-    };
-
-    const clearComparison = () => {
-        postToHost({ type: 'compare:clear' });
+    /**
+     * Diff exactly two commits against each other. Distinct from reviewing them
+     * together: this asks how two states differ, not what the two commits changed.
+     */
+    const compareTwoSelected = () => {
+        const [right, left] = selection.hashes; // rows are newest-first
+        postToHost({ type: 'compare:twoCommits', left, right });
     };
 </script>
 
@@ -151,11 +145,7 @@
         </div>
     {:else}
         <div class="flex-shrink-0 border-b border-gray-700">
-            <Toolbar
-                {currentBranchName}
-                onAction={handleToolbarAction}
-                onCompareBranch={compareBranch}
-            />
+            <Toolbar {currentBranchName} onAction={handleToolbarAction} />
         </div>
 
         {#if selection.hashes.length > 1}
@@ -173,10 +163,21 @@
                         : 'not contiguous — will be reconstructed'}
                 </span>
                 <div class="flex-1"></div>
+                {#if selection.hashes.length === 2}
+                    <button
+                        type="button"
+                        class="rounded border border-amber-500/50 px-2 py-1 font-medium text-amber-100 hover:bg-amber-500/20"
+                        onclick={compareTwoSelected}
+                        title="How do these two commits differ?"
+                    >
+                        Diff the two
+                    </button>
+                {/if}
                 <button
                     type="button"
                     class="rounded bg-amber-500/80 px-2 py-1 font-medium text-gray-900 hover:bg-amber-400"
-                    onclick={compareSelection}
+                    onclick={reviewSelectionTogether}
+                    title="What do these commits change, together?"
                 >
                     Review together
                 </button>
@@ -294,45 +295,36 @@
             <div
                 class="w-80 flex-shrink-0 border-l border-gray-700 bg-gray-850"
             >
-                {#if comparisonLoading}
-                    <div
-                        class="flex h-full flex-col items-center justify-center gap-3 p-6 text-center"
-                    >
+                <div class="flex h-full flex-col overflow-hidden">
+                    {#if comparison}
+                        <!-- A pointer to where the files actually are; the tree
+                             owns the list so it is not duplicated here. -->
                         <div
-                            class="h-6 w-6 animate-spin rounded-full border-b-2 border-blue-400"
-                        ></div>
-                        <p class="text-sm text-gray-400">Comparing…</p>
-                    </div>
-                {:else if comparisonError}
-                    <div class="flex h-full flex-col justify-center gap-3 p-6">
-                        <p class="text-sm font-medium text-red-300">
-                            Could not compare
-                        </p>
-                        <p class="text-xs text-gray-400">{comparisonError}</p>
-                        <button
-                            type="button"
-                            class="self-start text-xs text-gray-400 underline hover:text-gray-200"
-                            onclick={clearComparison}
+                            class="flex-shrink-0 border-b border-gray-700 bg-gray-800/60 px-4 py-2"
                         >
-                            Dismiss
-                        </button>
+                            <p
+                                class="truncate text-xs font-medium text-gray-200"
+                                title={comparison.label}
+                            >
+                                {comparison.label}
+                            </p>
+                            <!-- One expression: a sentence split across
+                                 interpolations becomes separate text nodes,
+                                 which assistive tech and text matchers cannot
+                                 read as one phrase. -->
+                            <p class="mt-0.5 text-[11px] text-gray-400">
+                                {`${comparison.totals.files} ${
+                                    comparison.totals.files === 1
+                                        ? 'file'
+                                        : 'files'
+                                } changed — open the Changes view in the sidebar`}
+                            </p>
+                        </div>
+                    {/if}
+                    <div class="min-h-0 flex-1">
+                        <CommitDetails {selectedCommit} />
                     </div>
-                {:else if comparison}
-                    <ComparisonPanel
-                        {comparison}
-                        onClear={clearComparison}
-                        onOpenFile={(file) =>
-                            postToHost({
-                                type: 'compare:openFile',
-                                path: file.path,
-                                previousPath: file.previousPath,
-                                baseRev: comparison!.baseRev,
-                                targetRev: comparison!.targetRev,
-                            })}
-                    />
-                {:else}
-                    <CommitDetails {selectedCommit} />
-                {/if}
+                </div>
             </div>
         </div>
     {/if}

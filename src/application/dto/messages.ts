@@ -11,9 +11,8 @@ import { GitGraphDto } from './GitGraphDto';
 export type HostToWebviewMessage =
     | { type: 'graph:loaded'; graph: GitGraphDto }
     | { type: 'graph:error'; message: string }
-    | { type: 'comparison:loading' }
+    /** Kept so the webview can reflect selection state; files live in the tree. */
     | { type: 'comparison:loaded'; comparison: ComparisonDto }
-    | { type: 'comparison:error'; message: string }
     | { type: 'comparison:cleared' };
 
 export type WebviewToHostMessage =
@@ -24,16 +23,11 @@ export type WebviewToHostMessage =
     /** Opens the native action menu for a branch. */
     | { type: 'branch:menu'; name: string; isRemote: boolean; isCurrent: boolean }
     | { type: 'remote:operation'; operation: 'fetch' | 'pull' | 'push' }
-    /** Review the current branch against a base branch, chosen by the host. */
-    | { type: 'compare:branch'; base?: string; includeWorkingTree: boolean }
-    /** Review an arbitrary set of selected commits together. */
+    /**
+     * Show what these commits changed. One commit shows its own diff; several are
+     * combined. Results land in the Changes tree, not in the webview.
+     */
     | { type: 'compare:commits'; hashes: string[] }
-    | { type: 'compare:clear' }
-    /** Open one changed file in VS Code's diff editor. */
-    | {
-          type: 'compare:openFile';
-          path: string;
-          previousPath?: string;
-          baseRev: string;
-          targetRev?: string;
-      };
+    /** Diff exactly two commits directly against each other. */
+    | { type: 'compare:twoCommits'; left: string; right: string }
+    | { type: 'compare:clear' };

@@ -44,12 +44,34 @@ Two rules worth knowing:
 - **Rows and lanes are domain concepts; pixels are not.** The layout emits
   `{row, lane}` only. Coordinates live in
   `presentation/webview/viewmodels/graphGeometry.ts`.
+- **Native UI wherever VS Code already has it.** Menus are QuickPicks, the file
+  list is a `TreeView`, and diffs open in the built-in diff editor. The webview
+  draws the graph, which is the one thing VS Code cannot already do.
 
-## Actions
+## Using it
+
+The graph lives in the **panel** (`Cmd+9`). Changed files live in a tree in the
+**primary sidebar**, under the GitHawk icon.
 
 Right-click a commit, or click a branch, and GitHawk opens a **native VS Code
 QuickPick** rather than a menu drawn inside the webview — so keyboard navigation,
 theming, and confirmation dialogs are the ones you already know.
+
+### Seeing what changed
+
+- **Click a commit** — its files appear in the Changes tree. Click a file to open
+  it in the diff editor.
+- **Click a branch → "Review my work against …"** — everything your branch adds
+  relative to that one, measured from the merge base, including uncommitted work.
+- **"Compare … with …"** on a branch or commit — any two revisions, directly.
+  Neither side has to involve where you currently are, so you can sit on `main`
+  and compare two other branches.
+- **Cmd/Ctrl-click** commits to select several, **Shift-click** for a run. Two
+  selected offers both *Diff the two* (how they differ) and *Review together*
+  (what they change combined); more than two offers only the latter.
+
+Whichever route you take, the tree states how the comparison was made, because a
+merge-base diff, a direct diff, and a reconstruction answer different questions.
 
 Destructive actions (reset, delete, rebase) require a modal confirmation that
 states what will be lost, and `PerformGitActionUseCase` refuses to run one that

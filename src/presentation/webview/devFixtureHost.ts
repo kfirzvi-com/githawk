@@ -101,14 +101,12 @@ function answerRequests(): void {
         const message = (event as CustomEvent<WebviewToHostMessage>).detail;
 
         switch (message.type) {
-            case 'compare:branch':
+            case 'compare:twoCommits':
                 post({
                     type: 'comparison:loaded',
                     comparison: fixtureComparison(
-                        message.includeWorkingTree
-                            ? 'main…working tree'
-                            : 'main…HEAD',
-                        'mergeBase'
+                        `${message.left.slice(0, 8)} → ${message.right.slice(0, 8)}`,
+                        'direct'
                     ),
                 });
                 break;
@@ -130,9 +128,18 @@ function answerRequests(): void {
     });
 }
 
+const explanations = {
+    mergeBase:
+        'Compared from where the branches diverged, so work that landed on the base branch afterwards is excluded.',
+    direct:
+        'A direct comparison of two revisions. Everything that differs is shown, including work done on either side independently.',
+    replay:
+        'These commits are not contiguous, so their combined effect was reconstructed by replaying them onto their common ancestor in a temporary worktree. Your working tree was not touched.',
+} as const;
+
 function fixtureComparison(
     label: string,
-    method: 'mergeBase' | 'replay'
+    method: 'mergeBase' | 'replay' | 'direct'
 ): ComparisonDto {
     const files: ComparisonDto['files'] = [
         { path: 'src/domain/services/GraphLayoutService.ts', status: 'modified', insertions: 84, deletions: 39, isBinary: false },
@@ -147,10 +154,7 @@ function fixtureComparison(
     return {
         label,
         method,
-        methodExplanation:
-            method === 'mergeBase'
-                ? 'Compared from where the branches diverged, so work that landed on the base branch afterwards is excluded.'
-                : 'These commits are not contiguous, so their combined effect was reconstructed by replaying them onto their common ancestor in a temporary worktree. Your working tree was not touched.',
+        methodExplanation: explanations[method],
         files,
         totals: {
             files: files.length,
