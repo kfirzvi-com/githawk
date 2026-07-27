@@ -136,6 +136,33 @@ export function tooltipFor(change: FileChangeDto): string {
     return lines.join('\n');
 }
 
+/**
+ * Markdown so the tooltip can separate the path from the numbers rather than
+ * being one undifferentiated block of text.
+ */
+export function markdownTooltipSource(change: FileChangeDto): string {
+    const lines = [`**${statusWord(change.status)}** \`${change.path}\``];
+
+    if (change.previousPath) {
+        lines.push(`renamed from \`${change.previousPath}\``);
+    }
+    lines.push(
+        change.isBinary
+            ? '_binary file — no line counts_'
+            : `\`+${change.insertions}\` \`−${change.deletions}\``
+    );
+
+    return lines.join('\n\n');
+}
+
+/** Files beneath a directory, including nested ones. */
+export function countFiles(node: TreeNode): number {
+    if (node.kind === 'file') {
+        return 1;
+    }
+    return node.children.reduce((total, child) => total + countFiles(child), 0);
+}
+
 export function statusWord(status: FileChangeDto['status']): string {
     switch (status) {
         case 'added':

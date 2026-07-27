@@ -4,9 +4,11 @@ import {
     TreeNode,
     basename,
     buildTree,
+    countFiles,
     describeChange,
-    tooltipFor,
+    markdownTooltipSource,
 } from './changedFilesTreeModel';
+import { ChangeDecorationProvider, changeUri } from './ChangeDecorationProvider';
 
 export const CHANGED_FILES_VIEW_ID = 'gitHawkChanges';
 export const OPEN_DIFF_COMMAND = 'gitHawk.openChangedFile';
@@ -28,6 +30,8 @@ export class ChangedFilesTree implements vscode.TreeDataProvider<TreeNode> {
     private roots: TreeNode[] = [];
     private view?: vscode.TreeView<TreeNode>;
 
+    constructor(private readonly decorations: ChangeDecorationProvider) {}
+
     attach(view: vscode.TreeView<TreeNode>): void {
         this.view = view;
         this.describe();
@@ -40,6 +44,7 @@ export class ChangedFilesTree implements vscode.TreeDataProvider<TreeNode> {
     show(comparison: ComparisonDto): void {
         this.comparison = comparison;
         this.roots = buildTree(comparison.files);
+        this.decorations.setChanges(comparison.files);
         this.changed.fire(undefined);
         this.describe();
     }
@@ -47,6 +52,7 @@ export class ChangedFilesTree implements vscode.TreeDataProvider<TreeNode> {
     clear(): void {
         this.comparison = undefined;
         this.roots = [];
+        this.decorations.clear();
         this.changed.fire(undefined);
         this.describe();
     }
@@ -64,7 +70,9 @@ export class ChangedFilesTree implements vscode.TreeDataProvider<TreeNode> {
                 node.label,
                 vscode.TreeItemCollapsibleState.Expanded
             );
-            item.resourceUri = vscode.Uri.file(node.path);
+            item.iconPath = vscode.ThemeIcon.Folder;
+            const files = countFiles(node);
+            item.description = `${files} ${files === 1 ? 'file' : 'files'}`;
             item.contextValue = 'gitHawkDirectory';
             return item;
         }
@@ -72,11 +80,14 @@ export class ChangedFilesTree implements vscode.TreeDataProvider<TreeNode> {
         const { change } = node;
         const item = new vscode.TreeItem(basename(change.path));
 
-        // A file: URI is what makes VS Code apply the icon theme, even though the
-        // file need not exist on disk at this revision.
-        item.resourceUri = vscode.Uri.file(change.path);
+        // A private scheme, not file:. VS Code still resolves the icon from the
+        // extension, and the decoration provider can colour these rows without
+        // touching identically-named files elsewhere in the workbench.
+        item.resourceUri = changeUri(change.path);
         item.description = describeChange(change);
-        item.tooltip = tooltipFor(change);
+        item.tooltip = new vscode.MarkdownString(
+            markdownTooltipSource(change)
+        );
         item.contextValue = 'gitHawkChangedFile';
         item.command = {
             command: OPEN_DIFF_COMMAND,

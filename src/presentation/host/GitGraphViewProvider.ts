@@ -94,6 +94,14 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
             case 'commit:menu':
                 void this.showCommitMenu(message.hash);
                 break;
+            case 'commit:copyHash':
+                void vscode.env.clipboard.writeText(message.hash).then(() =>
+                    vscode.window.setStatusBarMessage(
+                        `Copied ${message.hash.slice(0, 8)}`,
+                        3000
+                    )
+                );
+                break;
             case 'branch:menu':
                 void this.createMenu().showForBranch({
                     name: message.name,
@@ -264,7 +272,8 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
             await this.createMenu().showForCommit({
                 hash: commit.hash,
                 shortHash: commit.shortHash,
-                subject: commit.message,
+                // Subject only: the menu title must stay one line.
+                subject: commit.subject,
                 branchNames: commit.branchNames,
                 tagNames: commit.tagNames,
             });

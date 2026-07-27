@@ -14,9 +14,18 @@
 export const UNIT_SEPARATOR = String.fromCharCode(0x1f);
 export const RECORD_SEPARATOR = String.fromCharCode(0x1e);
 
-/** hash, parents, author, author date (ISO 8601), ref decorations, subject */
+/**
+ * hash, parents, author name, author email, author date, committer name,
+ * committer date, ref decorations, then the raw message.
+ *
+ * `%B` is last on purpose: it is the only field that can contain newlines, and
+ * keeping it at the end means a multi-line message cannot be mistaken for the
+ * start of another field. Records are still delimited by RS, so newlines inside
+ * it are harmless.
+ */
 export const LOG_FORMAT =
-    ['%H', '%P', '%an', '%aI', '%D', '%s'].join('%x1f') + '%x1e';
+    ['%H', '%P', '%an', '%ae', '%aI', '%cn', '%cI', '%D', '%B'].join('%x1f') +
+    '%x1e';
 
 export interface LogOptions {
     /** Maximum commits to display. One extra is requested so truncation is detectable. */

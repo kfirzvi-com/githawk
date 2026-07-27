@@ -15,7 +15,7 @@ test('a single click does not offer a multi-commit review', async ({ page }) => 
 
     // The selection bar is for multi-selections; one commit uses the details panel.
     await expect(page.getByText(/commits selected/)).toBeHidden();
-    await expect(page.getByText('Commit Details')).toBeVisible();
+    await expect(page.getByTestId('commit-details')).toBeVisible();
 });
 
 test('cmd-click builds a non-contiguous selection and says so', async ({
@@ -47,7 +47,7 @@ test('clearing a selection dismisses the bar', async ({ page }) => {
 
     await page.getByRole('button', { name: 'Clear' }).click();
     await expect(page.getByText(/commits selected/)).toBeHidden();
-    await expect(page.getByText('Commit Details')).toBeVisible();
+    await expect(page.getByTestId('commit-details')).toBeVisible();
 });
 
 test('selecting several commits compares them automatically', async ({
@@ -114,7 +114,7 @@ test('clearing the selection returns to commit details', async ({ page }) => {
     await expect(page.getByText('Included commits (2)')).toBeVisible();
 
     await page.getByRole('button', { name: 'Clear' }).click();
-    await expect(page.getByText('Commit Details')).toBeVisible();
+    await expect(page.getByTestId('commit-details')).toBeVisible();
 });
 
 test('looks right — multi-selection', async ({ page }) => {

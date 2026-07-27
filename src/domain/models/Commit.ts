@@ -2,8 +2,13 @@ import { Ref, compareRefsForDisplay, isBranchRef } from './Ref';
 
 export interface CommitProps {
     hash: string;
+    /** The raw commit message: subject, then body, exactly as written. */
     message: string;
     author: string;
+    authorEmail?: string;
+    /** Set when the committer differs from the author, as after a rebase or cherry-pick. */
+    committer?: string;
+    committedAt?: Date;
     parentHashes: string[];
     refs: Ref[];
     timestamp: Date;
@@ -19,6 +24,9 @@ export class Commit {
     readonly hash: string;
     readonly message: string;
     readonly author: string;
+    readonly authorEmail?: string;
+    readonly committer?: string;
+    readonly committedAt?: Date;
     readonly parentHashes: string[];
     readonly refs: Ref[];
     readonly timestamp: Date;
@@ -35,6 +43,9 @@ export class Commit {
         this.hash = props.hash;
         this.message = props.message;
         this.author = props.author;
+        this.authorEmail = props.authorEmail;
+        this.committer = props.committer;
+        this.committedAt = props.committedAt;
         this.parentHashes = [...props.parentHashes];
         this.refs = [...props.refs];
         this.timestamp = props.timestamp;
@@ -43,6 +54,40 @@ export class Commit {
 
     get shortHash(): string {
         return this.hash.substring(0, 8);
+    }
+
+    /** First line of the message — what a graph row shows. */
+    get subject(): string {
+        const newline = this.message.indexOf('\n');
+        return newline === -1 ? this.message : this.message.slice(0, newline);
+    }
+
+    /**
+     * Everything after the subject, with the blank separator line removed. Empty
+     * when the message is a single line, which most are.
+     */
+    get body(): string {
+        const newline = this.message.indexOf('\n');
+        return newline === -1 ? '' : this.message.slice(newline + 1).trim();
+    }
+
+    get hasBody(): boolean {
+        return this.body.length > 0;
+    }
+
+    /**
+     * True when the commit was authored by one person and committed by another,
+     * or at a different time — the fingerprint of a rebase, cherry-pick, or an
+     * applied patch. Worth surfacing, because it explains dates that look wrong.
+     */
+    get wasRewritten(): boolean {
+        if (this.committer && this.committer !== this.author) {
+            return true;
+        }
+        return (
+            this.committedAt !== undefined &&
+            Math.abs(this.committedAt.getTime() - this.timestamp.getTime()) > 1000
+        );
     }
 
     get isMergeCommit(): boolean {

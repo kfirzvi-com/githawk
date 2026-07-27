@@ -64,7 +64,26 @@ const nestedBranches: Topology = {
         repository(
             commits(
                 { hash: 'm13', message: 'Merge branch feature5 into main', author: 'Zara', parentHashes: ['m12', 'f20'], refs: ['main'], remotes: ['origin/main'], tags: ['v2.0.0'], isHead: true, timestamp: '2023-09-20T10:00:00Z' },
-                { hash: 'm12', message: 'Merge branch feature3 into main', author: 'Zane', parentHashes: ['m10', 'f12'], timestamp: '2023-09-18T10:00:00Z' },
+                {
+                    hash: 'm12',
+                    // Multi-line on purpose: the details panel must render a body,
+                    // and most fixtures are one-liners.
+                    message: [
+                        'Merge branch feature3 into main',
+                        '',
+                        'Brings in the reporting rewrite:',
+                        '',
+                        '  - CSV and PDF output share one formatter',
+                        '  - the column widths are computed once',
+                        '',
+                        'Reviewed-by: Zoe',
+                        'Refs: #412',
+                    ].join('\n'),
+                    author: 'Zane',
+                    authorEmail: 'zane@example.com',
+                    parentHashes: ['m10', 'f12'],
+                    timestamp: '2023-09-18T10:00:00Z',
+                },
                 { hash: 'm10', message: 'Merge branch feature2 into main', author: 'Zoe', parentHashes: ['m9', 'f8'], timestamp: '2023-09-15T10:00:00Z' },
                 { hash: 'm9', message: 'Merge branch feature1 into main', author: 'Yara', parentHashes: ['m7', 'f6'], timestamp: '2023-09-14T18:00:00Z' },
                 { hash: 'm7', message: 'Mainline work', author: 'Xander', parentHashes: ['m5'], timestamp: '2023-09-13T12:00:00Z' },

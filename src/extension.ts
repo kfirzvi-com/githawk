@@ -5,6 +5,7 @@ import {
 } from './infrastructure/git/GitCliRepository';
 import { GitCliComparer } from './infrastructure/git/GitCliComparer';
 import { GitCliWriter } from './infrastructure/git/GitCliWriter';
+import { ChangeDecorationProvider } from './presentation/host/ChangeDecorationProvider';
 import {
     CHANGED_FILES_VIEW_ID,
     ChangedFilesTree,
@@ -43,7 +44,8 @@ export function activate(context: vscode.ExtensionContext): void {
         firstWorkspaceFolder
     );
 
-    const changedFiles = new ChangedFilesTree();
+    const decorations = new ChangeDecorationProvider();
+    const changedFiles = new ChangedFilesTree(decorations);
     const changesView = vscode.window.createTreeView(CHANGED_FILES_VIEW_ID, {
         treeDataProvider: changedFiles,
         showCollapseAll: true,
@@ -70,6 +72,7 @@ export function activate(context: vscode.ExtensionContext): void {
             )
         ),
         changesView,
+        vscode.window.registerFileDecorationProvider(decorations),
         vscode.commands.registerCommand('gitHawk.refresh', () =>
             provider.refresh()
         ),

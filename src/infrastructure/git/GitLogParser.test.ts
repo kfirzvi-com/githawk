@@ -2,8 +2,33 @@ import { describe, expect, test } from 'vitest';
 import { GitLogParser } from './GitLogParser';
 import { RECORD_SEPARATOR, UNIT_SEPARATOR } from './gitCommands';
 
-const record = (...fields: string[]) =>
-    fields.join(UNIT_SEPARATOR) + RECORD_SEPARATOR;
+/**
+ * Builds one log record in the shipping field order. Named rather than
+ * positional, because nine positional strings is unreadable and the order has
+ * already changed once.
+ */
+const record = (fields: {
+    hash?: string;
+    parents?: string;
+    author?: string;
+    authorEmail?: string;
+    authorDate?: string;
+    committer?: string;
+    committerDate?: string;
+    decorations?: string;
+    message?: string;
+}) =>
+    [
+        fields.hash ?? 'abc123',
+        fields.parents ?? '',
+        fields.author ?? 'Test Author',
+        fields.authorEmail ?? 'test@example.com',
+        fields.authorDate ?? '2023-05-01T12:00:00Z',
+        fields.committer ?? fields.author ?? 'Test Author',
+        fields.committerDate ?? fields.authorDate ?? '2023-05-01T12:00:00Z',
+        fields.decorations ?? '',
+        fields.message ?? 'subject',
+    ].join(UNIT_SEPARATOR) + RECORD_SEPARATOR;
 
 const refLine = (refName: string, objectName: string, head = '') =>
     [refName, objectName, head].join(UNIT_SEPARATOR);
@@ -11,20 +36,23 @@ const refLine = (refName: string, objectName: string, head = '') =>
 describe('GitLogParser.parseCommits', () => {
     test('parses a record into a commit', () => {
         const [commit] = GitLogParser.parseCommits(
-            record(
-                'abc123',
-                'def456 789abc',
-                'Ada Lovelace',
-                '2023-05-01T12:00:00+02:00',
+            record({
+                hash: 'abc123',
+                parents: 'def456 789abc',
+                author: 'Ada Lovelace',
+                authorEmail: 'ada@example.com',
+                authorDate: '2023-05-01T12:00:00+02:00',
                 // --decorate=full emits full ref paths.
-                'HEAD -> refs/heads/main, refs/remotes/origin/main, tag: refs/tags/v1.0',
-                'Merge the thing'
-            )
+                decorations:
+                    'HEAD -> refs/heads/main, refs/remotes/origin/main, tag: refs/tags/v1.0',
+                message: 'Merge the thing',
+            })
         );
 
         expect(commit.hash).toBe('abc123');
         expect(commit.parentHashes).toEqual(['def456', '789abc']);
         expect(commit.author).toBe('Ada Lovelace');
+        expect(commit.authorEmail).toBe('ada@example.com');
         expect(commit.message).toBe('Merge the thing');
         expect(commit.isMergeCommit).toBe(true);
         expect(commit.timestamp.toISOString()).toBe('2023-05-01T10:00:00.000Z');
@@ -40,14 +68,10 @@ describe('GitLogParser.parseCommits', () => {
 
     test('drops refs it should not decorate with', () => {
         const [commit] = GitLogParser.parseCommits(
-            record(
-                'abc123',
-                '',
-                'A',
-                '2023-05-01T12:00:00Z',
-                'refs/stash, refs/notes/commits, refs/remotes/origin/HEAD, refs/heads/main',
-                'subject'
-            )
+            record({
+                decorations:
+                    'refs/stash, refs/notes/commits, refs/remotes/origin/HEAD, refs/heads/main',
+            })
         );
 
         // origin/HEAD only aliases a branch already decorated here.
@@ -58,14 +82,9 @@ describe('GitLogParser.parseCommits', () => {
 
     test('distinguishes a tag from a branch with the same name', () => {
         const [commit] = GitLogParser.parseCommits(
-            record(
-                'abc123',
-                '',
-                'A',
-                '2023-05-01T12:00:00Z',
-                'refs/heads/release, tag: refs/tags/release',
-                'subject'
-            )
+            record({
+                decorations: 'refs/heads/release, tag: refs/tags/release',
+            })
         );
 
         expect(commit.branchNames).toEqual(['release']);
@@ -75,7 +94,7 @@ describe('GitLogParser.parseCommits', () => {
 
     test('treats a root commit as having no parents', () => {
         const [commit] = GitLogParser.parseCommits(
-            record('abc123', '', 'A', '2023-05-01T12:00:00Z', '', 'first')
+            record({ message: 'first' })
         );
 
         expect(commit.parentHashes).toEqual([]);
@@ -84,7 +103,7 @@ describe('GitLogParser.parseCommits', () => {
 
     test('records a detached HEAD as its own kind', () => {
         const [commit] = GitLogParser.parseCommits(
-            record('abc123', '', 'A', '2023-05-01T12:00:00Z', 'HEAD', 'first')
+            record({ decorations: 'HEAD', message: 'first' })
         );
 
         expect(commit.refs).toEqual([
@@ -97,7 +116,7 @@ describe('GitLogParser.parseCommits', () => {
 
     test('accepts an empty subject', () => {
         const [commit] = GitLogParser.parseCommits(
-            record('abc123', 'def456', 'A', '2023-05-01T12:00:00Z', '', '')
+            record({ parents: 'def456', message: '' })
         );
 
         expect(commit.message).toBe('');
@@ -105,7 +124,7 @@ describe('GitLogParser.parseCommits', () => {
 
     test('falls back when the author is missing and the date is unparseable', () => {
         const [commit] = GitLogParser.parseCommits(
-            record('abc123', '', '', 'not-a-date', '', 'subject')
+            record({ author: '', authorDate: 'not-a-date', committerDate: 'not-a-date' })
         );
 
         expect(commit.author).toBe('Unknown');
@@ -119,14 +138,61 @@ describe('GitLogParser.parseCommits', () => {
 
     test('skips truncated records rather than throwing', () => {
         const commits = GitLogParser.parseCommits(
-            record('abc123', '', 'A', '2023-05-01T12:00:00Z', '', 'good') +
-                'partial' +
-                UNIT_SEPARATOR +
-                'record'
+            record({ message: 'good' }) + 'partial' + UNIT_SEPARATOR + 'record'
         );
 
         expect(commits).toHaveLength(1);
         expect(commits[0].message).toBe('good');
+    });
+});
+
+describe('GitLogParser multi-line messages', () => {
+    test('keeps a body containing newlines and blank lines', () => {
+        const [commit] = GitLogParser.parseCommits(
+            record({
+                message: 'Subject line\n\nA paragraph.\n\n  - a bullet\n\nRefs: #9',
+            })
+        );
+
+        // %B is last in the format precisely so newlines cannot be mistaken for
+        // the next field.
+        expect(commit.subject).toBe('Subject line');
+        expect(commit.body).toContain('A paragraph.');
+        expect(commit.body).toContain('- a bullet');
+        expect(commit.body).toContain('Refs: #9');
+    });
+
+    test('parses two records even when the first has a multi-line message', () => {
+        const commits = GitLogParser.parseCommits(
+            record({ hash: 'aaa', message: 'First\n\nwith a body' }) +
+                record({ hash: 'bbb', message: 'Second' })
+        );
+
+        expect(commits.map((c) => c.hash)).toEqual(['aaa', 'bbb']);
+        expect(commits[0].hasBody).toBe(true);
+        expect(commits[1].hasBody).toBe(false);
+    });
+
+    test('records the committer when it differs from the author', () => {
+        const [commit] = GitLogParser.parseCommits(
+            record({
+                author: 'Ada',
+                committer: 'Grace',
+                authorDate: '2023-01-01T00:00:00Z',
+                committerDate: '2023-06-01T00:00:00Z',
+            })
+        );
+
+        expect(commit.committer).toBe('Grace');
+        expect(commit.wasRewritten).toBe(true);
+    });
+
+    test('does not flag a rewrite when author and committer agree', () => {
+        const [commit] = GitLogParser.parseCommits(
+            record({ author: 'Ada', committer: 'Ada' })
+        );
+
+        expect(commit.wasRewritten).toBe(false);
     });
 });
 

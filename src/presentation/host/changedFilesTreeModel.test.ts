@@ -3,7 +3,9 @@ import {
     DirectoryNode,
     TreeNode,
     buildTree,
+    countFiles,
     describeChange,
+    markdownTooltipSource,
 } from './changedFilesTreeModel';
 import { FileChangeDto } from '../../application/dto/ComparisonDto';
 
@@ -148,5 +150,50 @@ describe('describeChange', () => {
                 file('a', { insertions: 0, deletions: 0, status: 'renamed' })
             )
         ).toBe('Renamed');
+    });
+});
+
+describe('countFiles', () => {
+    test('counts a single file', () => {
+        expect(countFiles({ kind: 'file', change: file('a.ts') })).toBe(1);
+    });
+
+    test('counts files nested at any depth', () => {
+        const tree = buildTree([
+            file('src/a.ts'),
+            file('src/deep/b.ts'),
+            file('src/deep/deeper/c.ts'),
+        ]);
+
+        expect(countFiles(tree[0])).toBe(3);
+    });
+});
+
+describe('markdownTooltipSource', () => {
+    test('states the status and the path', () => {
+        const source = markdownTooltipSource(file('src/a.ts'));
+
+        expect(source).toContain('**Modified**');
+        expect(source).toContain('src/a.ts');
+        expect(source).toContain('+1');
+    });
+
+    test('names the previous path for a rename', () => {
+        const source = markdownTooltipSource(
+            file('new.ts', { status: 'renamed', previousPath: 'old.ts' })
+        );
+
+        expect(source).toContain('**Renamed**');
+        expect(source).toContain('renamed from');
+        expect(source).toContain('old.ts');
+    });
+
+    test('says binary rather than showing counts', () => {
+        const source = markdownTooltipSource(
+            file('blob.bin', { isBinary: true, insertions: 0, deletions: 0 })
+        );
+
+        expect(source).toContain('binary');
+        expect(source).not.toContain('+0');
     });
 });

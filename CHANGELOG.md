@@ -31,9 +31,16 @@ Alpha. Reads real repositories and performs branch actions.
   - On the toolbar: fetch (with prune), pull, push.
   - Destructive actions require modal confirmation stating what will be lost, and
     the use case refuses to run one that was not confirmed.
-- Changed files appear as a folder tree in the primary sidebar. Selecting commits
-  fills it automatically; clicking a file opens VS Code's diff editor. The graph
-  panel shows the same comparison's totals, method, and included commits.
+- Changed files appear as a folder tree in the primary sidebar, with git's own
+  status letters and colours, per-directory file counts, and markdown tooltips.
+  Selecting commits fills it automatically; clicking a file opens VS Code's diff
+  editor. The graph panel shows the same comparison's totals, method, and included
+  commits.
+- Full commit details for a single selection: subject and body kept distinct with
+  the author's own line breaks preserved, author name and email, relative and
+  absolute dates, the full hash with a copy action, clickable parents, ref badges,
+  and merge/root markers. A commit whose committer differs from its author says so,
+  which is what explains dates that otherwise look wrong after a rebase.
 - Review a whole branch as one changeset, from a branch's context menu, measured
   **from the merge base** so work that landed on the base after you branched is
   not shown as though you had reverted it. Uncommitted work is included.

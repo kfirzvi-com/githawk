@@ -123,3 +123,110 @@ describe('Commit', () => {
         );
     });
 });
+
+describe('Commit message parts', () => {
+    it('splits a multi-line message into subject and body', () => {
+        const commit = aCommit({
+            hash: 'abc123',
+            message: 'Add the thing\n\nWhy it was needed.\n\nRefs: #12',
+            timestamp: '2023-01-01T10:00:00Z',
+        });
+
+        expect(commit.subject).toBe('Add the thing');
+        expect(commit.hasBody).toBe(true);
+        expect(commit.body).toBe('Why it was needed.\n\nRefs: #12');
+    });
+
+    it('reports no body for a single-line message', () => {
+        const commit = aCommit({
+            hash: 'abc123',
+            message: 'Just the subject',
+            timestamp: '2023-01-01T10:00:00Z',
+        });
+
+        expect(commit.subject).toBe('Just the subject');
+        expect(commit.body).toBe('');
+        expect(commit.hasBody).toBe(false);
+    });
+
+    it('preserves indentation inside the body', () => {
+        const commit = aCommit({
+            hash: 'abc123',
+            message: 'Subject\n\n  - first\n  - second',
+            timestamp: '2023-01-01T10:00:00Z',
+        });
+
+        // Bullet indentation carries meaning, so it must survive.
+        expect(commit.body).toBe('- first\n  - second');
+    });
+
+    it('copes with an empty message', () => {
+        const commit = aCommit({
+            hash: 'abc123',
+            message: '',
+            timestamp: '2023-01-01T10:00:00Z',
+        });
+
+        expect(commit.subject).toBe('');
+        expect(commit.hasBody).toBe(false);
+    });
+});
+
+describe('Commit.wasRewritten', () => {
+    it('is false when author and committer match', () => {
+        const commit = aCommit({
+            hash: 'abc123',
+            author: 'Ada',
+            committer: 'Ada',
+            timestamp: '2023-01-01T10:00:00Z',
+            committedAt: '2023-01-01T10:00:00Z',
+        });
+
+        expect(commit.wasRewritten).toBe(false);
+    });
+
+    it('is true when someone else committed it', () => {
+        const commit = aCommit({
+            hash: 'abc123',
+            author: 'Ada',
+            committer: 'Grace',
+            timestamp: '2023-01-01T10:00:00Z',
+            committedAt: '2023-01-01T10:00:00Z',
+        });
+
+        expect(commit.wasRewritten).toBe(true);
+    });
+
+    it('is true when the commit date moved, as after a rebase', () => {
+        const commit = aCommit({
+            hash: 'abc123',
+            author: 'Ada',
+            committer: 'Ada',
+            timestamp: '2023-01-01T10:00:00Z',
+            committedAt: '2023-06-01T10:00:00Z',
+        });
+
+        expect(commit.wasRewritten).toBe(true);
+    });
+
+    it('ignores sub-second differences, which are just clock noise', () => {
+        const commit = aCommit({
+            hash: 'abc123',
+            author: 'Ada',
+            committer: 'Ada',
+            timestamp: '2023-01-01T10:00:00.000Z',
+            committedAt: '2023-01-01T10:00:00.400Z',
+        });
+
+        expect(commit.wasRewritten).toBe(false);
+    });
+
+    it('is false when there is no committer information at all', () => {
+        const commit = aCommit({
+            hash: 'abc123',
+            timestamp: '2023-01-01T10:00:00Z',
+        });
+
+        expect(commit.wasRewritten).toBe(false);
+    });
+});

@@ -36,26 +36,45 @@ export const GitLogParser = {
 
 function parseCommitRecord(record: string): Commit | null {
     const fields = record.split(UNIT_SEPARATOR);
-    if (fields.length < 6) {
+    if (fields.length < 9) {
         return null;
     }
 
-    const [hash, parents, author, authorDate, decorations, subject] = fields;
+    const [
+        hash,
+        parents,
+        author,
+        authorEmail,
+        authorDate,
+        committer,
+        committerDate,
+        decorations,
+        message,
+    ] = fields;
     if (!hash) {
         return null;
     }
 
-    const timestamp = new Date(authorDate);
-
     return new Commit({
         hash,
-        // %s is the subject only; an empty message is legal in git.
-        message: subject ?? '',
+        // %B is the raw message; an empty one is legal in git.
+        message: (message ?? '').trim(),
         author: author || 'Unknown',
+        authorEmail: authorEmail || undefined,
+        committer: committer || undefined,
+        committedAt: parseDate(committerDate),
         parentHashes: parents ? parents.split(' ').filter(Boolean) : [],
         refs: parseDecorations(decorations ?? ''),
-        timestamp: Number.isNaN(timestamp.getTime()) ? new Date(0) : timestamp,
+        timestamp: parseDate(authorDate) ?? new Date(0),
     });
+}
+
+function parseDate(value: string | undefined): Date | undefined {
+    if (!value) {
+        return undefined;
+    }
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? undefined : parsed;
 }
 
 /**

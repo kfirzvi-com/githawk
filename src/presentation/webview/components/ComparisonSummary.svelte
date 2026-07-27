@@ -99,7 +99,7 @@
                             {commit.shortHash}
                         </code>
                         <span class="min-w-0 flex-1 truncate text-gray-300">
-                            {commit.message}
+                            {commit.subject}
                         </span>
                     </li>
                 {/each}

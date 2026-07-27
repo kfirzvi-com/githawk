@@ -122,6 +122,11 @@ function answerRequests(): void {
             case 'compare:clear':
                 post({ type: 'comparison:cleared' });
                 break;
+            case 'commit:copyHash':
+                void navigator.clipboard?.writeText(message.hash).catch(() => {
+                    // Clipboard access is not granted in headless runs.
+                });
+                break;
             default:
                 break;
         }

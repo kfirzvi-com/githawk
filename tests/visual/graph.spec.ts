@@ -46,10 +46,10 @@ for (const topology of TOPOLOGIES) {
         test('selecting a commit fills the details panel', async ({ page }) => {
             await page.goto(`/?topology=${topology.id}`);
 
-            await expect(page.getByText('No Commit Selected')).toBeVisible();
+            await expect(page.getByTestId('commit-details-empty')).toBeVisible();
             await page.getByTestId('git-graph').locator('button').first().click();
 
-            await expect(page.getByText('Commit Details')).toBeVisible();
+            await expect(page.getByTestId('commit-details')).toBeVisible();
             await expect(page.getByText('No Commit Selected')).toBeHidden();
         });
 

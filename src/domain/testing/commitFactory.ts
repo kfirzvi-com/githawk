@@ -11,6 +11,9 @@ export interface CommitSpec {
     remotes?: string[];
     message?: string;
     author?: string;
+    authorEmail?: string;
+    committer?: string;
+    committedAt?: string | Date;
     branchHint?: string;
     /** Marks the first ref as the checked-out branch. */
     isHead?: boolean;
@@ -37,6 +40,14 @@ export function aCommit(spec: CommitSpec): Commit {
         hash: spec.hash,
         message: spec.message ?? `commit ${spec.hash}`,
         author: spec.author ?? 'Test Author',
+        authorEmail: spec.authorEmail,
+        committer: spec.committer,
+        committedAt:
+            spec.committedAt === undefined
+                ? undefined
+                : spec.committedAt instanceof Date
+                  ? spec.committedAt
+                  : new Date(spec.committedAt),
         parentHashes: spec.parentHashes ?? [],
         refs,
         timestamp:

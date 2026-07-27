@@ -20,6 +20,7 @@ export type WebviewToHostMessage =
     | { type: 'commit:select'; hash: string }
     /** Opens the native action menu for a commit. */
     | { type: 'commit:menu'; hash: string }
+    | { type: 'commit:copyHash'; hash: string }
     /** Opens the native action menu for a branch. */
     | { type: 'branch:menu'; name: string; isRemote: boolean; isCurrent: boolean }
     | { type: 'remote:operation'; operation: 'fetch' | 'pull' | 'push' }

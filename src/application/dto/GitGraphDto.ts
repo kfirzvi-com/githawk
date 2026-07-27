@@ -14,8 +14,13 @@ import { Ref } from '../../domain/models/Ref';
  */
 export interface CommitDto {
     hash: string;
+    /** Raw message: subject, then body. */
     message: string;
     author: string;
+    authorEmail?: string;
+    committer?: string;
+    /** ISO 8601, present when it differs meaningfully from the author date. */
+    committedAt?: string;
     parentHashes: string[];
     /** Ref is already a plain serializable object, so it crosses as-is. */
     refs: Ref[];

@@ -135,6 +135,14 @@
      * Diff exactly two commits against each other. Distinct from reviewing them
      * together: this asks how two states differ, not what the two commits changed.
      */
+    /** Jumping to a parent from the details panel, when it is on screen. */
+    const selectParentByHash = (hash: string) => {
+        const parent = graph?.commits.find((commit) => commit.hash === hash);
+        if (parent) {
+            handleSelectCommit(parent, { toggle: false, range: false });
+        }
+    };
+
     const compareTwoSelected = () => {
         // Rows are newest-first, so the second selected is the older side.
         const [right, left] = [...selection.hashes];
@@ -277,7 +285,7 @@
                                         class="min-w-0 flex-1 truncate text-sm font-medium text-gray-100"
                                         title={commit.message}
                                     >
-                                        {commit.message}
+                                        {commit.subject}
                                     </span>
                                     <span
                                         class="w-32 flex-shrink-0 truncate text-right text-xs whitespace-nowrap text-gray-400"
@@ -323,7 +331,12 @@
                         commits={selectedCommits}
                     />
                 {:else}
-                    <CommitDetails {selectedCommit} />
+                    <CommitDetails
+                        {selectedCommit}
+                        onCopyHash={(hash) =>
+                            postToHost({ type: 'commit:copyHash', hash })}
+                        onSelectParent={selectParentByHash}
+                    />
                 {/if}
             </div>
         </div>
