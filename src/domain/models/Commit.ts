@@ -1,9 +1,11 @@
+import { Ref, compareRefsForDisplay, isBranchRef } from './Ref';
+
 export interface CommitProps {
     hash: string;
     message: string;
     author: string;
     parentHashes: string[];
-    refs: string[];
+    refs: Ref[];
     timestamp: Date;
     /**
      * Which branch this commit was observed on, when the ref list alone is
@@ -18,7 +20,7 @@ export class Commit {
     readonly message: string;
     readonly author: string;
     readonly parentHashes: string[];
-    readonly refs: string[];
+    readonly refs: Ref[];
     readonly timestamp: Date;
     readonly branchHint?: string;
 
@@ -55,8 +57,29 @@ export class Commit {
         return this.parentHashes[0];
     }
 
+    /** Refs in display order: checked-out branch, local branches, tags, remotes. */
+    get sortedRefs(): Ref[] {
+        return [...this.refs].sort(compareRefsForDisplay);
+    }
+
+    get branchNames(): string[] {
+        return this.refs.filter(isBranchRef).map((ref) => ref.name);
+    }
+
+    get tagNames(): string[] {
+        return this.refs.filter((ref) => ref.kind === 'tag').map((r) => r.name);
+    }
+
+    get isHead(): boolean {
+        return this.refs.some((ref) => ref.isHead);
+    }
+
     hasBranch(branchName: string): boolean {
-        return this.refs.includes(branchName) || this.branchHint === branchName;
+        return (
+            this.refs.some(
+                (ref) => isBranchRef(ref) && ref.name === branchName
+            ) || this.branchHint === branchName
+        );
     }
 
     equals(other: Commit): boolean {

@@ -1,4 +1,5 @@
 import { BranchType } from '../../domain/models/Branch';
+import { Ref } from '../../domain/models/Ref';
 
 /**
  * The serializable shape that crosses the extension-host / webview boundary.
@@ -16,7 +17,8 @@ export interface CommitDto {
     message: string;
     author: string;
     parentHashes: string[];
-    refs: string[];
+    /** Ref is already a plain serializable object, so it crosses as-is. */
+    refs: Ref[];
     /** ISO 8601. `Date` does survive structured cloning, but a string keeps the wire format explicit and diffable. */
     timestamp: string;
     branchHint?: string;

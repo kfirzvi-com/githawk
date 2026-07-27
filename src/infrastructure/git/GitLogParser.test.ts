@@ -16,7 +16,8 @@ describe('GitLogParser.parseCommits', () => {
                 'def456 789abc',
                 'Ada Lovelace',
                 '2023-05-01T12:00:00+02:00',
-                'HEAD -> main, origin/main, tag: v1.0',
+                // --decorate=full emits full ref paths.
+                'HEAD -> refs/heads/main, refs/remotes/origin/main, tag: refs/tags/v1.0',
                 'Merge the thing'
             )
         );
@@ -27,7 +28,49 @@ describe('GitLogParser.parseCommits', () => {
         expect(commit.message).toBe('Merge the thing');
         expect(commit.isMergeCommit).toBe(true);
         expect(commit.timestamp.toISOString()).toBe('2023-05-01T10:00:00.000Z');
-        expect(commit.refs).toEqual(['main', 'origin/main', 'v1.0']);
+        expect(commit.refs).toEqual([
+            { kind: 'localBranch', name: 'main', isHead: true },
+            { kind: 'remoteBranch', name: 'origin/main', isHead: false },
+            { kind: 'tag', name: 'v1.0', isHead: false },
+        ]);
+        expect(commit.branchNames).toEqual(['main', 'origin/main']);
+        expect(commit.tagNames).toEqual(['v1.0']);
+        expect(commit.isHead).toBe(true);
+    });
+
+    test('drops refs it should not decorate with', () => {
+        const [commit] = GitLogParser.parseCommits(
+            record(
+                'abc123',
+                '',
+                'A',
+                '2023-05-01T12:00:00Z',
+                'refs/stash, refs/notes/commits, refs/remotes/origin/HEAD, refs/heads/main',
+                'subject'
+            )
+        );
+
+        // origin/HEAD only aliases a branch already decorated here.
+        expect(commit.refs).toEqual([
+            { kind: 'localBranch', name: 'main', isHead: false },
+        ]);
+    });
+
+    test('distinguishes a tag from a branch with the same name', () => {
+        const [commit] = GitLogParser.parseCommits(
+            record(
+                'abc123',
+                '',
+                'A',
+                '2023-05-01T12:00:00Z',
+                'refs/heads/release, tag: refs/tags/release',
+                'subject'
+            )
+        );
+
+        expect(commit.branchNames).toEqual(['release']);
+        expect(commit.tagNames).toEqual(['release']);
+        expect(commit.hasBranch('release')).toBe(true);
     });
 
     test('treats a root commit as having no parents', () => {
@@ -39,12 +82,17 @@ describe('GitLogParser.parseCommits', () => {
         expect(commit.isRootCommit).toBe(true);
     });
 
-    test('keeps a detached HEAD decoration as-is', () => {
+    test('records a detached HEAD as its own kind', () => {
         const [commit] = GitLogParser.parseCommits(
             record('abc123', '', 'A', '2023-05-01T12:00:00Z', 'HEAD', 'first')
         );
 
-        expect(commit.refs).toEqual(['HEAD']);
+        expect(commit.refs).toEqual([
+            { kind: 'head', name: 'HEAD', isHead: true },
+        ]);
+        // Detached HEAD is not a branch, so it must not be mistaken for one.
+        expect(commit.branchNames).toEqual([]);
+        expect(commit.isHead).toBe(true);
     });
 
     test('accepts an empty subject', () => {

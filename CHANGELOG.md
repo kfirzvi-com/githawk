@@ -33,10 +33,12 @@ Alpha. Reads real repositories; branch actions are not implemented.
   repository has. On a 49-branch repository this went from 23 lanes to 4, and the
   graph gutter from 644px to 112px.
 - Branch filter, shown once a repository has more than eight branches.
+- Inline ref badges on the graph, distinguishing the checked-out branch, local
+  branches, remote branches, tags, and a detached HEAD. Refs are a structured
+  domain type rather than bare strings, so a tag named `release` is no longer
+  indistinguishable from the branch `release`.
 
 ### Known limitations
-
-- Branch and tag refs appear only in the details panel, not inline on the graph.
 - Colours are dark-theme oriented and do not yet follow the active VS Code theme.
 - Branch actions (checkout, merge, rebase, cherry-pick…) show a placeholder.
 - No row virtualisation, so a large `commitLimit` will be slow to render.

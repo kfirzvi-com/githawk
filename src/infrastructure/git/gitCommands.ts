@@ -31,6 +31,9 @@ export function logArgs({ limit }: LogOptions): string[] {
         // Parents before children within the page git returns.
         '--topo-order',
         '--no-color',
+        // Full ref paths in %D, so a branch, a tag, and a remote are
+        // distinguishable. Short names alone cannot tell `v1.0` from `main`.
+        '--decorate=full',
         // One extra distinguishes "exactly `limit` commits" from "more exist".
         `--max-count=${limit + 1}`,
         `--format=${LOG_FORMAT}`,

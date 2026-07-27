@@ -105,10 +105,15 @@ describe('GitCliRepository', () => {
         const result = await new GitCliRepository({ cwd: repo.path }).getRepository();
         const commit = result.getCommit(base)!;
 
-        expect(commit.refs).toContain('main');
-        expect(commit.refs).toContain('v1.0.0');
+        // A tag and a branch must be distinguishable, not flattened together.
+        expect(commit.branchNames).toContain('main');
+        expect(commit.tagNames).toEqual(['v1.0.0']);
+        expect(commit.hasBranch('v1.0.0')).toBe(false);
+        // HEAD points at main here, so the branch carries the head marker.
+        expect(commit.isHead).toBe(true);
         // The `HEAD -> ` prefix must be unwrapped, not kept verbatim.
-        expect(commit.refs.some((r) => r.includes('->'))).toBe(false);
+        expect(commit.refs.some((r) => r.name.includes('->'))).toBe(false);
+        expect(commit.refs.some((r) => r.name.startsWith('refs/'))).toBe(false);
     });
 
     test('works on a repository whose default branch is master', async () => {
@@ -118,7 +123,7 @@ describe('GitCliRepository', () => {
         const result = await new GitCliRepository({ cwd: repo.path }).getRepository();
 
         expect(result.currentBranch?.name).toBe('master');
-        expect(result.getCommit(repo.head())!.refs).toContain('master');
+        expect(result.getCommit(repo.head())!.branchNames).toContain('master');
     });
 
     test('accepts a commit with an empty message', async () => {

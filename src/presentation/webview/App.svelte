@@ -6,6 +6,7 @@
     import BranchList from './components/BranchList.svelte';
     import CommitDetails from './components/CommitDetails.svelte';
     import GitGraph from './components/GitGraph.svelte';
+    import RefBadge from './components/RefBadge.svelte';
     import Toolbar from './components/Toolbar.svelte';
     import type { ToolbarAction } from './viewmodels/toolbar';
     import { onHostMessage, postToHost } from './vscodeApi';
@@ -128,6 +129,26 @@
                                     >
                                         {commit.shortHash}
                                     </span>
+                                    {#if commit.refs.length > 0}
+                                        <span
+                                            class="flex flex-shrink-0 items-center gap-1"
+                                        >
+                                            {#each commit.sortedRefs.slice(0, 3) as ref (ref.kind + ref.name)}
+                                                <RefBadge {ref} />
+                                            {/each}
+                                            {#if commit.refs.length > 3}
+                                                <span
+                                                    class="text-[10px] text-gray-500"
+                                                    title={commit.sortedRefs
+                                                        .slice(3)
+                                                        .map((r) => r.name)
+                                                        .join(', ')}
+                                                >
+                                                    +{commit.refs.length - 3}
+                                                </span>
+                                            {/if}
+                                        </span>
+                                    {/if}
                                     <span
                                         class="min-w-0 flex-1 truncate text-sm font-medium text-gray-100"
                                         title={commit.message}

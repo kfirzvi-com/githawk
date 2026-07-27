@@ -1,5 +1,12 @@
 import { Branch, BranchType } from '../../domain/models/Branch';
 import { Commit } from '../../domain/models/Commit';
+import {
+    Ref,
+    detachedHeadRef,
+    localBranchRef,
+    remoteBranchRef,
+    tagRef,
+} from '../../domain/models/Ref';
 import { RECORD_SEPARATOR, UNIT_SEPARATOR } from './gitCommands';
 
 /**
@@ -52,32 +59,57 @@ function parseCommitRecord(record: string): Commit | null {
 }
 
 /**
- * `%D` yields e.g. `HEAD -> main, origin/main, tag: v1.2.0`.
+ * With `--decorate=full`, `%D` yields full ref paths, e.g.
+ * `HEAD -> refs/heads/main, refs/remotes/origin/main, tag: refs/tags/v1.2.0`.
  *
- * The `HEAD -> ` prefix is unwrapped to the branch it points at, a bare `HEAD`
- * (detached) is kept as-is, and `tag: ` prefixes are stripped. Distinguishing
- * tags from branches visually is separate work; what matters here is that the
- * branch name appears in `refs` so lane assignment can find the spine.
+ * Full paths are what make the kinds unambiguous: short names alone cannot tell
+ * a tag called `main` from the branch `main`.
  */
-function parseDecorations(decorations: string): string[] {
+function parseDecorations(decorations: string): Ref[] {
     if (!decorations.trim()) {
         return [];
     }
 
-    return decorations
-        .split(',')
-        .map((ref) => ref.trim())
-        .filter(Boolean)
-        .map((ref) => {
-            if (ref.startsWith('HEAD -> ')) {
-                return ref.slice('HEAD -> '.length);
+    const refs: Ref[] = [];
+
+    for (const raw of decorations.split(',').map((part) => part.trim())) {
+        if (!raw) {
+            continue;
+        }
+
+        let text = raw;
+        let isHead = false;
+
+        if (text.startsWith('HEAD -> ')) {
+            text = text.slice('HEAD -> '.length).trim();
+            isHead = true;
+        } else if (text === 'HEAD') {
+            // Detached: HEAD points at the commit directly, not via a branch.
+            refs.push(detachedHeadRef());
+            continue;
+        }
+
+        // `tag: ` survives --decorate=full and precedes the full path.
+        if (text.startsWith('tag: ')) {
+            text = text.slice('tag: '.length).trim();
+        }
+
+        if (text.startsWith('refs/heads/')) {
+            refs.push(localBranchRef(text.slice('refs/heads/'.length), isHead));
+        } else if (text.startsWith('refs/remotes/')) {
+            const name = text.slice('refs/remotes/'.length);
+            // origin/HEAD only aliases another branch already decorated here.
+            if (!name.endsWith('/HEAD')) {
+                refs.push(remoteBranchRef(name));
             }
-            if (ref.startsWith('tag: ')) {
-                return ref.slice('tag: '.length);
-            }
-            return ref;
-        })
-        .filter(Boolean);
+        } else if (text.startsWith('refs/tags/')) {
+            refs.push(tagRef(text.slice('refs/tags/'.length)));
+        }
+        // Anything else (refs/stash, refs/notes, replace refs) is not a
+        // decoration worth showing on the graph.
+    }
+
+    return refs;
 }
 
 function parseBranchLine(line: string): Branch | null {

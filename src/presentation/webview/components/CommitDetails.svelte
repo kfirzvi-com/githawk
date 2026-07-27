@@ -1,5 +1,6 @@
 <script lang="ts">
     import type { Commit } from '../../../domain/models/Commit';
+    import RefBadge from './RefBadge.svelte';
 
     interface Props {
         selectedCommit?: Commit | null;
@@ -128,12 +129,8 @@
                         class="rounded-md border border-gray-700 bg-gray-800 p-3"
                     >
                         <div class="flex flex-wrap gap-2">
-                            {#each selectedCommit.refs as ref (ref)}
-                                <span
-                                    class="rounded border border-green-500/30 bg-green-600/20 px-2 py-1 text-xs text-green-300"
-                                >
-                                    {ref}
-                                </span>
+                            {#each selectedCommit.sortedRefs as ref (ref.kind + ref.name)}
+                                <RefBadge {ref} />
                             {/each}
                         </div>
                     </div>

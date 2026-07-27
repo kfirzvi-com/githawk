@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Commit } from './Commit';
+import { localBranchRef } from './Ref';
 import { aCommit } from '../testing/commitFactory';
 
 describe('Commit', () => {
@@ -70,7 +71,7 @@ describe('Commit', () => {
 
     it('copies parent and ref arrays so callers cannot mutate it', () => {
         const parentHashes = ['parent1'];
-        const refs = ['main'];
+        const refs = [localBranchRef('main')];
         const commit = new Commit({
             hash: 'abc123',
             message: 'msg',
@@ -81,9 +82,44 @@ describe('Commit', () => {
         });
 
         parentHashes.push('injected');
-        refs.push('injected');
+        refs.push(localBranchRef('injected'));
 
         expect(commit.parentHashes).toEqual(['parent1']);
-        expect(commit.refs).toEqual(['main']);
+        expect(commit.branchNames).toEqual(['main']);
+    });
+
+    it('separates branches, tags, and the checked-out ref', () => {
+        const commit = aCommit({
+            hash: 'abc123',
+            refs: ['main'],
+            tags: ['v1.0.0'],
+            remotes: ['origin/main'],
+            isHead: true,
+            timestamp: '2023-01-01T10:00:00Z',
+        });
+
+        expect(commit.branchNames).toEqual(['main', 'origin/main']);
+        expect(commit.tagNames).toEqual(['v1.0.0']);
+        expect(commit.isHead).toBe(true);
+        // A tag is not a branch, however similar the names look.
+        expect(commit.hasBranch('v1.0.0')).toBe(false);
+        expect(commit.hasBranch('main')).toBe(true);
+    });
+
+    it('orders refs with the checked-out branch first and remotes last', () => {
+        const commit = aCommit({
+            hash: 'abc123',
+            refs: ['zzz-branch', 'main'],
+            tags: ['v1.0.0'],
+            remotes: ['origin/main'],
+            timestamp: '2023-01-01T10:00:00Z',
+        });
+
+        const ordered = commit.sortedRefs.map((r) => r.name);
+        expect(ordered[ordered.length - 1]).toBe('origin/main');
+        expect(ordered).toContain('v1.0.0');
+        expect(ordered.indexOf('v1.0.0')).toBeGreaterThan(
+            ordered.indexOf('main')
+        );
     });
 });

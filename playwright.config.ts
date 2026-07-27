@@ -22,8 +22,14 @@ export default defineConfig({
     },
     expect: {
         toHaveScreenshot: {
-            // Anti-aliasing on curved lane segments differs slightly per machine.
-            maxDiffPixelRatio: 0.01,
+            /*
+             * An absolute budget, not a ratio. `maxDiffPixelRatio: 0.01` scaled
+             * with the image: 1% of 1400x900 is ~12,600 pixels, which quietly
+             * absorbed the arrival of ref badges — a change worth ~3,400 pixels
+             * — and reported a pass. A few hundred pixels covers anti-aliasing
+             * on the curved lane segments without hiding real changes.
+             */
+            maxDiffPixels: 400,
         },
     },
 });

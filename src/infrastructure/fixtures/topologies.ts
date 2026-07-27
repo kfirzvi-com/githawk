@@ -29,7 +29,7 @@ const linear: Topology = {
                 { hash: 'a1', message: 'Initial commit', author: 'Alice', timestamp: '2023-09-01T09:00:00Z' },
                 { hash: 'b2', message: 'Add README', author: 'Bob', parentHashes: ['a1'], timestamp: '2023-09-02T12:00:00Z' },
                 { hash: 'c3', message: 'Add licence', author: 'Carol', parentHashes: ['b2'], timestamp: '2023-09-03T12:00:00Z' },
-                { hash: 'd4', message: 'Wire up CI', author: 'Dan', parentHashes: ['c3'], refs: ['main'], timestamp: '2023-09-04T12:00:00Z' }
+                { hash: 'd4', message: 'Wire up CI', author: 'Dan', parentHashes: ['c3'], refs: ['main'], tags: ['v1.0.0'], isHead: true, timestamp: '2023-09-04T12:00:00Z' }
             ),
             [new Branch('main', 'local', 'd4', true)]
         ),
@@ -46,7 +46,7 @@ const singleMerge: Topology = {
                 { hash: 'b2', message: 'Add README', author: 'Bob', parentHashes: ['a1'], timestamp: '2023-09-02T12:00:00Z' },
                 { hash: 'c3', message: 'Start feature', author: 'Carol', parentHashes: ['b2'], timestamp: '2023-09-03T18:45:00Z' },
                 { hash: 'c4', message: 'Finish feature', author: 'Carol', parentHashes: ['c3'], refs: ['feature'], timestamp: '2023-09-04T09:00:00Z' },
-                { hash: 'd5', message: 'Merge branch feature into main', author: 'Dan', parentHashes: ['b2', 'c4'], refs: ['main'], timestamp: '2023-09-05T10:00:00Z' }
+                { hash: 'd5', message: 'Merge branch feature into main', author: 'Dan', parentHashes: ['b2', 'c4'], refs: ['main'], remotes: ['origin/main'], isHead: true, timestamp: '2023-09-05T10:00:00Z' }
             ),
             [
                 new Branch('main', 'local', 'd5', true),
@@ -63,7 +63,7 @@ const nestedBranches: Topology = {
     build: () =>
         repository(
             commits(
-                { hash: 'm13', message: 'Merge branch feature5 into main', author: 'Zara', parentHashes: ['m12', 'f20'], refs: ['main'], timestamp: '2023-09-20T10:00:00Z' },
+                { hash: 'm13', message: 'Merge branch feature5 into main', author: 'Zara', parentHashes: ['m12', 'f20'], refs: ['main'], remotes: ['origin/main'], tags: ['v2.0.0'], isHead: true, timestamp: '2023-09-20T10:00:00Z' },
                 { hash: 'm12', message: 'Merge branch feature3 into main', author: 'Zane', parentHashes: ['m10', 'f12'], timestamp: '2023-09-18T10:00:00Z' },
                 { hash: 'm10', message: 'Merge branch feature2 into main', author: 'Zoe', parentHashes: ['m9', 'f8'], timestamp: '2023-09-15T10:00:00Z' },
                 { hash: 'm9', message: 'Merge branch feature1 into main', author: 'Yara', parentHashes: ['m7', 'f6'], timestamp: '2023-09-14T18:00:00Z' },

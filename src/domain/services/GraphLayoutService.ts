@@ -93,7 +93,7 @@ export class GraphLayoutService {
         }
 
         for (const candidate of FALLBACK_PRIMARY_BRANCHES) {
-            const match = ordered.find((c) => c.refs.includes(candidate));
+            const match = ordered.find((c) => c.hasBranch(candidate));
             if (match) {
                 return match;
             }
