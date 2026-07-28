@@ -8,6 +8,7 @@
     import GitGraph from './components/GitGraph.svelte';
     import RefBadge from './components/RefBadge.svelte';
     import type { ComparisonDto } from '../../application/dto/ComparisonDto';
+    import type { RepositoryLocation } from '../../domain/models/RepositoryLocation';
     import ComparisonSummary from './components/ComparisonSummary.svelte';
     import {
         applySelection,
@@ -32,6 +33,9 @@
     let selection = $state<SelectionState>(emptySelection);
     /** Files live in the Changes tree; this is kept only for the summary line. */
     let comparison = $state<ComparisonDto | null>(null);
+    /** Empty until the host has scanned the workspace, and in the dev harness. */
+    let repositories = $state<RepositoryLocation[]>([]);
+    let activeRepositoryRoot = $state<string | undefined>(undefined);
 
     /** Layout is derived, never stored: one source of truth for the graph. */
     const graph = $derived(
@@ -94,6 +98,19 @@
                     break;
                 case 'comparison:cleared':
                     comparison = null;
+                    break;
+                case 'repositories:loaded':
+                    if (message.activeRoot !== activeRepositoryRoot) {
+                        // Hashes belong to a repository. Carrying a selection
+                        // across a switch would ask the new one about commits
+                        // it has never heard of.
+                        selection = emptySelection;
+                        selectedCommit = null;
+                        comparison = null;
+                        isLoading = true;
+                    }
+                    repositories = message.repositories;
+                    activeRepositoryRoot = message.activeRoot;
                     break;
             }
         })
@@ -189,17 +206,39 @@
                 Could not load the graph
             </div>
             <p class="max-w-md text-sm text-gray-400">{errorMessage}</p>
-            <button
-                type="button"
-                class="mt-4 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-500"
-                onclick={() => handleToolbarAction('refresh')}
-            >
-                Try again
-            </button>
+            <div class="mt-4 flex items-center gap-2">
+                <button
+                    type="button"
+                    class="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-500"
+                    onclick={() => handleToolbarAction('refresh')}
+                >
+                    Try again
+                </button>
+                <!-- Failing to load one repository is a common reason to want a
+                     different one, and the toolbar is not rendered here. -->
+                {#if repositories.length > 0}
+                    <button
+                        type="button"
+                        data-testid="repository-picker-error"
+                        class="rounded-md border border-gray-600 bg-gray-700 px-3 py-1.5 text-xs font-medium text-gray-200 hover:bg-gray-600"
+                        onclick={() =>
+                            postToHost({ type: 'repository:menu' })}
+                    >
+                        Switch repository
+                    </button>
+                {/if}
+            </div>
         </div>
     {:else}
         <div class="flex-shrink-0 border-b border-gray-700">
-            <Toolbar {currentBranchName} onAction={handleToolbarAction} />
+            <Toolbar
+                {currentBranchName}
+                {repositories}
+                {activeRepositoryRoot}
+                onAction={handleToolbarAction}
+                onSelectRepository={() =>
+                    postToHost({ type: 'repository:menu' })}
+            />
         </div>
 
         {#if selection.hashes.length > 1}

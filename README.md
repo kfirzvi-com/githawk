@@ -57,6 +57,32 @@ Right-click a commit, or click a branch, and GitHawk opens a **native VS Code
 QuickPick** rather than a menu drawn inside the webview — so keyboard navigation,
 theming, and confirmation dialogs are the ones you already know.
 
+### Several repositories in one workspace
+
+GitHawk searches each opened folder for git working trees and shows the one you
+are working in. The repository name sits at the left of the toolbar — click it to
+switch, or run **`GitHawk: Switch Repository`**.
+
+How far it looks is `gitHawk.repositoryScanDepth`, default **2**:
+
+| Depth | Finds |
+| ----- | ----- |
+| `0` | the opened folders only |
+| `1` | a folder of projects |
+| `2` | a folder of buckets, each holding projects |
+| `3+` | anything deeper you happen to have |
+
+The search skips dot-directories and heavy build directories (`node_modules`,
+`dist`, `target`, and similar), so raising it is usually cheap — and it does not
+stop at a repository, so submodules, linked worktrees, and repositories nested
+inside a monorepo are all found. The picker itself has a gear that jumps straight
+to the setting, and a **Search again** entry for a repository cloned since the
+window opened.
+
+Switching moves everything with it: the graph, branch actions, comparisons, and
+the Changes tree, which is cleared rather than left describing the repository you
+just left. Your choice is remembered per workspace.
+
 ### Keeping branches current
 
 `main` behind the remote while you are on a feature branch is the common case, and
@@ -141,14 +167,20 @@ sidebar tree, the diff editor. VS Code is Electron, so Playwright can drive the
 actual application:
 
 ```bash
-npm run shot:vscode artifacts/vscode
+npm run shot:vscode                        # the sample repository, every scene
+npm run shot:vscode:multi                  # a workspace holding several repositories
 ```
 
-That launches a real VS Code with the extension loaded against the sample
-repository, opens the panel, and captures the graph, the Changes tree, the grouped
-branch and commit menus, and a multi-commit aggregate. It is also how the
-documentation screenshots are produced, so they show the real UI rather than a
-mock.
+That launches a real VS Code with the extension loaded, opens the panel, and
+captures the graph, the Changes tree, the grouped branch and commit menus, the
+repository picker, and a multi-commit aggregate. It is also how the documentation
+screenshots are produced, so they show the real UI rather than a mock.
+
+Two things the script has to work around, both documented inline: clicks inside
+the webview need `force: true`, because Playwright resolves the element in a
+doubly-nested Electron iframe and then wrongly reports it as invisible; and the
+first click after the panel is composed is sometimes swallowed while VS Code
+settles focus, so opening a QuickPick is retried.
 
 ### Checks
 

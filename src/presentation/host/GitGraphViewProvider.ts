@@ -9,6 +9,7 @@ import type { IGitWriter } from '../../domain/repositories/IGitWriter';
 import { CompareRequest, GitActionMenu } from './GitActionMenu';
 import { ComparisonController } from './ComparisonController';
 import { CHANGED_FILES_VIEW_ID, ChangedFilesTree } from './ChangedFilesTree';
+import { RepositoryRegistry } from './RepositoryRegistry';
 import { log } from './log';
 
 /** Matches the `views` contribution id in package.json. */
@@ -36,13 +37,16 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
      * every commit click would make the graph unusable to browse.
      */
     private hasRevealedChanges = false;
+    /** Which repository the Changes tree currently describes. */
+    private lastRepositoryRoot?: string;
 
     constructor(
         private readonly extensionUri: vscode.Uri,
         private readonly createRepository: GitRepositoryFactory,
         private readonly createWriter: GitWriterFactory,
         private readonly comparisons: ComparisonController,
-        private readonly changedFiles: ChangedFilesTree
+        private readonly changedFiles: ChangedFilesTree,
+        private readonly repositories: RepositoryRegistry
     ) {}
 
     resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -61,13 +65,38 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
             (message: WebviewToHostMessage) => this.handleMessage(message)
         );
 
+        this.sendRepositories();
         void this.sendGraph();
     }
 
     /** Re-reads the repository and pushes it to the webview, if one is open. */
     refresh(): void {
+        this.forgetOtherRepositorysChanges();
         if (this.view) {
+            this.sendRepositories();
             void this.sendGraph();
+        }
+    }
+
+    /**
+     * The Changes tree survives a graph reload, which is right — but not across
+     * a switch of repository. Its file list, and the revisions behind it, belong
+     * to the repository it came from; clicking one afterwards would ask the new
+     * repository for a commit it has never heard of.
+     *
+     * Done outside the `this.view` guard because the tree is in the sidebar and
+     * is visible whether or not the graph panel is open.
+     */
+    private forgetOtherRepositorysChanges(): void {
+        const root = this.repositories.active?.root;
+        if (root === this.lastRepositoryRoot) {
+            return;
+        }
+
+        this.lastRepositoryRoot = root;
+        if (this.changedFiles.current) {
+            this.changedFiles.clear();
+            this.post({ type: 'comparison:cleared' });
         }
     }
 
@@ -80,12 +109,30 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
         }
     }
 
+    /**
+     * Sent even when there is only one repository: the webview decides whether a
+     * picker is worth showing, and it cannot decide that without the count.
+     */
+    private sendRepositories(): void {
+        this.post({
+            type: 'repositories:loaded',
+            repositories: [...this.repositories.all],
+            activeRoot: this.repositories.active?.root,
+        });
+    }
+
     private handleMessage(message: WebviewToHostMessage): void {
         log.debug(`webview → host: ${message.type}`, JSON.stringify(message));
 
         switch (message.type) {
             case 'graph:refresh':
-                void this.sendGraph();
+                // A rescan too, so a repository cloned since the window opened
+                // shows up without needing a reload. The registry's change event
+                // is what reloads the graph.
+                void this.repositories.refresh();
+                break;
+            case 'repository:menu':
+                void this.repositories.pick();
                 break;
             case 'commit:select':
                 // Clicking a commit fills the Changes tree with what it changed.

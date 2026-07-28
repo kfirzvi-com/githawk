@@ -6,7 +6,10 @@
  * theme colours, and the native diff editor all live outside the webview.
  *
  *   npm run build
- *   node scripts/shotVscode.mjs [output-dir] [repo]
+ *   node scripts/shotVscode.mjs [output-dir] [workspace] [scenes]
+ *
+ * `scenes` is `all` (the default, and specific to the sample repository's
+ * branches) or `repositories`, which captures only what any workspace has.
  *
  * Doubles as the way to produce documentation screenshots, so the README shows the
  * real thing rather than a mock.
@@ -17,6 +20,7 @@ import { _electron as electron } from '@playwright/test';
 
 const outDir = process.argv[2] ?? 'artifacts/vscode';
 const repo = process.argv[3] ?? '/tmp/githawk-sample';
+const scenes = process.argv[4] ?? 'all';
 const extensionPath = fileURLToPath(new URL('..', import.meta.url));
 const executablePath = `${extensionPath}/.vscode-test/vscode-darwin-arm64-1.130.0/Visual Studio Code.app/Contents/MacOS/Electron`;
 
@@ -113,58 +117,111 @@ try {
             .getByTestId('branch-list')
             .getByRole('button', { name: new RegExp(`◊ ${name}`) });
 
-    // Selecting a commit fills the Changes tree and the details panel.
-    await click(rows.nth(4));
-    await page.waitForTimeout(3000);
-    await capture('02-commit-selected');
+    /**
+     * Clicks something in the webview and waits for the QuickPick it opens.
+     *
+     * Retried, because the first click after the panel is composed is sometimes
+     * swallowed — VS Code is still settling focus, and the message never reaches
+     * the host. A retry is far cheaper than a flaky capture.
+     */
+    const openQuickPick = async (locator, options = {}) => {
+        for (let attempt = 1; attempt <= 3; attempt++) {
+            await click(locator, options);
+            try {
+                await page.waitForSelector('.quick-input-widget:visible', {
+                    timeout: 5000,
+                });
+                await page.waitForTimeout(1200);
+                return;
+            } catch {
+                console.warn(`no quick pick after click ${attempt}, retrying`);
+            }
+        }
+        throw new Error('the quick pick never opened');
+    };
 
-    // The Changes tree lives in the primary sidebar, which the maximized panel
-    // hides, so un-maximize to show both at once.
-    await runCommand('View: Toggle Maximized Panel');
-    await page.waitForTimeout(1500);
-    await capture('03-changes-tree');
-    await runCommand('View: Toggle Maximized Panel');
-    await page.waitForTimeout(1200);
+    /*
+     * The repository selector, and the picker behind it. Present in any
+     * workspace, so this runs before the sample-specific scenes.
+     */
+    const repositoryPicker = inner.getByTestId('repository-picker');
+    await repositoryPicker.waitFor();
+    await capture('09-repository-selector');
+    await openQuickPick(repositoryPicker);
+    await capture('10-repository-picker');
 
-    // A branch that is purely behind: the Update entry leads.
-    await click(localBranch('main'));
-    await page.waitForSelector('.quick-input-widget:visible');
-    await page.waitForTimeout(1500);
-    await capture('04-branch-menu-behind');
+    /*
+     * The gear that jumps to the depth setting. It sits in the title bar, where
+     * it is always visible, and on the "Search again" row itself — VS Code only
+     * paints a row's buttons while that row is hovered or active, so the hover
+     * is what makes the second one appear.
+     */
+    await page
+        .locator('.quick-input-list .monaco-list-row', {
+            hasText: 'Search again',
+        })
+        .hover();
+    await page.waitForTimeout(800);
+    await capture('11-repository-picker-depth-setting');
+
     await page.keyboard.press('Escape');
     await page.waitForTimeout(600);
 
-    // A diverged branch takes a different path through the same groups.
-    await click(localBranch('feature/login'));
-    await page.waitForSelector('.quick-input-widget:visible');
-    await page.waitForTimeout(1500);
-    await capture('05-branch-menu-diverged');
-    await page.keyboard.press('Escape');
-    await page.waitForTimeout(600);
+    // Everything below depends on the sample repository's own branches.
+    if (scenes === 'all') {
+        // Selecting a commit fills the Changes tree and the details panel.
+        await click(rows.nth(4));
+        await page.waitForTimeout(3000);
+        await capture('02-commit-selected');
 
-    // A remote branch: check out, and delete on the remote.
-    await click(remoteBranch('origin/feature/login'));
-    await page.waitForSelector('.quick-input-widget:visible');
-    await page.waitForTimeout(1500);
-    await capture('06-branch-menu-remote');
-    await page.keyboard.press('Escape');
-    await page.waitForTimeout(600);
+        // The Changes tree lives in the primary sidebar, which the maximized
+        // panel hides, so un-maximize to show both at once.
+        await runCommand('View: Toggle Maximized Panel');
+        await page.waitForTimeout(1500);
+        await capture('03-changes-tree');
+        await runCommand('View: Toggle Maximized Panel');
+        await page.waitForTimeout(1200);
 
-    // The grouped commit menu, via right-click on a row.
-    await click(rows.nth(3), { button: 'right' });
-    await page.waitForSelector('.quick-input-widget:visible');
-    await page.waitForTimeout(1500);
-    await capture('07-commit-menu-grouped');
-    await page.keyboard.press('Escape');
-    await page.waitForTimeout(600);
+        // A branch that is purely behind: the Update entry leads.
+        await click(localBranch('main'));
+        await page.waitForSelector('.quick-input-widget:visible');
+        await page.waitForTimeout(1500);
+        await capture('04-branch-menu-behind');
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(600);
 
-    // Several commits selected: the aggregate appears without a button press.
-    await click(rows.nth(2));
-    await page.waitForTimeout(700);
-    await click(rows.nth(5), { modifiers: ['Meta'] });
-    await click(rows.nth(8), { modifiers: ['Meta'] });
-    await page.waitForTimeout(4000);
-    await capture('08-multi-selection-aggregate');
+        // A diverged branch takes a different path through the same groups.
+        await click(localBranch('feature/login'));
+        await page.waitForSelector('.quick-input-widget:visible');
+        await page.waitForTimeout(1500);
+        await capture('05-branch-menu-diverged');
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(600);
+
+        // A remote branch: check out, and delete on the remote.
+        await click(remoteBranch('origin/feature/login'));
+        await page.waitForSelector('.quick-input-widget:visible');
+        await page.waitForTimeout(1500);
+        await capture('06-branch-menu-remote');
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(600);
+
+        // The grouped commit menu, via right-click on a row.
+        await click(rows.nth(3), { button: 'right' });
+        await page.waitForSelector('.quick-input-widget:visible');
+        await page.waitForTimeout(1500);
+        await capture('07-commit-menu-grouped');
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(600);
+
+        // Several commits selected: the aggregate appears without a button press.
+        await click(rows.nth(2));
+        await page.waitForTimeout(700);
+        await click(rows.nth(5), { modifiers: ['Meta'] });
+        await click(rows.nth(8), { modifiers: ['Meta'] });
+        await page.waitForTimeout(4000);
+        await capture('08-multi-selection-aggregate');
+    }
 
     console.log(JSON.stringify({ shots }, null, 2));
 } catch (error) {

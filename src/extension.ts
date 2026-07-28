@@ -13,6 +13,9 @@ import {
 } from './presentation/host/ChangedFilesTree';
 import { PerformGitActionUseCase } from './application/usecases/PerformGitActionUseCase';
 import { ComparisonController } from './presentation/host/ComparisonController';
+import { FileSystemRepositoryLocator } from './infrastructure/fs/FileSystemRepositoryLocator';
+import { RepositoryRegistry } from './presentation/host/RepositoryRegistry';
+import { CONFIG_SECTION, SCAN_DEPTH_SETTING } from './presentation/host/config';
 import { initialiseLog, log } from './presentation/host/log';
 import {
     GITHAWK_VIEW_ID,
@@ -23,26 +26,46 @@ import {
     RevisionContentProvider,
 } from './presentation/host/RevisionContentProvider';
 
-export const CONFIG_SECTION = 'gitHawk';
+export { CONFIG_SECTION } from './presentation/host/config';
 
-export class NoWorkspaceFolderError extends Error {
-    constructor() {
-        super('Open a folder to see its git graph.');
-        this.name = 'NoWorkspaceFolderError';
+/**
+ * Set once at activation. The adapter factories are module-level so they can be
+ * shared, and every one of them needs the working directory of whichever
+ * repository is currently selected.
+ */
+let repositoryRegistry: RepositoryRegistry | undefined;
+
+function activeRepositoryRoot(): string {
+    if (!repositoryRegistry) {
+        throw new Error('GitHawk is not activated yet.');
     }
+    return repositoryRegistry.rootOrThrow();
 }
 
 /**
  * Composition root: the only place that picks concrete adapters.
+ *
+ * Async so that the repository scan has finished before activation resolves.
+ * Every disposable is registered before the first `await`, so commands exist
+ * immediately regardless of how long the scan takes.
  */
-export function activate(context: vscode.ExtensionContext): void {
+export async function activate(
+    context: vscode.ExtensionContext
+): Promise<void> {
     context.subscriptions.push(initialiseLog());
     log.info('GitHawk activated');
+
+    const repositories = new RepositoryRegistry(
+        context.workspaceState,
+        () => new FileSystemRepositoryLocator()
+    );
+    repositoryRegistry = repositories;
+    context.subscriptions.push(repositories);
 
     const comparisons = new ComparisonController(
         createGitComparer,
         createGitRepository,
-        firstWorkspaceFolder
+        activeRepositoryRoot
     );
 
     const decorations = new ChangeDecorationProvider();
@@ -58,7 +81,8 @@ export function activate(context: vscode.ExtensionContext): void {
         createGitRepository,
         createGitWriter,
         comparisons,
-        changedFiles
+        changedFiles,
+        repositories
     );
 
     context.subscriptions.push(
@@ -74,9 +98,41 @@ export function activate(context: vscode.ExtensionContext): void {
         ),
         changesView,
         vscode.window.registerFileDecorationProvider(decorations),
+        // Refreshing rescans as well as reloads: a repository cloned since the
+        // window opened is exactly what someone pressing refresh is after. The
+        // registry's change event reloads the graph.
         vscode.commands.registerCommand('gitHawk.refresh', () =>
-            provider.refresh()
+            repositories.refresh()
         ),
+        repositories.onDidChange(() => provider.refresh()),
+        /*
+         * With no argument this shows the picker. With one it switches directly,
+         * which makes the command usable from a keybinding or a task — and is how
+         * the integration tests drive it.
+         */
+        vscode.commands.registerCommand(
+            'gitHawk.selectRepository',
+            (root?: string) => {
+                if (typeof root === 'string') {
+                    repositories.setActive(root);
+                    return;
+                }
+                return repositories.pick();
+            }
+        ),
+        // Returns the picker's structure without showing it, so the integration
+        // tests can assert what it offers.
+        vscode.commands.registerCommand('gitHawk.repositoryPickItems', () =>
+            repositories.pickItemsForTesting()
+        ),
+        // Reports what the scan found, so the integration tests can assert on
+        // real state rather than on a screenshot.
+        vscode.commands.registerCommand('gitHawk.repositories', () => ({
+            repositories: repositories.all.map((repository) => ({
+                ...repository,
+            })),
+            activeRoot: repositories.active?.root,
+        })),
         // Clicking a file in the Changes tree opens the native diff editor.
         vscode.commands.registerCommand(OPEN_DIFF_COMMAND, (change) => {
             const comparison = changedFiles.current;
@@ -135,46 +191,48 @@ export function activate(context: vscode.ExtensionContext): void {
             REVISION_SCHEME,
             new RevisionContentProvider(createGitComparer)
         ),
-        // A new folder or a changed limit both invalidate what is on screen.
-        vscode.workspace.onDidChangeWorkspaceFolders(() => provider.refresh()),
+        // A new folder changes which repositories exist, so it needs a rescan
+        // rather than a reload.
+        vscode.workspace.onDidChangeWorkspaceFolders(() =>
+            repositories.refresh()
+        ),
         vscode.workspace.onDidChangeConfiguration((event) => {
-            if (event.affectsConfiguration(CONFIG_SECTION)) {
+            if (
+                event.affectsConfiguration(
+                    `${CONFIG_SECTION}.${SCAN_DEPTH_SETTING}`
+                )
+            ) {
+                void repositories.refresh();
+            } else if (event.affectsConfiguration(CONFIG_SECTION)) {
                 provider.refresh();
             }
         })
     );
+
+    // Everything above is registered; the graph can now wait for the scan that
+    // tells it which repository to read.
+    await repositories.refresh();
 }
 
 /**
- * Resolved per load rather than once at activation, so opening a folder or
- * changing the commit limit takes effect without a window reload.
+ * Resolved per load rather than once at activation, so switching repository,
+ * opening a folder, or changing the commit limit takes effect without a window
+ * reload.
  */
 function createGitRepository(): GitCliRepository {
-    const folder = firstWorkspaceFolder();
     const limit = vscode.workspace
         .getConfiguration(CONFIG_SECTION)
         .get<number>('commitLimit', DEFAULT_COMMIT_LIMIT);
 
-    return new GitCliRepository({ cwd: folder, limit });
+    return new GitCliRepository({ cwd: activeRepositoryRoot(), limit });
 }
 
 function createGitWriter(): GitCliWriter {
-    return new GitCliWriter(firstWorkspaceFolder());
+    return new GitCliWriter(activeRepositoryRoot());
 }
 
 function createGitComparer(): GitCliComparer {
-    return new GitCliComparer(firstWorkspaceFolder());
-}
-
-function firstWorkspaceFolder(): string {
-    const folders = vscode.workspace.workspaceFolders;
-    if (!folders || folders.length === 0) {
-        throw new NoWorkspaceFolderError();
-    }
-
-    // Multi-root workspaces show the first folder's repository. A repository
-    // picker is separate work.
-    return folders[0].uri.fsPath;
+    return new GitCliComparer(activeRepositoryRoot());
 }
 
 /**
@@ -255,5 +313,7 @@ async function updateAllBranches(
 }
 
 export function deactivate(): void {
-    // Nothing to tear down: every disposable is registered on the context.
+    // Every disposable is registered on the context; only the module-level
+    // handle needs clearing, so a reactivation cannot see a disposed registry.
+    repositoryRegistry = undefined;
 }

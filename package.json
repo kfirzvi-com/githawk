@@ -39,6 +39,13 @@
           "minimum": 1,
           "maximum": 100000,
           "description": "How many commits to read from history. Higher values show more of the graph and take longer to load."
+        },
+        "gitHawk.repositoryScanDepth": {
+          "type": "number",
+          "default": 2,
+          "minimum": 0,
+          "maximum": 8,
+          "markdownDescription": "How many directory levels below each workspace folder to search for git repositories.\n\n`0` searches the opened folders only. `2` — the default — covers a folder of projects, or a folder of buckets each holding projects.\n\nThe search skips dot-directories and heavy build directories such as `node_modules`, `dist`, and `target`, so raising it is usually cheap. Repositories nested inside another repository, including submodules and linked worktrees, are found too."
         }
       }
     },
@@ -72,6 +79,19 @@
       {
         "command": "gitHawk.updateAllBranches",
         "title": "GitHawk: Update All Branches From Upstream"
+      },
+      {
+        "command": "gitHawk.selectRepository",
+        "title": "GitHawk: Switch Repository",
+        "icon": "$(repo)"
+      },
+      {
+        "command": "gitHawk.repositories",
+        "title": "GitHawk: List Discovered Repositories"
+      },
+      {
+        "command": "gitHawk.repositoryPickItems",
+        "title": "GitHawk: Describe The Repository Picker"
       }
     ],
     "keybindings": [
@@ -136,6 +156,14 @@
         {
           "command": "gitHawk.compareCommits",
           "when": "false"
+        },
+        {
+          "command": "gitHawk.repositories",
+          "when": "false"
+        },
+        {
+          "command": "gitHawk.repositoryPickItems",
+          "when": "false"
         }
       ]
     }
@@ -161,7 +189,8 @@
     "package": "npm run check && npm run test && npm run build && vsce package",
     "vscode:prepublish": "npm run build",
     "test:integration": "npm run build && vite-node tests/integration/runTest.ts",
-    "shot:vscode": "npm run build && node scripts/shotVscode.mjs"
+    "shot:vscode": "npm run build && node scripts/shotVscode.mjs",
+    "shot:vscode:multi": "npm run build && ./scripts/makeMultiRepoSample.sh /tmp/githawk-multi-sample && node scripts/shotVscode.mjs artifacts/vscode-multi /tmp/githawk-multi-sample repositories"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.0",

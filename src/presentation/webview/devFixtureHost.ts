@@ -25,9 +25,10 @@ import {
 export async function startFixtureHost(): Promise<void> {
     answerRequests();
 
-    const requestedId = new URLSearchParams(window.location.search).get(
-        'topology'
-    );
+    const parameters = new URLSearchParams(window.location.search);
+    announceRepositories(Number(parameters.get('repositories') ?? '0'));
+
+    const requestedId = parameters.get('topology');
 
     // ?topology=real renders a dump of an actual repository produced by
     // scripts/dumpGraph.ts, which is the only way to see real history without
@@ -89,6 +90,32 @@ async function loadRealDump(): Promise<void> {
 
 function post(message: HostToWebviewMessage): void {
     window.postMessage(message, '*');
+}
+
+/**
+ * The harness has no filesystem to scan, so how many repositories exist is a
+ * parameter: `?repositories=3`.
+ *
+ * Zero — the default — sends nothing at all, which is what the host does before
+ * its first scan, and keeps the toolbar identical to the pre-multi-repo one.
+ */
+function announceRepositories(count: number): void {
+    if (!Number.isFinite(count) || count < 1) {
+        return;
+    }
+
+    const names = ['api', 'web', 'cli', 'docs', 'infra'];
+    const repositories = Array.from({ length: Math.min(count, names.length) }, (_, index) => ({
+        root: `/workspace/apps/${names[index]}`,
+        name: names[index],
+        description: `apps/${names[index]}`,
+    }));
+
+    post({
+        type: 'repositories:loaded',
+        repositories,
+        activeRoot: repositories[0].root,
+    });
 }
 
 /**

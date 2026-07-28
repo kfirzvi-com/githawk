@@ -62,6 +62,18 @@ Alpha. Reads real repositories and performs branch actions.
 - Delete a remote branch, and rename a local one.
 - Branch and commit menus are grouped by topic rather than being one flat list.
 - Branch filter, shown once a repository has more than eight branches.
+- Multi-repository workspaces. Every opened folder is searched for git working
+  trees, to `gitHawk.repositoryScanDepth` levels (default 2). The toolbar names
+  the repository being shown and opens a picker; `GitHawk: Switch Repository`
+  does the same from the palette, and accepts a path so it can be scripted.
+  - The search skips dot-directories and heavy build directories such as
+    `node_modules`, and does not follow symlinks, so raising the depth is cheap.
+  - It does not stop at a repository, so submodules, linked worktrees (whose
+    `.git` is a file), and repositories nested inside a monorepo are all found.
+  - Switching moves the graph, branch actions, and comparisons with it, and
+    clears the Changes tree rather than leaving it describing the previous
+    repository. The choice is remembered per workspace.
+  - The picker offers a rescan, with a gear that jumps to the depth setting.
 - `gitHawk.commitLimit` setting (default 500) and a truncation notice when older
   history exists.
 - `GitHawk: Refresh Git Graph` command; the graph also reloads when the
@@ -76,7 +88,9 @@ Alpha. Reads real repositories and performs branch actions.
 
 - Colours are dark-theme oriented and do not yet follow the active VS Code theme.
 - No row virtualisation, so a large `commitLimit` will be slow to render.
-- Multi-root workspaces show the first folder's repository only.
+- One repository is shown at a time; there is no combined view across several.
+- Repositories are found by scanning on load, not watched, so one cloned while
+  the window is open needs a refresh or the picker's "Search again".
 - A merge or rebase that conflicts leaves the repository mid-operation; GitHawk
   reports git's message but offers no conflict resolution or abort.
 - A reconstructed comparison's combined commit is unreferenced, so `git gc` can

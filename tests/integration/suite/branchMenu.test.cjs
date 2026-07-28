@@ -15,11 +15,14 @@ suite('branch menu grouping', () => {
     });
 
     test('groups a local branch by topic, in a sensible order', async () => {
+        // main is one behind its upstream in the sample repository, so every
+        // group this menu can produce is present.
         const { separators } = await menu('main');
 
         // Update first: "does this branch need anything?" is the usual reason to
         // open the menu at all.
         assert.deepEqual(separators, [
+            'Update',
             'Compare',
             'Check out',
             'Bring into current branch',

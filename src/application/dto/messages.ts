@@ -1,3 +1,4 @@
+import { RepositoryLocation } from '../../domain/models/RepositoryLocation';
 import { ComparisonDto } from './ComparisonDto';
 import { GitGraphDto } from './GitGraphDto';
 
@@ -13,7 +14,16 @@ export type HostToWebviewMessage =
     | { type: 'graph:error'; message: string }
     /** Kept so the webview can reflect selection state; files live in the tree. */
     | { type: 'comparison:loaded'; comparison: ComparisonDto }
-    | { type: 'comparison:cleared' };
+    | { type: 'comparison:cleared' }
+    /**
+     * Sent separately from the graph, and on its own schedule: a scan is slower
+     * than a load, and the picker must still appear when the graph itself failed.
+     */
+    | {
+          type: 'repositories:loaded';
+          repositories: RepositoryLocation[];
+          activeRoot?: string;
+      };
 
 export type WebviewToHostMessage =
     | { type: 'graph:refresh' }
@@ -31,4 +41,6 @@ export type WebviewToHostMessage =
     | { type: 'compare:commits'; hashes: string[] }
     /** Diff exactly two commits directly against each other. */
     | { type: 'compare:twoCommits'; left: string; right: string }
-    | { type: 'compare:clear' };
+    | { type: 'compare:clear' }
+    /** Opens the native picker for switching repository. */
+    | { type: 'repository:menu' };
