@@ -221,6 +221,33 @@ try {
         await click(rows.nth(8), { modifiers: ['Meta'] });
         await page.waitForTimeout(4000);
         await capture('08-multi-selection-aggregate');
+
+        /*
+         * Worktrees. The sample repository has two beyond its own — one live,
+         * one whose directory was deleted — so the branch badge, the sidebar
+         * section, and the "cannot be checked out here" menu are all reachable.
+         */
+        // Rows are labelled relative to the repository's own directory, so
+        // githawk-sample-handbook reads as "handbook" here.
+        await openQuickPick(
+            inner
+                .getByTestId('worktree-list')
+                .getByRole('button', { name: /handbook/ })
+        );
+        await capture('12-worktree-actions');
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(600);
+
+        await openQuickPick(inner.getByTestId('manage-worktrees'));
+        await capture('13-worktree-manager');
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(600);
+
+        // A branch checked out elsewhere: no checkout entry, a worktree instead.
+        await openQuickPick(localBranch('docs/handbook'));
+        await capture('14-branch-menu-in-worktree');
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(600);
     }
 
     console.log(JSON.stringify({ shots }, null, 2));

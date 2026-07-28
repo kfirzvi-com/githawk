@@ -1,16 +1,11 @@
 import { RepositoryLocation } from '../models/RepositoryLocation';
+import { baseName, isInside, normalizePath, relativePathFrom } from './paths';
 
 /**
  * The policy half of finding repositories: what to walk into, how to name what
  * was found, and which one to open. The walking itself is a filesystem concern
- * and lives in infrastructure.
- *
- * Paths are handled as strings rather than through `node:path`, because this
- * tier is bundled into the webview too and must stay runnable in a browser.
- * Both separators are accepted so a Windows path behaves the same.
+ * and lives in infrastructure. Path arithmetic lives in ./paths.
  */
-
-const SEPARATORS = /[\\/]/;
 
 /**
  * Directories that are skipped when descending.
@@ -48,49 +43,6 @@ export function shouldDescendInto(name: string): boolean {
         return false;
     }
     return !IGNORED_DIRECTORY_NAMES.has(name.toLowerCase());
-}
-
-/** Strips trailing separators so `/a/b` and `/a/b/` compare equal. */
-export function normalizePath(path: string): string {
-    let end = path.length;
-    while (end > 1 && SEPARATORS.test(path.charAt(end - 1))) {
-        end--;
-    }
-    return path.slice(0, end);
-}
-
-export function baseName(path: string): string {
-    const segments = normalizePath(path).split(SEPARATORS);
-    return segments[segments.length - 1] || normalizePath(path);
-}
-
-/** True when `child` is `parent` or sits underneath it. */
-export function isInside(parent: string, child: string): boolean {
-    const from = normalizePath(parent);
-    const to = normalizePath(child);
-
-    if (to === from) {
-        return true;
-    }
-    // A filesystem root normalizes to "/" and already ends in a separator.
-    if (SEPARATORS.test(from.charAt(from.length - 1))) {
-        return to.startsWith(from);
-    }
-    // The separator check matters: without it /a/bc reads as inside /a/b.
-    return to.startsWith(from) && SEPARATORS.test(to.charAt(from.length));
-}
-
-/** `undefined` when `child` is not underneath `parent`. Always `/`-joined. */
-export function relativePathFrom(
-    parent: string,
-    child: string
-): string | undefined {
-    if (!isInside(parent, child)) {
-        return undefined;
-    }
-
-    const rest = normalizePath(child).slice(normalizePath(parent).length);
-    return rest.split(SEPARATORS).filter(Boolean).join('/');
 }
 
 /**

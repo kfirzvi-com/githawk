@@ -109,5 +109,48 @@ export function argsFor(action: GitAction): string[] {
              * outcome here.
              */
             return ['branch', '-m', action.from, action.to];
+
+        case 'addWorktree':
+            /*
+             * `git worktree add` has no `--` terminator, so a path beginning
+             * with `-` would be read as an option. The menu rejects one before
+             * it gets here; see describePathProblem.
+             *
+             * Without --force, git refuses a ref already checked out in another
+             * worktree — which is the rule that makes worktrees confusing, and
+             * exactly the refusal worth keeping.
+             */
+            return action.newBranch
+                ? [
+                      'worktree',
+                      'add',
+                      '-b',
+                      action.newBranch,
+                      action.path,
+                      action.ref,
+                  ]
+                : ['worktree', 'add', action.path, action.ref];
+
+        case 'removeWorktree':
+            /*
+             * The one place --force is emitted, and only when the caller asked
+             * for it after git had already refused: git declines to remove a
+             * worktree holding uncommitted or untracked files, and overriding
+             * that is a decision, not a retry.
+             */
+            return action.force
+                ? ['worktree', 'remove', '--force', action.path]
+                : ['worktree', 'remove', action.path];
+
+        case 'pruneWorktrees':
+            return ['worktree', 'prune'];
+
+        case 'lockWorktree':
+            return action.reason
+                ? ['worktree', 'lock', '--reason', action.reason, action.path]
+                : ['worktree', 'lock', action.path];
+
+        case 'unlockWorktree':
+            return ['worktree', 'unlock', action.path];
     }
 }

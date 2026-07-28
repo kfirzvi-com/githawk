@@ -1,11 +1,7 @@
 import * as vscode from 'vscode';
-import {
-    GitAction,
-    destructiveReason,
-    isDestructive,
-} from '../../domain/models/GitAction';
-import { PerformGitActionUseCase } from '../../application/usecases/PerformGitActionUseCase';
+import { GitAction } from '../../domain/models/GitAction';
 import { IGitWriter } from '../../domain/repositories/IGitWriter';
+import { ActionRunner } from './ActionRunner';
 
 export interface CommitContext {
     hash: string;
@@ -34,7 +30,17 @@ export interface BranchContext {
         canFastForward: boolean;
         hasDiverged: boolean;
     };
+    /**
+     * Set when the branch is checked out in a *different* working tree. Git will
+     * refuse to check it out again, so the menu offers that worktree instead.
+     */
+    checkedOutIn?: { path: string; name: string };
 }
+
+/** What the menu asks the worktree UI to do; the doing belongs elsewhere. */
+export type WorktreeRequest =
+    | { kind: 'open'; path: string }
+    | { kind: 'createForBranch'; branch: string };
 
 interface ActionItem extends vscode.QuickPickItem {
     /**
@@ -73,17 +79,21 @@ function group(label: string, items: ActionItem[]): ActionItem[] {
  * thing people learn to click through.
  */
 export class GitActionMenu {
-    private readonly performAction: PerformGitActionUseCase;
+    private readonly runner: ActionRunner;
 
     constructor(
         writer: IGitWriter,
-        private readonly onCompleted: () => void,
+        onCompleted: () => void,
         /** Comparisons are owned by ComparisonController; the menu only asks. */
         private readonly onCompareRequested?: (
             request: CompareRequest
+        ) => Promise<void>,
+        /** Worktrees are owned by WorktreeMenu; the menu only asks. */
+        private readonly onWorktreeRequested?: (
+            request: WorktreeRequest
         ) => Promise<void>
     ) {
-        this.performAction = new PerformGitActionUseCase(writer);
+        this.runner = new ActionRunner(writer, onCompleted);
     }
 
     async showForCommit(commit: CommitContext): Promise<void> {
@@ -290,10 +300,45 @@ export class GitActionMenu {
                     localName,
                 }),
             });
-        } else if (!branch.isCurrent) {
+        } else if (!branch.isCurrent && !branch.checkedOutIn) {
             checkout.push({
                 label: `$(check) Check out ${branch.name}`,
                 build: async () => ({ type: 'checkoutBranch', name: branch.name }),
+            });
+        }
+
+        /*
+         * A branch lives in one working tree at a time. When another has it, an
+         * ordinary checkout is refused, and git's error names a path without
+         * explaining the rule — so the entry is replaced rather than left to
+         * fail. Creating a worktree is offered either way: it is the way to work
+         * on a branch without disturbing what is checked out here.
+         */
+        const worktrees: ActionItem[] = [];
+        if (branch.checkedOutIn) {
+            worktrees.push({
+                label: `$(multiple-windows) Open the worktree ${branch.checkedOutIn.name}`,
+                description: 'this branch is checked out there',
+                detail: branch.checkedOutIn.path,
+                build: async () => {
+                    await this.onWorktreeRequested?.({
+                        kind: 'open',
+                        path: branch.checkedOutIn!.path,
+                    });
+                    return undefined;
+                },
+            });
+        } else if (!branch.isRemote) {
+            worktrees.push({
+                label: `$(new-folder) Create a worktree for ${branch.name}…`,
+                description: 'work on it without changing this checkout',
+                build: async () => {
+                    await this.onWorktreeRequested?.({
+                        kind: 'createForBranch',
+                        branch: branch.name,
+                    });
+                    return undefined;
+                },
             });
         }
 
@@ -360,6 +405,7 @@ export class GitActionMenu {
             ...group('Update', update),
             ...group('Compare', compare),
             ...group('Check out', checkout),
+            ...group('Worktree', worktrees),
             ...group('Bring into current branch', integrate),
             ...group('Manage', manage),
         ];
@@ -415,7 +461,7 @@ export class GitActionMenu {
 
     /** Toolbar operations, which need no target. */
     async runRemoteOperation(type: 'fetch' | 'pull' | 'push'): Promise<void> {
-        await this.run({ type });
+        await this.runner.run({ type });
     }
 
     private show = async (items: ActionItem[], title?: string): Promise<void> => {
@@ -432,99 +478,9 @@ export class GitActionMenu {
         // check exists because the type permits it.
         const action = await chosen.build?.();
         if (action) {
-            await this.run(action);
+            await this.runner.run(action);
         }
     };
-
-    private async run(action: GitAction): Promise<void> {
-        let confirmed = false;
-
-        if (isDestructive(action)) {
-            const reason = destructiveReason(action);
-            const answer = await vscode.window.showWarningMessage(
-                `${describe(action)}?`,
-                {
-                    modal: true,
-                    detail: reason
-                        ? `This ${reason}. It cannot always be undone.`
-                        : undefined,
-                },
-                'Yes, continue'
-            );
-            if (answer !== 'Yes, continue') {
-                return;
-            }
-            confirmed = true;
-        }
-
-        const outcome = await vscode.window.withProgress(
-            { location: vscode.ProgressLocation.Notification, title: describe(action) },
-            () => this.performAction.execute(action, { confirmed })
-        );
-
-        if (outcome.succeeded) {
-            this.onCompleted();
-            return;
-        }
-
-        // git's own wording is the most useful thing available here.
-        const retry = await vscode.window.showErrorMessage(
-            `${describe(action)} failed`,
-            { detail: outcome.message, modal: false },
-            'Show details'
-        );
-        if (retry === 'Show details') {
-            const channel = vscode.window.createOutputChannel('GitHawk');
-            channel.appendLine(`$ git ${action.type}`);
-            channel.appendLine(outcome.message ?? 'no output');
-            channel.show();
-        }
-
-        // The repository may have changed even on failure — a merge can conflict
-        // halfway — so the graph is refreshed either way.
-        this.onCompleted();
-    }
-}
-
-function describe(action: GitAction): string {
-    switch (action.type) {
-        case 'checkoutBranch':
-            return `Check out ${action.name}`;
-        case 'checkoutCommit':
-            return `Check out ${action.hash.slice(0, 8)}`;
-        case 'checkoutRemote':
-            return `Check out ${action.localName}`;
-        case 'createBranch':
-            return `Create branch ${action.name}`;
-        case 'deleteBranch':
-            return `Delete branch ${action.name}`;
-        case 'createTag':
-            return `Create tag ${action.name}`;
-        case 'deleteTag':
-            return `Delete tag ${action.name}`;
-        case 'mergeBranch':
-            return `Merge ${action.name}`;
-        case 'rebaseOnto':
-            return `Rebase onto ${action.name}`;
-        case 'cherryPick':
-            return `Cherry-pick ${action.hash.slice(0, 8)}`;
-        case 'revert':
-            return `Revert ${action.hash.slice(0, 8)}`;
-        case 'reset':
-            return `Reset --${action.mode} to ${action.hash.slice(0, 8)}`;
-        case 'fetch':
-            return 'Fetch';
-        case 'pull':
-            return 'Pull';
-        case 'push':
-            return 'Push';
-        case 'updateBranchFromUpstream':
-            return `Update ${action.branch} from ${action.remote}/${action.remoteBranch}`;
-        case 'deleteRemoteBranch':
-            return `Delete ${action.branch} on ${action.remote}`;
-        case 'renameBranch':
-            return `Rename ${action.from} to ${action.to}`;
-    }
 }
 
 async function pickResetMode(hash: string): Promise<GitAction | undefined> {

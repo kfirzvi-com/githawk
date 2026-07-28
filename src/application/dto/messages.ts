@@ -1,6 +1,7 @@
 import { RepositoryLocation } from '../../domain/models/RepositoryLocation';
 import { ComparisonDto } from './ComparisonDto';
 import { GitGraphDto } from './GitGraphDto';
+import { WorktreeDto } from './WorktreeDto';
 
 /**
  * Every message crossing the webview boundary, in both directions.
@@ -23,7 +24,9 @@ export type HostToWebviewMessage =
           type: 'repositories:loaded';
           repositories: RepositoryLocation[];
           activeRoot?: string;
-      };
+      }
+    /** Sent alongside the graph, so the sidebar can list the working trees. */
+    | { type: 'worktrees:loaded'; worktrees: WorktreeDto[] };
 
 export type WebviewToHostMessage =
     | { type: 'graph:refresh' }
@@ -43,4 +46,6 @@ export type WebviewToHostMessage =
     | { type: 'compare:twoCommits'; left: string; right: string }
     | { type: 'compare:clear' }
     /** Opens the native picker for switching repository. */
-    | { type: 'repository:menu' };
+    | { type: 'repository:menu' }
+    /** Opens the worktree manager, or one worktree's actions when given a path. */
+    | { type: 'worktree:menu'; path?: string };

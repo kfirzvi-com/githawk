@@ -17,7 +17,13 @@ export class Branch {
         public readonly type: BranchType,
         public readonly headCommitHash: string,
         public readonly isCurrent: boolean = false,
-        public readonly upstream?: UpstreamState
+        public readonly upstream?: UpstreamState,
+        /**
+         * The working tree this branch is checked out in, if any — the current
+         * one when `isCurrent`, or a linked worktree otherwise. Absent when the
+         * branch is not checked out anywhere.
+         */
+        public readonly worktreePath?: string
     ) {
         if (!name || name.trim().length === 0) {
             throw new Error('Branch name cannot be empty');
@@ -51,6 +57,15 @@ export class Branch {
 
     get isHotfixBranch(): boolean {
         return this.shortName.startsWith('hotfix/');
+    }
+
+    /**
+     * Checked out in a *different* working tree, which is why git will refuse
+     * to check it out here. `isCurrent` distinguishes the two cases: the branch
+     * this worktree is on also has a worktreePath — its own.
+     */
+    get isCheckedOutElsewhere(): boolean {
+        return this.worktreePath !== undefined && !this.isCurrent;
     }
 
     get isBehind(): boolean {

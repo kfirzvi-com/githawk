@@ -35,6 +35,8 @@ export interface BranchDto {
     headCommitHash: string;
     isCurrent: boolean;
     upstream?: UpstreamState;
+    /** The working tree holding this branch, when one does. */
+    worktreePath?: string;
 }
 
 export interface GitGraphDto {

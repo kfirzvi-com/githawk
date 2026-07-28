@@ -38,7 +38,19 @@ export type GitAction =
       }
     /** Deletes the branch on the server. Visible to everyone, not just you. */
     | { type: 'deleteRemoteBranch'; remote: string; branch: string }
-    | { type: 'renameBranch'; from: string; to: string };
+    | { type: 'renameBranch'; from: string; to: string }
+    /**
+     * Checks `ref` out into a second working tree at `path`. With `newBranch`,
+     * creates that branch there and treats `ref` as its start point.
+     */
+    | { type: 'addWorktree'; path: string; ref: string; newBranch?: string }
+    /** Deletes the worktree's directory and git's record of it. */
+    | { type: 'removeWorktree'; path: string; force: boolean }
+    /** Discards records for worktrees whose directories are already gone. */
+    | { type: 'pruneWorktrees' }
+    /** Stops prune from discarding a worktree that is temporarily unreachable. */
+    | { type: 'lockWorktree'; path: string; reason?: string }
+    | { type: 'unlockWorktree'; path: string };
 
 export type GitActionType = GitAction['type'];
 
@@ -60,6 +72,10 @@ export function isDestructive(action: GitAction): boolean {
         case 'rebaseOnto':
             return true;
         case 'deleteRemoteBranch':
+            return true;
+        case 'removeWorktree':
+            // Deletes a directory from disk. Git refuses a dirty one without
+            // --force, but a clean directory still disappears.
             return true;
         default:
             return false;
@@ -90,6 +106,10 @@ export function destructiveReason(action: GitAction): string | undefined {
             return `deletes ${action.branch} from ${action.remote}, for everyone — not just locally`;
         case 'rebaseOnto':
             return 'rewrites commits on the current branch';
+        case 'removeWorktree':
+            return action.force
+                ? 'deletes the worktree directory along with any uncommitted or untracked files in it'
+                : 'deletes the worktree directory from disk';
         default:
             return undefined;
     }

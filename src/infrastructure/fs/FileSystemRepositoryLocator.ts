@@ -5,10 +5,8 @@ import {
     RepositoryScanRequest,
     RepositoryScanResult,
 } from '../../domain/repositories/IRepositoryLocator';
-import {
-    normalizePath,
-    shouldDescendInto,
-} from '../../domain/services/repositoryDiscovery';
+import { shouldDescendInto } from '../../domain/services/repositoryDiscovery';
+import { normalizePath } from '../../domain/services/paths';
 
 /**
  * A scan of a home directory with the depth turned up can otherwise wander into

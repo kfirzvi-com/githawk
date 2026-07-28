@@ -123,6 +123,87 @@ describe('argsFor', () => {
     });
 });
 
+describe('worktree commands', () => {
+    test('adds a worktree for an existing ref', () => {
+        expect(
+            argsFor({ type: 'addWorktree', path: '/w/repo-side', ref: 'feature/x' })
+        ).toEqual(['worktree', 'add', '/w/repo-side', 'feature/x']);
+    });
+
+    test('creates the branch in the worktree when one is named', () => {
+        expect(
+            argsFor({
+                type: 'addWorktree',
+                path: '/w/repo-side',
+                ref: 'HEAD',
+                newBranch: 'feature/x',
+            })
+        ).toEqual(['worktree', 'add', '-b', 'feature/x', '/w/repo-side', 'HEAD']);
+    });
+
+    test('does not force an add, so git can refuse a branch already checked out', () => {
+        // That refusal is the rule worth keeping: a branch belongs to one
+        // working tree at a time.
+        const args = argsFor({
+            type: 'addWorktree',
+            path: '/w/repo-side',
+            ref: 'main',
+        });
+
+        expect(args).not.toContain('--force');
+        expect(args).not.toContain('-f');
+    });
+
+    test('removes a worktree, forcing only when asked', () => {
+        expect(
+            argsFor({ type: 'removeWorktree', path: '/w/side', force: false })
+        ).toEqual(['worktree', 'remove', '/w/side']);
+        expect(
+            argsFor({ type: 'removeWorktree', path: '/w/side', force: true })
+        ).toEqual(['worktree', 'remove', '--force', '/w/side']);
+    });
+
+    test('prunes records without touching any directory', () => {
+        expect(argsFor({ type: 'pruneWorktrees' })).toEqual(['worktree', 'prune']);
+    });
+
+    test('locks with and without a reason', () => {
+        expect(argsFor({ type: 'lockWorktree', path: '/w/side' })).toEqual([
+            'worktree',
+            'lock',
+            '/w/side',
+        ]);
+        expect(
+            argsFor({ type: 'lockWorktree', path: '/w/side', reason: 'on a usb' })
+        ).toEqual(['worktree', 'lock', '--reason', 'on a usb', '/w/side']);
+    });
+
+    test('unlocks', () => {
+        expect(argsFor({ type: 'unlockWorktree', path: '/w/side' })).toEqual([
+            'worktree',
+            'unlock',
+            '/w/side',
+        ]);
+    });
+
+    test('passes a path through verbatim rather than quoting it', () => {
+        // execFile takes an argument array, so spaces need no quoting — and
+        // quoting here would create a directory with quotes in its name.
+        expect(
+            argsFor({
+                type: 'addWorktree',
+                path: '/Users/me/My Projects/repo-wt',
+                ref: 'main',
+            })
+        ).toEqual([
+            'worktree',
+            'add',
+            '/Users/me/My Projects/repo-wt',
+            'main',
+        ]);
+    });
+});
+
 describe('isDestructive', () => {
     test('flags resets that touch the index or working tree', () => {
         expect(isDestructive({ type: 'reset', hash: 'a', mode: 'hard' })).toBe(true);
@@ -148,6 +229,19 @@ describe('isDestructive', () => {
         expect(isDestructive({ type: 'fetch' })).toBe(false);
     });
 
+    test('removing a worktree is destructive; pruning records is not', () => {
+        // Removing deletes a directory. Pruning only discards records for
+        // directories that are already gone, so there is nothing left to lose.
+        expect(
+            isDestructive({ type: 'removeWorktree', path: '/w', force: false })
+        ).toBe(true);
+        expect(isDestructive({ type: 'pruneWorktrees' })).toBe(false);
+        expect(isDestructive({ type: 'addWorktree', path: '/w', ref: 'main' })).toBe(
+            false
+        );
+        expect(isDestructive({ type: 'lockWorktree', path: '/w' })).toBe(false);
+    });
+
     test('every destructive action explains itself', () => {
         const destructive: GitAction[] = [
             { type: 'reset', hash: 'a', mode: 'hard' },
@@ -156,6 +250,8 @@ describe('isDestructive', () => {
             { type: 'deleteBranch', name: 'x', force: false },
             { type: 'deleteTag', name: 'v1' },
             { type: 'rebaseOnto', name: 'main' },
+            { type: 'removeWorktree', path: '/w', force: false },
+            { type: 'removeWorktree', path: '/w', force: true },
         ];
 
         for (const action of destructive) {

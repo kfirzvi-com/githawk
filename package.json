@@ -4,6 +4,7 @@
   "description": "A simple, fast git graph for VS Code. MIT licensed. No AI, no telemetry.",
   "version": "0.0.1",
   "license": "MIT",
+  "icon": "media/icon.png",
   "publisher": "kfirzvi",
   "author": "Kfir Zvi",
   "homepage": "https://githawk.dev",
@@ -46,6 +47,45 @@
           "minimum": 0,
           "maximum": 8,
           "markdownDescription": "How many directory levels below each workspace folder to search for git repositories.\n\n`0` searches the opened folders only. `2` — the default — covers a folder of projects, or a folder of buckets each holding projects.\n\nThe search skips dot-directories and heavy build directories such as `node_modules`, `dist`, and `target`, so raising it is usually cheap. Repositories nested inside another repository, including submodules and linked worktrees, are found too."
+        },
+        "gitHawk.aiTools": {
+          "type": "array",
+          "markdownDescription": "Coding agents GitHawk can start in a terminal, from a worktree or the current repository.\n\nThe command is typed into a terminal already rooted in the chosen directory, so wrappers and aliases work — replace `claude` with `npx @anthropic-ai/claude-code`, or with your own script, as you like. An entry missing `name` or `command` is ignored.",
+          "default": [
+            {
+              "name": "Claude Code",
+              "command": "claude"
+            },
+            {
+              "name": "Codex",
+              "command": "codex"
+            },
+            {
+              "name": "Gemini CLI",
+              "command": "gemini"
+            },
+            {
+              "name": "opencode",
+              "command": "opencode"
+            }
+          ],
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "command"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Shown in the picker, and used as the terminal's name."
+              },
+              "command": {
+                "type": "string",
+                "description": "Typed into the terminal verbatim."
+              }
+            }
+          }
         }
       }
     },
@@ -92,12 +132,31 @@
       {
         "command": "gitHawk.repositoryPickItems",
         "title": "GitHawk: Describe The Repository Picker"
+      },
+      {
+        "command": "gitHawk.manageWorktrees",
+        "title": "GitHawk: Manage Worktrees",
+        "icon": "$(multiple-windows)"
+      },
+      {
+        "command": "gitHawk.startAiTool",
+        "title": "GitHawk: Start An AI CLI Here",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "gitHawk.worktrees",
+        "title": "GitHawk: List Worktrees"
+      },
+      {
+        "command": "gitHawk.worktreeItems",
+        "title": "GitHawk: Describe The Worktree Manager"
       }
     ],
     "keybindings": [
       {
         "command": "gitHawk.open",
-        "key": "cmd+9",
+        "key": "ctrl+9",
+        "mac": "cmd+9",
         "when": "!terminalFocus"
       }
     ],
@@ -106,7 +165,7 @@
         {
           "id": "gitHawkSidebar",
           "title": "GitHawk",
-          "icon": "media/githawk.svg"
+          "icon": "media/githawk-eye.svg"
         }
       ],
       "panel": [
@@ -163,6 +222,14 @@
         },
         {
           "command": "gitHawk.repositoryPickItems",
+          "when": "false"
+        },
+        {
+          "command": "gitHawk.worktreeItems",
+          "when": "false"
+        },
+        {
+          "command": "gitHawk.worktrees",
           "when": "false"
         }
       ]

@@ -24,5 +24,8 @@ dist/**/*.map
 
 *.vsix
 
+# Icon master — only the 256px media/icon.png ships
+media/icon-1024.png
+
 # Repo housekeeping
 .gitignore

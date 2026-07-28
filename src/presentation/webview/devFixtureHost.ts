@@ -1,4 +1,6 @@
 import type { ComparisonDto } from '../../application/dto/ComparisonDto';
+import type { GitGraphDto } from '../../application/dto/GitGraphDto';
+import type { WorktreeDto } from '../../application/dto/WorktreeDto';
 import type {
     HostToWebviewMessage,
     WebviewToHostMessage,
@@ -27,6 +29,8 @@ export async function startFixtureHost(): Promise<void> {
 
     const parameters = new URLSearchParams(window.location.search);
     announceRepositories(Number(parameters.get('repositories') ?? '0'));
+    const worktreeCount = Number(parameters.get('worktrees') ?? '0');
+    announceWorktrees(worktreeCount);
 
     const requestedId = parameters.get('topology');
 
@@ -54,7 +58,10 @@ export async function startFixtureHost(): Promise<void> {
 
     try {
         const graph = await useCase.execute();
-        post({ type: 'graph:loaded', graph });
+        post({
+            type: 'graph:loaded',
+            graph: markBranchesInWorktrees(graph, worktreeCount),
+        });
         console.info(
             `[harness] loaded "${topology.id}" — ${graph.commits.length} commits, ${graph.branches.length} branches`
         );
@@ -116,6 +123,83 @@ function announceRepositories(count: number): void {
         repositories,
         activeRoot: repositories[0].root,
     });
+}
+
+/**
+ * Worktrees, likewise parameterised: `?worktrees=3`.
+ *
+ * The first is the main one and the current one — always true of the repository
+ * you are reading — and the last is deliberately prunable, because a worktree
+ * whose directory is gone is the state the UI most needs to explain.
+ */
+function announceWorktrees(count: number): void {
+    if (!Number.isFinite(count) || count < 1) {
+        return;
+    }
+
+    const worktrees = harnessWorktrees(count);
+    post({ type: 'worktrees:loaded', worktrees });
+}
+
+/**
+ * Directory names deliberately differ from the branch names they hold. Naming a
+ * worktree after its branch is common in real life, but here it would make an
+ * assertion about the directory indistinguishable from one about the branch.
+ */
+const HARNESS_WORKTREES = [
+    { dir: 'api', branch: 'main' },
+    { dir: 'api-docs', branch: 'feature3' },
+    { dir: 'api-review', branch: 'feature5' },
+    { dir: 'api-archive', branch: 'feature4' },
+] as const;
+
+function harnessWorktrees(count: number): WorktreeDto[] {
+    const wanted = Math.min(count, HARNESS_WORKTREES.length);
+
+    return HARNESS_WORKTREES.slice(0, wanted).map((entry, index) => ({
+        path: `/workspace/apps/${entry.dir}`,
+        head: `${index}`.repeat(40),
+        branch: entry.branch,
+        isBare: false,
+        isMain: index === 0,
+        isCurrent: index === 0,
+        isLocked: index === 2,
+        lockReason: index === 2 ? 'on an external drive' : undefined,
+        isPrunable: wanted > 3 && index === wanted - 1,
+        prunableReason:
+            wanted > 3 && index === wanted - 1
+                ? 'gitdir file points to non-existent location'
+                : undefined,
+    }));
+}
+
+/**
+ * The fixtures know nothing about worktrees, so the branches a harness worktree
+ * claims are marked here — otherwise the "checked out elsewhere" badge, which is
+ * the whole point of carrying worktreePath on a branch, would never render.
+ */
+function markBranchesInWorktrees(
+    graph: GitGraphDto,
+    worktreeCount: number
+): GitGraphDto {
+    if (worktreeCount < 2) {
+        return graph;
+    }
+
+    const holders = new Map(
+        harnessWorktrees(worktreeCount)
+            .filter((worktree) => !worktree.isMain && worktree.branch)
+            .map((worktree) => [worktree.branch!, worktree.path])
+    );
+
+    return {
+        ...graph,
+        branches: graph.branches.map((branch) =>
+            holders.has(branch.name)
+                ? { ...branch, worktreePath: holders.get(branch.name) }
+                : branch
+        ),
+    };
 }
 
 /**

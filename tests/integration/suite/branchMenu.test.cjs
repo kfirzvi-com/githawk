@@ -25,6 +25,7 @@ suite('branch menu grouping', () => {
             'Update',
             'Compare',
             'Check out',
+            'Worktree',
             'Bring into current branch',
             'Manage',
         ]);

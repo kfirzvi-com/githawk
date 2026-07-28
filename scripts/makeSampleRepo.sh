@@ -13,7 +13,7 @@ set -euo pipefail
 
 TARGET="${1:-/tmp/githawk-sample}"
 
-rm -rf "$TARGET" "${TARGET}-remote"
+rm -rf "$TARGET" "${TARGET}-remote" "${TARGET}-handbook" "${TARGET}-abandoned"
 mkdir -p "$TARGET"
 
 # A bare repository stands in for a remote, so remote branches are real rather
@@ -181,6 +181,16 @@ Reviewed-by: Someone Else
 Refs: #412
 MSG
 
+# --- worktrees: one live, one abandoned ---------------------------------
+#
+# Both states matter. The live one is why a branch shows as checked out
+# elsewhere and cannot be checked out here. The abandoned one — directory
+# deleted by hand, record left behind — is the state that wastes people's
+# time, because git keeps refusing the branch until the record is pruned.
+git worktree add --quiet "${TARGET}-handbook" -b docs/handbook
+git worktree add --quiet "${TARGET}-abandoned" -b spike/abandoned
+rm -rf "${TARGET}-abandoned"
+
 # --- uncommitted work: staged, unstaged, and untracked ------------------
 printf 'work in progress\n' >> src/features/reporting/schedule.ts
 printf 'staged change\n' >> src/core/config.ts
@@ -196,6 +206,8 @@ echo "  directories: $(git ls-files | sed 's|/[^/]*$||' | sort -u | wc -l | tr -
 echo "  branches:    $(git for-each-ref --format='%(refname:short)' refs/heads refs/remotes | tr '\n' ' ')"
 echo "  tags:        $(git tag | tr '\n' ' ')"
 echo "  uncommitted: staged src/core/config.ts, unstaged schedule.ts, untracked notes/todo.md"
+echo "  worktrees:"
+git worktree list | sed 's/^/    /'
 echo
 echo "  upstream states, so every branch-menu path is reachable:"
 git for-each-ref --format='    %(refname:short) -> %(upstream:short) [%(upstream:track,nobracket)]' refs/heads

@@ -3,9 +3,6 @@ import {
     chooseActiveRepository,
     containingRepository,
     describeRepositories,
-    isInside,
-    normalizePath,
-    relativePathFrom,
     shouldDescendInto,
 } from './repositoryDiscovery';
 
@@ -32,35 +29,6 @@ describe('shouldDescendInto', () => {
         expect(shouldDescendInto('apps')).toBe(true);
         expect(shouldDescendInto('packages')).toBe(true);
         expect(shouldDescendInto('outbound')).toBe(true);
-    });
-});
-
-describe('path helpers', () => {
-    test('normalizes away trailing separators but keeps the root', () => {
-        expect(normalizePath('/a/b/')).toBe('/a/b');
-        expect(normalizePath('/a/b')).toBe('/a/b');
-        expect(normalizePath('/')).toBe('/');
-    });
-
-    test('a prefix is not the same as being inside a directory', () => {
-        expect(isInside('/a/b', '/a/b/c')).toBe(true);
-        expect(isInside('/a/b', '/a/b')).toBe(true);
-        // The trap: /a/bc starts with /a/b but is a sibling.
-        expect(isInside('/a/b', '/a/bc')).toBe(false);
-    });
-
-    test('handles a filesystem root, which already ends in a separator', () => {
-        expect(isInside('/', '/anything')).toBe(true);
-    });
-
-    test('treats a backslash as a separator too', () => {
-        expect(isInside('C:\\work', 'C:\\work\\api')).toBe(true);
-        expect(relativePathFrom('C:\\work', 'C:\\work\\api')).toBe('api');
-    });
-
-    test('reports a relative path only for something actually inside', () => {
-        expect(relativePathFrom('/w', '/w/apps/api')).toBe('apps/api');
-        expect(relativePathFrom('/w', '/elsewhere')).toBeUndefined();
     });
 });
 

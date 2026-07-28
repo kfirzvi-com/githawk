@@ -1,6 +1,8 @@
 import { Branch } from '../../domain/models/Branch';
 import { Commit } from '../../domain/models/Commit';
+import { Worktree } from '../../domain/models/Worktree';
 import { BranchDto, CommitDto } from './GitGraphDto';
+import { WorktreeDto } from './WorktreeDto';
 
 export const CommitMapper = {
     toDto(commit: Commit): CommitDto {
@@ -42,6 +44,7 @@ export const BranchMapper = {
             headCommitHash: branch.headCommitHash,
             isCurrent: branch.isCurrent,
             upstream: branch.upstream,
+            worktreePath: branch.worktreePath,
         };
     },
 
@@ -51,7 +54,29 @@ export const BranchMapper = {
             dto.type,
             dto.headCommitHash,
             dto.isCurrent,
-            dto.upstream
+            dto.upstream,
+            dto.worktreePath
         );
+    },
+};
+
+export const WorktreeMapper = {
+    toDto(worktree: Worktree): WorktreeDto {
+        return {
+            path: worktree.path,
+            head: worktree.head,
+            branch: worktree.branch,
+            isBare: worktree.isBare,
+            isMain: worktree.isMain,
+            isCurrent: worktree.isCurrent,
+            isLocked: worktree.isLocked,
+            lockReason: worktree.lockReason,
+            isPrunable: worktree.isPrunable,
+            prunableReason: worktree.prunableReason,
+        };
+    },
+
+    fromDto(dto: WorktreeDto): Worktree {
+        return new Worktree(dto);
     },
 };

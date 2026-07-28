@@ -6,10 +6,21 @@ import type {
 import { LoadGitGraphUseCase } from '../../application/usecases/LoadGitGraphUseCase';
 import type { IGitRepository } from '../../domain/repositories/IGitRepository';
 import type { IGitWriter } from '../../domain/repositories/IGitWriter';
-import { CompareRequest, GitActionMenu } from './GitActionMenu';
+import {
+    BranchContext,
+    CompareRequest,
+    GitActionMenu,
+    WorktreeRequest,
+} from './GitActionMenu';
 import { ComparisonController } from './ComparisonController';
 import { CHANGED_FILES_VIEW_ID, ChangedFilesTree } from './ChangedFilesTree';
 import { RepositoryRegistry } from './RepositoryRegistry';
+import { ActionRunner } from './ActionRunner';
+import { WorktreeMenu } from './WorktreeMenu';
+import { ListWorktreesUseCase } from '../../application/usecases/ListWorktreesUseCase';
+import type { IWorktreeReader } from '../../domain/repositories/IWorktreeReader';
+import { WorktreeMapper } from '../../application/dto/mappers';
+import { baseName } from '../../domain/services/paths';
 import { log } from './log';
 
 /** Matches the `views` contribution id in package.json. */
@@ -21,6 +32,7 @@ export const GITHAWK_VIEW_ID = 'gitHawkView';
  */
 export type GitRepositoryFactory = () => IGitRepository;
 export type GitWriterFactory = () => IGitWriter;
+export type WorktreeReaderFactory = () => IWorktreeReader;
 
 /**
  * `focus` puts the Changes view in front, for an action the user explicitly asked
@@ -46,7 +58,8 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
         private readonly createWriter: GitWriterFactory,
         private readonly comparisons: ComparisonController,
         private readonly changedFiles: ChangedFilesTree,
-        private readonly repositories: RepositoryRegistry
+        private readonly repositories: RepositoryRegistry,
+        private readonly createWorktreeReader: WorktreeReaderFactory
     ) {}
 
     resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -67,6 +80,7 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
 
         this.sendRepositories();
         void this.sendGraph();
+        void this.sendWorktrees();
     }
 
     /** Re-reads the repository and pushes it to the webview, if one is open. */
@@ -75,6 +89,7 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
         if (this.view) {
             this.sendRepositories();
             void this.sendGraph();
+            void this.sendWorktrees();
         }
     }
 
@@ -121,6 +136,24 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
         });
     }
 
+    /**
+     * Separate from the graph, and never allowed to fail it: an old git, or a
+     * repository in an odd state, must cost the worktree list rather than the
+     * whole panel.
+     */
+    private async sendWorktrees(): Promise<void> {
+        try {
+            const useCase = new ListWorktreesUseCase(this.createWorktreeReader());
+            this.post({
+                type: 'worktrees:loaded',
+                worktrees: (await useCase.execute()).map(WorktreeMapper.toDto),
+            });
+        } catch (error) {
+            log.warn(`could not list worktrees: ${describeError(error)}`);
+            this.post({ type: 'worktrees:loaded', worktrees: [] });
+        }
+    }
+
     private handleMessage(message: WebviewToHostMessage): void {
         log.debug(`webview → host: ${message.type}`, JSON.stringify(message));
 
@@ -133,6 +166,11 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
                 break;
             case 'repository:menu':
                 void this.repositories.pick();
+                break;
+            case 'worktree:menu':
+                void (message.path
+                    ? this.createWorktreeMenu().openByPath(message.path)
+                    : this.createWorktreeMenu().showManager());
                 break;
             case 'commit:select':
                 // Clicking a commit fills the Changes tree with what it changed.
@@ -335,27 +373,42 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
         isRemote: boolean
     ): Promise<void> {
         try {
-            const repository = await this.createRepository().getRepository();
-            const branch = repository.getBranch(
-                name,
-                isRemote ? 'remote' : 'local'
+            await this.createMenu().showForBranch(
+                await this.branchContext(name, isRemote)
             );
-
-            await this.createMenu().showForBranch({
-                name,
-                isRemote,
-                isCurrent: branch?.isCurrent ?? false,
-                upstream: branch?.upstream
-                    ? {
-                          ...branch.upstream,
-                          canFastForward: branch.canFastForwardToUpstream,
-                          hasDiverged: branch.hasDiverged,
-                      }
-                    : undefined,
-            });
         } catch (error) {
             vscode.window.showErrorMessage(describeError(error));
         }
+    }
+
+    /**
+     * Built once and shared with the test hook below.
+     *
+     * Not duplicated, however small the duplication looks: a test hook that
+     * assembles its own context asserts a menu no user ever sees. That has
+     * already happened here — the worktree field was added to the real path and
+     * not the hook, and the test passed while the feature was missing.
+     */
+    private async branchContext(
+        name: string,
+        isRemote: boolean
+    ): Promise<BranchContext> {
+        const repository = await this.createRepository().getRepository();
+        const branch = repository.getBranch(name, isRemote ? 'remote' : 'local');
+
+        return {
+            name,
+            isRemote,
+            isCurrent: branch?.isCurrent ?? false,
+            upstream: branch?.upstream
+                ? {
+                      ...branch.upstream,
+                      canFastForward: branch.canFastForwardToUpstream,
+                      hasDiverged: branch.hasDiverged,
+                  }
+                : undefined,
+            checkedOutIn: worktreeHolding(branch),
+        };
     }
 
     /** See gitHawk.branchMenuEntries: structure only, nothing shown. */
@@ -367,29 +420,44 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
         labels: string[];
         entries: { label: string; description?: string }[];
     }> {
-        const repository = await this.createRepository().getRepository();
-        const branch = repository.getBranch(name, isRemote ? 'remote' : 'local');
-
-        return this.createMenu().entriesForBranch({
-            name,
-            isRemote,
-            isCurrent: branch?.isCurrent ?? false,
-            upstream: branch?.upstream
-                ? {
-                      ...branch.upstream,
-                      canFastForward: branch.canFastForwardToUpstream,
-                      hasDiverged: branch.hasDiverged,
-                  }
-                : undefined,
-        });
+        return this.createMenu().entriesForBranch(
+            await this.branchContext(name, isRemote)
+        );
     }
 
     private createMenu(): GitActionMenu {
         return new GitActionMenu(
             this.createWriter(),
             () => this.refresh(),
-            (request) => this.handleCompareRequest(request)
+            (request) => this.handleCompareRequest(request),
+            (request) => this.handleWorktreeRequest(request)
         );
+    }
+
+    /** Exposed so a command can open the manager without going via the webview. */
+    createWorktreeMenu(): WorktreeMenu {
+        return new WorktreeMenu({
+            listWorktrees: () =>
+                new ListWorktreesUseCase(this.createWorktreeReader()).execute(),
+            listBranches: async () =>
+                (await this.createRepository().getRepository()).branches,
+            runner: new ActionRunner(this.createWriter(), () => this.refresh()),
+            showInGitHawk: (path) => this.repositories.setActiveByRealPath(path),
+            rescanRepositories: () => this.repositories.refresh(),
+            currentRepositoryPath: () => this.repositories.rootOrThrow(),
+        });
+    }
+
+    private async handleWorktreeRequest(
+        request: WorktreeRequest
+    ): Promise<void> {
+        const menu = this.createWorktreeMenu();
+
+        if (request.kind === 'open') {
+            await menu.openByPath(request.path);
+            return;
+        }
+        await menu.createForBranch(request.branch);
     }
 
     private post(message: HostToWebviewMessage): void {
@@ -434,6 +502,20 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
  */
 function describeError(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * A branch checked out in a *different* working tree. The branch this worktree
+ * is on also has a worktreePath — its own — so `isCurrent` is what separates
+ * "checked out here" from "checked out elsewhere".
+ */
+function worktreeHolding(
+    branch: { worktreePath?: string; isCheckedOutElsewhere: boolean } | undefined
+): { path: string; name: string } | undefined {
+    if (!branch?.isCheckedOutElsewhere || !branch.worktreePath) {
+        return undefined;
+    }
+    return { path: branch.worktreePath, name: baseName(branch.worktreePath) };
 }
 
 function createNonce(): string {

@@ -136,7 +136,7 @@ function parseDecorations(decorations: string): Ref[] {
 }
 
 function parseBranchLine(line: string): Branch | null {
-    const [refName, objectName, headMarker, upstreamName, trackInfo] =
+    const [refName, objectName, headMarker, upstreamName, trackInfo, worktreePath] =
         line.split(UNIT_SEPARATOR);
     if (!refName || !objectName) {
         return null;
@@ -165,7 +165,9 @@ function parseBranchLine(line: string): Branch | null {
         type,
         objectName,
         headMarker === '*',
-        parseUpstream(upstreamName, trackInfo)
+        parseUpstream(upstreamName, trackInfo),
+        // Empty for a branch checked out nowhere, which is the common case.
+        worktreePath?.trim() || undefined
     );
 }
 

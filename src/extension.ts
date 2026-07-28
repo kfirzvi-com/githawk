@@ -1,9 +1,11 @@
 import * as vscode from 'vscode';
+import { realpathSync } from 'node:fs';
 import {
     DEFAULT_COMMIT_LIMIT,
     GitCliRepository,
 } from './infrastructure/git/GitCliRepository';
 import { GitCliComparer } from './infrastructure/git/GitCliComparer';
+import { GitCliWorktreeReader } from './infrastructure/git/GitCliWorktreeReader';
 import { GitCliWriter } from './infrastructure/git/GitCliWriter';
 import { ChangeDecorationProvider } from './presentation/host/ChangeDecorationProvider';
 import {
@@ -11,6 +13,7 @@ import {
     ChangedFilesTree,
     OPEN_DIFF_COMMAND,
 } from './presentation/host/ChangedFilesTree';
+import { ListWorktreesUseCase } from './application/usecases/ListWorktreesUseCase';
 import { PerformGitActionUseCase } from './application/usecases/PerformGitActionUseCase';
 import { ComparisonController } from './presentation/host/ComparisonController';
 import { FileSystemRepositoryLocator } from './infrastructure/fs/FileSystemRepositoryLocator';
@@ -57,7 +60,11 @@ export async function activate(
 
     const repositories = new RepositoryRegistry(
         context.workspaceState,
-        () => new FileSystemRepositoryLocator()
+        () => new FileSystemRepositoryLocator(),
+        // Git reports resolved paths, the workspace does not; without this,
+        // showing a worktree in GitHawk silently fails wherever /tmp is a
+        // symlink for /private/tmp, which is to say on every Mac.
+        (path) => realpathSync.native(path)
     );
     repositoryRegistry = repositories;
     context.subscriptions.push(repositories);
@@ -82,7 +89,8 @@ export async function activate(
         createGitWriter,
         comparisons,
         changedFiles,
-        repositories
+        repositories,
+        createWorktreeReader
     );
 
     context.subscriptions.push(
@@ -120,10 +128,34 @@ export async function activate(
                 return repositories.pick();
             }
         ),
+        vscode.commands.registerCommand('gitHawk.manageWorktrees', () =>
+            provider.createWorktreeMenu().showManager()
+        ),
+        vscode.commands.registerCommand('gitHawk.startAiTool', () =>
+            provider.createWorktreeMenu().startAiToolHere()
+        ),
         // Returns the picker's structure without showing it, so the integration
         // tests can assert what it offers.
         vscode.commands.registerCommand('gitHawk.repositoryPickItems', () =>
             repositories.pickItemsForTesting()
+        ),
+        vscode.commands.registerCommand('gitHawk.worktreeItems', () =>
+            provider.createWorktreeMenu().managerItemsForTesting()
+        ),
+        // Reports the worktrees as the extension sees them.
+        vscode.commands.registerCommand('gitHawk.worktrees', async () =>
+            (
+                await new ListWorktreesUseCase(createWorktreeReader()).execute()
+            ).map((worktree) => ({
+                path: worktree.path,
+                name: worktree.name,
+                branch: worktree.branch,
+                isMain: worktree.isMain,
+                isCurrent: worktree.isCurrent,
+                isLocked: worktree.isLocked,
+                isPrunable: worktree.isPrunable,
+                checkedOut: worktree.checkedOut,
+            }))
         ),
         // Reports what the scan found, so the integration tests can assert on
         // real state rather than on a screenshot.
@@ -233,6 +265,10 @@ function createGitWriter(): GitCliWriter {
 
 function createGitComparer(): GitCliComparer {
     return new GitCliComparer(activeRepositoryRoot());
+}
+
+function createWorktreeReader(): GitCliWorktreeReader {
+    return new GitCliWorktreeReader(activeRepositoryRoot());
 }
 
 /**

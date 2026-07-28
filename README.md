@@ -83,6 +83,41 @@ Switching moves everything with it: the graph, branch actions, comparisons, and
 the Changes tree, which is cleared rather than left describing the repository you
 just left. Your choice is remembered per workspace.
 
+### Worktrees
+
+A worktree is a second directory with a different branch checked out, sharing one
+repository. The idea is old and stays niche because the commands are unmemorable
+and the failure modes are opaque — git refuses a checkout because of a directory
+you deleted last month.
+
+GitHawk names the rule instead of relaying the error:
+
+- The branch list badges any branch checked out in another worktree (`⧉ handbook`),
+  so you can see before clicking that a checkout would be refused.
+- Its menu drops **Check out** entirely and offers **Open the worktree** instead.
+- A **Worktrees** section appears in the sidebar once there is more than one, with
+  what each has checked out, and `locked` / `missing` where it applies. **Manage**
+  opens the full picker; so does `GitHawk: Manage Worktrees`.
+- Every branch that is free offers **Create a worktree for …**, suggesting a
+  sibling of the repository named after the branch —
+  `/projects/gitgrit` plus `feature/login` gives `/projects/gitgrit-feature-login`.
+  Beside rather than inside, so it does not appear as untracked in its own
+  parent's `git status`, and so the repository scan finds it.
+
+Each row in the picker carries three buttons: **open a new VS Code window**,
+**open a terminal**, and **start an AI CLI** there. The CLI list is
+`gitHawk.aiTools` — Claude Code, Codex, Gemini CLI, and opencode by default. The
+command is typed into a terminal already rooted in the worktree, so aliases and
+`npx …` wrappers work. `GitHawk: Start An AI CLI Here` does the same for the
+current repository.
+
+Removing one asks twice, and the second question is different: git refuses to
+remove a worktree holding uncommitted or untracked files, and overriding that
+destroys files that exist nowhere else, so it is asked for separately rather than
+folded into the first confirmation. A worktree whose directory is gone is reported
+as `missing` with a **Prune** entry, because until that record is pruned git keeps
+refusing its branch everywhere.
+
 ### Keeping branches current
 
 `main` behind the remote while you are on a feature branch is the common case, and

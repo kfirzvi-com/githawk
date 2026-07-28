@@ -59,7 +59,14 @@ export class RepositoryRegistry implements vscode.Disposable {
 
     constructor(
         private readonly memento: vscode.Memento,
-        private readonly createLocator: () => IRepositoryLocator
+        private readonly createLocator: () => IRepositoryLocator,
+        /**
+         * Resolves symlinks. Injected because touching the filesystem is not
+         * this tier's job, and because it is only needed to reconcile two
+         * spellings of the same directory — see setActiveByRealPath.
+         */
+        private readonly resolveRealPath: (path: string) => string = (path) =>
+            path
     ) {}
 
     get all(): readonly RepositoryLocation[] {
@@ -152,6 +159,42 @@ export class RepositoryRegistry implements vscode.Disposable {
         void this.remember(match.root);
         log.info(`switched to repository ${match.root}`);
         this.changed.fire();
+    }
+
+    /**
+     * Switches to a path that came from git rather than from the workspace.
+     *
+     * The two disagree: git resolves symlinks, so a workspace opened at
+     * `/tmp/repo` is `/private/tmp/repo` in every `git worktree list`. Comparing
+     * the strings directly never matches on macOS, and the failure is silent —
+     * "Show in GitHawk" would simply do nothing.
+     *
+     * Returns false when the path is not a discovered repository, which is a
+     * real answer: a worktree outside the workspace, or deeper than the scan
+     * reaches, cannot be shown here.
+     */
+    setActiveByRealPath(path: string): boolean {
+        const wanted = this.realPath(path);
+        const match = this.repositories.find(
+            (repository) =>
+                repository.root === path || this.realPath(repository.root) === wanted
+        );
+
+        if (!match) {
+            return false;
+        }
+        this.setActive(match.root);
+        return true;
+    }
+
+    private realPath(path: string): string {
+        try {
+            return this.resolveRealPath(path);
+        } catch {
+            // A path that cannot be resolved — deleted, or unreadable — is left
+            // as written, so the exact-match case still works.
+            return path;
+        }
     }
 
     /**

@@ -1,8 +1,13 @@
 <script lang="ts">
     import type { Branch } from '../../domain/models/Branch';
     import type { Commit } from '../../domain/models/Commit';
+    import type { Worktree } from '../../domain/models/Worktree';
     import { GraphLayoutService } from '../../domain/services/GraphLayoutService';
-    import { BranchMapper, CommitMapper } from '../../application/dto/mappers';
+    import {
+        BranchMapper,
+        CommitMapper,
+        WorktreeMapper,
+    } from '../../application/dto/mappers';
     import BranchList from './components/BranchList.svelte';
     import CommitDetails from './components/CommitDetails.svelte';
     import GitGraph from './components/GitGraph.svelte';
@@ -36,6 +41,8 @@
     /** Empty until the host has scanned the workspace, and in the dev harness. */
     let repositories = $state<RepositoryLocation[]>([]);
     let activeRepositoryRoot = $state<string | undefined>(undefined);
+    /** Working trees of the active repository. One is the common case. */
+    let worktrees = $state<Worktree[]>([]);
 
     /** Layout is derived, never stored: one source of truth for the graph. */
     const graph = $derived(
@@ -111,6 +118,9 @@
                     }
                     repositories = message.repositories;
                     activeRepositoryRoot = message.activeRoot;
+                    break;
+                case 'worktrees:loaded':
+                    worktrees = message.worktrees.map(WorktreeMapper.fromDto);
                     break;
             }
         })
@@ -284,6 +294,7 @@
             >
                 <BranchList
                     {branches}
+                    {worktrees}
                     onOpenMenu={(branch) =>
                         postToHost({
                             type: 'branch:menu',
@@ -291,6 +302,8 @@
                             isRemote: branch.isRemote,
                             isCurrent: branch.isCurrent,
                         })}
+                    onOpenWorktreeMenu={(path) =>
+                        postToHost({ type: 'worktree:menu', path })}
                 />
             </div>
 

@@ -1,8 +1,9 @@
-import { existsSync, writeFileSync } from 'node:fs';
+import { existsSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, test } from 'vitest';
 import { GitActionFailedError, GitCliWriter } from './GitCliWriter';
 import { GitCliRepository } from './GitCliRepository';
+import { GitCliWorktreeReader } from './GitCliWorktreeReader';
 import { TemporaryRepository } from './testing/temporaryRepository';
 import { PerformGitActionUseCase } from '../../application/usecases/PerformGitActionUseCase';
 
@@ -470,5 +471,228 @@ describe('remote branches and renaming', () => {
         ).rejects.toThrow(GitActionFailedError);
 
         expect((await read(repo)).getBranch('feature/a')).toBeDefined();
+    });
+});
+
+/**
+ * Worktrees against real git. Every assertion here is about a git rule the UI
+ * relies on — one branch per working tree, no removing the main one, a deleted
+ * directory keeps blocking until its record is pruned — and a stub would only
+ * ever agree with whatever this author believed those rules to be.
+ */
+describe('worktrees', () => {
+    /** Removed via git so the record goes with the directory. */
+    const removeQuietly = (repo: TemporaryRepository, path: string) => {
+        try {
+            repo.git(['worktree', 'remove', '--force', path]);
+        } catch {
+            rmSync(path, { recursive: true, force: true });
+        }
+    };
+
+    test('adds a worktree on a new branch', async () => {
+        const repo = newRepo();
+        commitFile(repo, 'base.txt', 'base\n', 'base');
+        const path = `${repo.path}-side`;
+
+        try {
+            await new GitCliWriter(repo.path).perform({
+                type: 'addWorktree',
+                path,
+                ref: 'HEAD',
+                newBranch: 'feature/side',
+            });
+
+            expect(existsSync(join(path, 'base.txt'))).toBe(true);
+            const repository = await read(repo);
+            expect(repository.getBranch('feature/side')).toBeDefined();
+            expect(
+                repository.getBranch('feature/side')?.isCheckedOutElsewhere
+            ).toBe(true);
+        } finally {
+            removeQuietly(repo, path);
+        }
+    });
+
+    test('adds a worktree for a branch that already exists', async () => {
+        const repo = newRepo();
+        commitFile(repo, 'base.txt', 'base\n', 'base');
+        repo.git(['branch', 'feature/existing']);
+        const path = `${repo.path}-existing`;
+
+        try {
+            await new GitCliWriter(repo.path).perform({
+                type: 'addWorktree',
+                path,
+                ref: 'feature/existing',
+            });
+
+            expect(existsSync(join(path, '.git'))).toBe(true);
+        } finally {
+            removeQuietly(repo, path);
+        }
+    });
+
+    test('refuses to check a branch out into two worktrees at once', async () => {
+        const repo = newRepo();
+        commitFile(repo, 'base.txt', 'base\n', 'base');
+        const first = `${repo.path}-first`;
+        const second = `${repo.path}-second`;
+
+        try {
+            await new GitCliWriter(repo.path).perform({
+                type: 'addWorktree',
+                path: first,
+                ref: 'HEAD',
+                newBranch: 'feature/one',
+            });
+
+            // The rule the branch menu exists to explain, confirmed here rather
+            // than assumed: no --force is emitted, so git says no.
+            await expect(
+                new GitCliWriter(repo.path).perform({
+                    type: 'addWorktree',
+                    path: second,
+                    ref: 'feature/one',
+                })
+            ).rejects.toThrow(GitActionFailedError);
+
+            expect(existsSync(second)).toBe(false);
+        } finally {
+            removeQuietly(repo, first);
+        }
+    });
+
+    test('removes a clean worktree, directory and record together', async () => {
+        const repo = newRepo();
+        commitFile(repo, 'base.txt', 'base\n', 'base');
+        const path = `${repo.path}-clean`;
+        repo.git(['worktree', 'add', '--quiet', path, '-b', 'feature/clean']);
+
+        await new PerformGitActionUseCase(new GitCliWriter(repo.path)).execute(
+            { type: 'removeWorktree', path, force: false },
+            { confirmed: true }
+        );
+
+        expect(existsSync(path)).toBe(false);
+        // Record gone too, so the branch is checked out nowhere.
+        expect((await read(repo)).getBranch('feature/clean')?.worktreePath).toBeUndefined();
+    });
+
+    test('refuses to remove a worktree holding uncommitted work', async () => {
+        const repo = newRepo();
+        commitFile(repo, 'base.txt', 'base\n', 'base');
+        const path = `${repo.path}-dirty`;
+        repo.git(['worktree', 'add', '--quiet', path, '-b', 'feature/dirty']);
+        writeFileSync(join(path, 'unsaved.txt'), 'work in progress\n');
+
+        try {
+            const outcome = await new PerformGitActionUseCase(
+                new GitCliWriter(repo.path)
+            ).execute(
+                { type: 'removeWorktree', path, force: false },
+                { confirmed: true }
+            );
+
+            expect(outcome.succeeded).toBe(false);
+            // The message the force path keys on. If git ever rewords this, the
+            // second confirmation stops being offered — which is why it is
+            // asserted rather than trusted.
+            expect(outcome.message).toMatch(
+                /contains modified or untracked files|use --force/i
+            );
+            expect(existsSync(path)).toBe(true);
+        } finally {
+            removeQuietly(repo, path);
+        }
+    });
+
+    test('removes it anyway when forced, losing the uncommitted work', async () => {
+        const repo = newRepo();
+        commitFile(repo, 'base.txt', 'base\n', 'base');
+        const path = `${repo.path}-forced`;
+        repo.git(['worktree', 'add', '--quiet', path, '-b', 'feature/forced']);
+        writeFileSync(join(path, 'unsaved.txt'), 'work in progress\n');
+
+        await new PerformGitActionUseCase(new GitCliWriter(repo.path)).execute(
+            { type: 'removeWorktree', path, force: true },
+            { confirmed: true }
+        );
+
+        expect(existsSync(path)).toBe(false);
+    });
+
+    test('refuses to remove the main worktree', async () => {
+        const repo = newRepo();
+        commitFile(repo, 'base.txt', 'base\n', 'base');
+
+        await expect(
+            new GitCliWriter(repo.path).perform({
+                type: 'removeWorktree',
+                path: repo.path,
+                force: false,
+            })
+        ).rejects.toThrow(GitActionFailedError);
+
+        expect(existsSync(repo.path)).toBe(true);
+    });
+
+    test('a deleted directory keeps blocking its branch until pruned', async () => {
+        const repo = newRepo();
+        commitFile(repo, 'base.txt', 'base\n', 'base');
+        const path = `${repo.path}-abandoned`;
+        repo.git(['worktree', 'add', '--quiet', path, '-b', 'feature/abandoned']);
+
+        // Deleted by hand, as people do.
+        rmSync(path, { recursive: true, force: true });
+
+        const stillBlocked = await read(repo);
+        expect(
+            stillBlocked.getBranch('feature/abandoned')?.isCheckedOutElsewhere
+        ).toBe(true);
+
+        await new GitCliWriter(repo.path).perform({ type: 'pruneWorktrees' });
+
+        const afterPrune = await read(repo);
+        expect(
+            afterPrune.getBranch('feature/abandoned')?.worktreePath
+        ).toBeUndefined();
+    });
+
+    test('a locked worktree survives a prune', async () => {
+        const repo = newRepo();
+        commitFile(repo, 'base.txt', 'base\n', 'base');
+        const path = `${repo.path}-locked`;
+        repo.git(['worktree', 'add', '--quiet', path, '-b', 'feature/locked']);
+
+        try {
+            await new GitCliWriter(repo.path).perform({
+                type: 'lockWorktree',
+                path,
+                reason: 'on an external drive',
+            });
+            rmSync(path, { recursive: true, force: true });
+
+            await new GitCliWriter(repo.path).perform({ type: 'pruneWorktrees' });
+
+            // That is what locking is for: the record outlives the directory.
+            const reader = new GitCliWorktreeReader(repo.path);
+            const locked = (await reader.list()).find((w) => !w.isMain);
+            expect(locked?.isLocked).toBe(true);
+
+            await new GitCliWriter(repo.path).perform({
+                type: 'unlockWorktree',
+                path: locked!.path,
+            });
+            const unlocked = (await reader.list()).find((w) => !w.isMain);
+            expect(unlocked?.isLocked).toBe(false);
+        } finally {
+            try {
+                repo.git(['worktree', 'unlock', path]);
+            } catch {
+                // Already unlocked by the assertions above.
+            }
+            repo.git(['worktree', 'prune']);
+        }
     });
 });

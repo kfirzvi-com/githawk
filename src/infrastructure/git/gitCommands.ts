@@ -55,16 +55,26 @@ export function branchArgs(): string[] {
         // `upstream:track,nobracket` yields "ahead 2, behind 3", "gone", or
         // nothing — which is how a branch's relationship to its remote is read
         // without a second command per branch.
+        //
+        // `worktreepath` is the working tree holding the branch, empty when it
+        // is not checked out anywhere. It comes free with this command, which is
+        // why the graph does not need to list worktrees separately just to know
+        // that a checkout would be refused.
         [
             '--format=%(refname)',
             '%(objectname)',
             '%(HEAD)',
             '%(upstream:short)',
             '%(upstream:track,nobracket)',
+            '%(worktreepath)',
         ].join(UNIT_SEPARATOR),
         'refs/heads',
         'refs/remotes',
     ];
+}
+
+export function worktreeListArgs(): string[] {
+    return ['worktree', 'list', '--porcelain'];
 }
 
 export function repositoryRootArgs(): string[] {
