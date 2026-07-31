@@ -1,0 +1,145 @@
+name: Release
+
+# Two channels, one number line:
+#
+#   X.Y.0            stable       tag vX.Y.0
+#   X.Y.<commits>    pre-release  push to main
+#
+# Patch 0 is reserved for stable, every other patch is a pre-release build, so
+# no version is ever published on both channels — which the Marketplace forbids,
+# and which it enforces by refusing to reissue a version at all.
+on:
+  push:
+    branches: [main]
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+
+# Serialised across the whole repository, not per ref: two publishes racing for
+# the next version number would leave one of them permanently unusable.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  plan:
+    name: Decide what to publish
+    runs-on: ubuntu-24.04
+    outputs:
+      channel: ${{ steps.plan.outputs.channel }}
+      version: ${{ steps.plan.outputs.version }}
+    steps:
+      # Full history: the pre-release build number is the commit count, and the
+      # release-commit check needs tags.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: plan
+        run: |
+          set -euo pipefail
+
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            version="${GITHUB_REF#refs/tags/v}"
+            manifest="$(node -p "require('./package.json').version")"
+
+            if [[ "$version" != "$manifest" ]]; then
+              echo "::error::tag v$version disagrees with package.json $manifest"
+              exit 1
+            fi
+            if [[ "${version##*.}" != "0" ]]; then
+              echo "::error::a stable release must end in .0 (got $version); other patch numbers belong to pre-release builds"
+              exit 1
+            fi
+
+            channel=stable
+
+          elif [[ -n "$(git tag --points-at HEAD -l 'v*')" ]]; then
+            # The release commit arriving on main. Its tag publishes the stable
+            # version; also publishing a pre-release from this commit would take
+            # a higher number and lock the stable one out for good. Push the
+            # commit and its tag together with --atomic so this check cannot see
+            # the commit before the tag exists.
+            channel=none
+            version=
+
+          else
+            # package.json holds the most recent stable version; its major.minor
+            # is the line the current pre-releases belong to.
+            line="$(node -p "require('./package.json').version.split('.').slice(0, 2).join('.')")"
+            channel=pre-release
+            version="$line.$(git rev-list --count HEAD)"
+          fi
+
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Publishing $channel${version:+ $version}"
+
+  ci:
+    name: CI
+    needs: plan
+    if: needs.plan.outputs.channel != 'none'
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    name: Publish ${{ needs.plan.outputs.channel }} ${{ needs.plan.outputs.version }}
+    needs: [plan, ci]
+    runs-on: ubuntu-24.04
+    env:
+      VSCE_PAT: ${{ secrets.VSCE_PAT }}
+      OVSX_PAT: ${{ secrets.OVSX_PAT }}
+      VERSION: ${{ needs.plan.outputs.version }}
+      CHANNEL: ${{ needs.plan.outputs.channel }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+
+      # Pre-release build numbers are never committed back to main. The commit
+      # is the identity of a build; the number only has to sort correctly.
+      - name: Stamp the version
+        run: npm version "$VERSION" --no-git-tag-version --allow-same-version
+
+      - name: Package
+        run: |
+          set -euo pipefail
+          flag=()
+          if [[ "$CHANNEL" == pre-release ]]; then flag=(--pre-release); fi
+          npx vsce package "${flag[@]}" --out "githawk-$VERSION.vsix"
+
+      - name: Publish to the Visual Studio Marketplace
+        run: |
+          set -euo pipefail
+          flag=()
+          if [[ "$CHANNEL" == pre-release ]]; then flag=(--pre-release); fi
+          npx vsce publish "${flag[@]}" --packagePath "githawk-$VERSION.vsix"
+
+      # Stable only — Open VSX has no pre-release channel. Skipped until the
+      # secret exists, because the Eclipse publisher agreement takes days to
+      # approve and that should not hold up a Marketplace release.
+      - name: Publish to Open VSX
+        if: needs.plan.outputs.channel == 'stable' && env.OVSX_PAT != ''
+        run: npx ovsx publish "githawk-$VERSION.vsix" --pat "$OVSX_PAT"
+
+      - name: GitHub Release
+        if: needs.plan.outputs.channel == 'stable'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          node scripts/changelogSection.mjs "$VERSION" > /tmp/notes.md
+          gh release create "v$VERSION" "githawk-$VERSION.vsix" \
+            --title "GitHawk $VERSION" \
+            --notes-file /tmp/notes.md
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: githawk-${{ needs.plan.outputs.version }}
+          path: githawk-*.vsix
+          retention-days: 90
