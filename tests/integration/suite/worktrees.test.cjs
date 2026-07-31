@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
 const vscode = require('vscode');
 
-const EXTENSION_ID = 'kfirzvi.githawk';
+const { EXTENSION_ID } = require('../extensionId.cjs');
 
 const root = () => vscode.workspace.workspaceFolders[0].uri.fsPath;
 const git = (args) =>

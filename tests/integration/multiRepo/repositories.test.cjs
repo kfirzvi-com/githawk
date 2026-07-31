@@ -3,7 +3,7 @@ const { execFileSync } = require('node:child_process');
 const path = require('node:path');
 const vscode = require('vscode');
 
-const EXTENSION_ID = 'kfirzvi.githawk';
+const { EXTENSION_ID } = require('../extensionId.cjs');
 const SECTION = 'gitHawk';
 const DEPTH_SETTING = 'repositoryScanDepth';
 

@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
 const vscode = require('vscode');
+const { EXTENSION_ID } = require('../extensionId.cjs');
 
 const root = () => vscode.workspace.workspaceFolders[0].uri.fsPath;
 const git = (args) =>
@@ -11,7 +12,7 @@ const menu = (name, isRemote = false) =>
 
 suite('branch menu grouping', () => {
     suiteSetup(async () => {
-        await vscode.extensions.getExtension('kfirzvi.githawk').activate();
+        await vscode.extensions.getExtension(EXTENSION_ID).activate();
     });
 
     test('groups a local branch by topic, in a sensible order', async () => {
