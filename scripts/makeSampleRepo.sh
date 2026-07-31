@@ -17,8 +17,13 @@ rm -rf "$TARGET" "${TARGET}-remote" "${TARGET}-handbook" "${TARGET}-abandoned"
 mkdir -p "$TARGET"
 
 # A bare repository stands in for a remote, so remote branches are real rather
-# than simulated.
-git init --quiet --bare "${TARGET}-remote"
+# than simulated. --initial-branch is not cosmetic here: it sets the bare HEAD,
+# which is what `git clone` of this remote checks out. Left to the ambient
+# init.defaultBranch it becomes `master`, which no branch ever occupies, and a
+# clone then lands on an unborn branch — so `push origin main` fails with "src
+# refspec main does not match any". macOS hides that, because Xcode ships a
+# system gitconfig setting init.defaultBranch=main.
+git init --quiet --bare --initial-branch=main "${TARGET}-remote"
 
 cd "$TARGET"
 git init --quiet --initial-branch=main
