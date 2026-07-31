@@ -2,8 +2,9 @@
   "name": "githawk",
   "displayName": "GitHawk",
   "description": "A simple, fast git graph for VS Code. MIT licensed. No AI, no telemetry.",
-  "version": "0.0.1",
+  "version": "0.2.0",
   "license": "MIT",
+  "preview": true,
   "icon": "media/icon.png",
   "publisher": "kfirzvi",
   "author": "Kfir Zvi",
@@ -46,11 +47,11 @@
           "default": 2,
           "minimum": 0,
           "maximum": 8,
-          "markdownDescription": "How many directory levels below each workspace folder to search for git repositories.\n\n`0` searches the opened folders only. `2` — the default — covers a folder of projects, or a folder of buckets each holding projects.\n\nThe search skips dot-directories and heavy build directories such as `node_modules`, `dist`, and `target`, so raising it is usually cheap. Repositories nested inside another repository, including submodules and linked worktrees, are found too."
+          "markdownDescription": "How many directory levels below each workspace folder to search for git repositories.\n\n`0` searches the opened folders only. `2` \u2014 the default \u2014 covers a folder of projects, or a folder of buckets each holding projects.\n\nThe search skips dot-directories and heavy build directories such as `node_modules`, `dist`, and `target`, so raising it is usually cheap. Repositories nested inside another repository, including submodules and linked worktrees, are found too."
         },
         "gitHawk.aiTools": {
           "type": "array",
-          "markdownDescription": "Coding agents GitHawk can start in a terminal, from a worktree or the current repository.\n\nThe command is typed into a terminal already rooted in the chosen directory, so wrappers and aliases work — replace `claude` with `npx @anthropic-ai/claude-code`, or with your own script, as you like. An entry missing `name` or `command` is ignored.",
+          "markdownDescription": "Coding agents GitHawk can start in a terminal, from a worktree or the current repository.\n\nThe command is typed into a terminal already rooted in the chosen directory, so wrappers and aliases work \u2014 replace `claude` with `npx @anthropic-ai/claude-code`, or with your own script, as you like. An entry missing `name` or `command` is ignored.",
           "default": [
             {
               "name": "Claude Code",

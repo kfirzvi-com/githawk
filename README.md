@@ -16,8 +16,10 @@ lines between commits.
 
 **Explicit non-goals:** no AI, no telemetry, no account, no cloud.
 
-> Status: alpha. Reads real repositories, draws the graph correctly, and performs
-> branch and commit actions. Reviewing a whole branch as one changeset is next.
+> **Status: preview.** Everything below works and is tested. What it does not yet
+> do: follow your colour theme (the panel is dark regardless), virtualise very
+> long histories, or help you out of a conflicted merge. Those are the honest
+> gaps — see the Changelog for the full list.
 
 ## Architecture
 

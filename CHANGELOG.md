@@ -3,9 +3,11 @@
 All notable changes to GitHawk are documented here, following
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.2.0] — 2026-07-31
 
-Alpha. Reads real repositories and performs branch actions.
+First public release, marked **Preview** on the Marketplace. Everything listed
+here works and is covered by tests; the known limitations at the bottom are the
+reason it is a preview rather than a 1.0.
 
 ### Added
 
