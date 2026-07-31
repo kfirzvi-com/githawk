@@ -1,245 +1,176 @@
 # GitHawk
 
-A simple, fast git graph for VS Code. MIT licensed.
+**A git graph for VS Code that is just a git graph.** No AI, no telemetry, no
+account, no cloud. MIT licensed.
 
-The extension most people used for this — [Git
-Graph](https://github.com/mhutchie/vscode-git-graph) — has been abandoned
+![The GitHawk graph panel](media/screenshots/graph.png)
+
+> **Preview.** Everything documented here works and is covered by tests. What it
+> does not do yet: follow your colour theme (the panel is dark whatever your
+> theme), stay fast on very long histories, or help you out of a conflicted merge.
+
+## Install
+
+Search **GitHawk** in the Extensions view, or:
+
+```
+code --install-extension kfirzvi-com.githawk
+```
+
+Then press **`Cmd+9`** (**`Ctrl+9`** on Windows and Linux) — or run
+**`GitHawk: Open Git Graph`**. The graph opens in the panel at the bottom; changed
+files appear in a tree in the sidebar under the GitHawk icon.
+
+Nothing to configure to get started.
+
+## Why another one
+
+[Git Graph](https://github.com/mhutchie/vscode-git-graph) is what most people used,
+and it has been abandoned
 ([#913](https://github.com/mhutchie/vscode-git-graph/issues/913),
 [#838](https://github.com/mhutchie/vscode-git-graph/issues/838)) with millions of
-installs still depending on it. Its licence looks like MIT but removes the rights
-to `publish, distribute, sublicense, and/or sell derivative works`, so it is not
-open source and nobody can legally ship a maintained fork.
+installs still depending on it. Its licence looks like MIT but removes the right to
+`publish, distribute, sublicense, and/or sell derivative works` — so it is not open
+source, and nobody can legally ship a maintained fork.
 
 GitHawk is a clean-room replacement under a real MIT licence. Meanwhile the
-maintained alternatives keep bolting AI onto a tool whose entire job is drawing
-lines between commits.
+maintained alternatives keep adding AI to a tool whose entire job is drawing lines
+between commits.
 
-**Explicit non-goals:** no AI, no telemetry, no account, no cloud.
+## What it does
 
-> **Status: preview.** Everything below works and is tested. What it does not yet
-> do: follow your colour theme (the panel is dark regardless), virtualise very
-> long histories, or help you out of a conflicted merge. Those are the honest
-> gaps — see the Changelog for the full list.
+### Read the graph
 
-## Architecture
+Commits in correct topological order — a parent is never drawn above its child,
+even after a rebase or a cherry-pick. Lanes are reused as soon as a branch ends, so
+the gutter stays narrow on repositories with dozens of branches. Branches, remote
+branches, tags, and a detached HEAD are each labelled distinctly.
 
-Four tiers, with the dependency rule enforced by `eslint-plugin-boundaries`
-rather than by convention:
+### See what a commit changed
 
-```
-src/
-  domain/          zero dependencies — entities, layout algorithm
-  application/     use cases + the host↔webview DTO and mappers
-  infrastructure/  adapters behind ports (fixtures now, git CLI next)
-  presentation/    host/ (VS Code plumbing) and webview/ (Svelte 5)
-```
+![Commit details and the changed-files tree](media/screenshots/commit-details.png)
 
-`domain` and `application` are platform-free and are bundled into **both** the
-extension host and the webview. That is what lets the layout algorithm run
-client-side without existing twice, and lets it be tested with no VS Code and no
-browser.
+Click a commit: its full message, author, date, and hash appear on the right, and
+its files fill the **Changes** tree in the sidebar. Click a file to open it in
+VS Code's own diff editor.
 
-Two rules worth knowing:
+### Review a whole branch, or any set of commits
 
-- **`vscode` may only be imported by `presentation/host` and `extension.ts`.**
-  Everything else stays runnable in Node and in a browser. Lint fails otherwise.
-- **Rows and lanes are domain concepts; pixels are not.** The layout emits
-  `{row, lane}` only. Coordinates live in
-  `presentation/webview/viewmodels/graphGeometry.ts`.
-- **Native UI wherever VS Code already has it.** Menus are QuickPicks, the file
-  list is a `TreeView`, and diffs open in the built-in diff editor. The webview
-  draws the graph, which is the one thing VS Code cannot already do.
+![Several commits selected, with their combined changes](media/screenshots/review-commits.png)
 
-## Using it
+- **Click a branch → "Review my work against …"** — everything your branch adds
+  relative to that one, measured from the merge base, including work you have not
+  committed yet.
+- **Cmd/Ctrl-click** several commits, or **Shift-click** for a run. Their combined
+  changeset appears automatically — selecting *is* the request, there is no button.
+  They do not have to be next to each other.
+- **"Compare … with …"** — any two branches, tags, or commits, directly. Neither
+  side has to involve where you currently are, so you can sit on `main` and compare
+  two other branches.
 
-The graph lives in the **panel** (`Cmd+9`). Changed files live in a tree in the
-**primary sidebar**, under the GitHawk icon.
+The tree always states how the comparison was made, because a merge-base diff, a
+direct diff, and a reconstruction answer different questions.
 
-Right-click a commit, or click a branch, and GitHawk opens a **native VS Code
-QuickPick** rather than a menu drawn inside the webview — so keyboard navigation,
-theming, and confirmation dialogs are the ones you already know.
+### Act on branches and commits
 
-### Several repositories in one workspace
+![The grouped branch menu](media/screenshots/branch-menu.png)
 
-GitHawk searches each opened folder for git working trees and shows the one you
-are working in. The repository name sits at the left of the toolbar — click it to
-switch, or run **`GitHawk: Switch Repository`**.
+Click a branch, or right-click a commit, and you get a native VS Code menu —
+grouped by topic, with your keyboard shortcuts and theme, not a menu drawn inside a
+webview.
 
-How far it looks is `gitHawk.repositoryScanDepth`, default **2**:
+On a commit: create a branch or tag here, check it out, cherry-pick, revert, reset,
+copy the hash. On a branch: check out, merge, rebase, rename, delete, or delete it
+on the remote.
 
-| Depth | Finds |
-| ----- | ----- |
-| `0` | the opened folders only |
-| `1` | a folder of projects |
-| `2` | a folder of buckets, each holding projects |
-| `3+` | anything deeper you happen to have |
+**`main` is behind while you are on a feature branch?** That does not need a
+checkout. Click the branch and choose **"Update from origin/main"** — the ref moves
+and your working tree, index, and HEAD are untouched. There is deliberately no
+`--force`, so a diverged branch is reported rather than overwritten. The branch
+list shows ↓ behind, ↑ ahead, or `gone` at a glance, and
+**`GitHawk: Update All Branches From Upstream`** does every eligible one at once.
 
-The search skips dot-directories and heavy build directories (`node_modules`,
-`dist`, `target`, and similar), so raising it is usually cheap — and it does not
-stop at a repository, so submodules, linked worktrees, and repositories nested
-inside a monorepo are all found. The picker itself has a gear that jumps straight
-to the setting, and a **Search again** entry for a repository cloned since the
-window opened.
+Anything destructive asks first, and says what will be lost.
 
-Switching moves everything with it: the graph, branch actions, comparisons, and
-the Changes tree, which is cleared rather than left describing the repository you
-just left. Your choice is remembered per workspace.
+### Work across several repositories
 
-### Worktrees
+![The repository picker](media/screenshots/changes.png)
+
+Open a folder of projects and GitHawk finds the repositories inside it. The name at
+the left of the toolbar switches between them; so does
+**`GitHawk: Switch Repository`**. Switching moves everything with it — graph,
+menus, comparisons, and the Changes tree.
+
+Submodules, linked worktrees, and repositories nested inside a monorepo are all
+found. How deep it looks is [`gitHawk.repositoryScanDepth`](#settings).
+
+### Manage worktrees
+
+![The worktree manager](media/screenshots/worktrees.png)
 
 A worktree is a second directory with a different branch checked out, sharing one
-repository. The idea is old and stays niche because the commands are unmemorable
-and the failure modes are opaque — git refuses a checkout because of a directory
-you deleted last month.
+repository. They stay niche because git's errors are opaque — it refuses a checkout
+because of a directory you deleted last month, and tells you only that the branch
+"is already used by worktree at …".
 
-GitHawk names the rule instead of relaying the error:
+GitHawk names the rule instead:
 
-- The branch list badges any branch checked out in another worktree (`⧉ handbook`),
-  so you can see before clicking that a checkout would be refused.
-- Its menu drops **Check out** entirely and offers **Open the worktree** instead.
-- A **Worktrees** section appears in the sidebar once there is more than one, with
-  what each has checked out, and `locked` / `missing` where it applies. **Manage**
-  opens the full picker; so does `GitHawk: Manage Worktrees`.
-- Every branch that is free offers **Create a worktree for …**, suggesting a
-  sibling of the repository named after the branch —
-  `/projects/gitgrit` plus `feature/login` gives `/projects/gitgrit-feature-login`.
-  Beside rather than inside, so it does not appear as untracked in its own
-  parent's `git status`, and so the repository scan finds it.
+- A branch checked out in another worktree is **badged in the branch list**, so you
+  can see before clicking that a checkout would be refused. Its menu offers to
+  **open that worktree** instead.
+- A **Worktrees** section appears in the sidebar once you have more than one,
+  flagging `locked` and `missing`.
+- Any free branch offers **Create a worktree for …**, suggesting a sibling of the
+  repository named after the branch.
+- A worktree whose directory is gone is reported as `missing` with a **Prune**
+  entry — until that record is cleared, git keeps refusing its branch everywhere.
 
-Each row in the picker carries three buttons: **open a new VS Code window**,
-**open a terminal**, and **start an AI CLI** there. The CLI list is
-`gitHawk.aiTools` — Claude Code, Codex, Gemini CLI, and opencode by default. The
-command is typed into a terminal already rooted in the worktree, so aliases and
-`npx …` wrappers work. `GitHawk: Start An AI CLI Here` does the same for the
-current repository.
+Each row has buttons to **open a new VS Code window**, **open a terminal**, or
+**start an AI CLI** there — Claude Code, Codex, Gemini CLI, and opencode by
+default, configurable. That is the one place AI appears in GitHawk: launching your
+tool in the right directory. It reads nothing and sends nothing.
 
-Removing one asks twice, and the second question is different: git refuses to
-remove a worktree holding uncommitted or untracked files, and overriding that
-destroys files that exist nowhere else, so it is asked for separately rather than
-folded into the first confirmation. A worktree whose directory is gone is reported
-as `missing` with a **Prune** entry, because until that record is pruned git keeps
-refusing its branch everywhere.
+## Settings
 
-### Keeping branches current
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `gitHawk.commitLimit` | `500` | How many commits to read. Higher shows more and loads slower. |
+| `gitHawk.repositoryScanDepth` | `2` | Directory levels below each opened folder to search for repositories. `0` searches the folders only; `2` covers a folder of projects, or a folder of buckets each holding projects. |
+| `gitHawk.aiTools` | Claude Code, Codex, Gemini CLI, opencode | Commands offered by "Start an AI CLI here". |
 
-`main` behind the remote while you are on a feature branch is the common case, and
-it does not need a checkout: click the branch and choose **"Update from
-origin/main"**. That runs `git fetch origin main:main`, which moves the ref and
-leaves your working tree, index, and HEAD alone.
+## Commands
 
-There is deliberately no `--force`: git refuses anything that is not a
-fast-forward, so a diverged branch is reported rather than overwritten. The branch
-list shows ↓ behind, ↑ ahead, or "gone" for each branch, and
-`GitHawk: Update All Branches From Upstream` fast-forwards every eligible one.
+| Command | |
+| --- | --- |
+| `GitHawk: Open Git Graph` | `Cmd+9` / `Ctrl+9` |
+| `GitHawk: Refresh Git Graph` | Also rescans for new repositories |
+| `GitHawk: Switch Repository` | |
+| `GitHawk: Manage Worktrees` | |
+| `GitHawk: Start An AI CLI Here` | |
+| `GitHawk: Update All Branches From Upstream` | Fast-forwards every branch that can be |
+| `GitHawk: Show Log` | GitHawk's own output, when something goes wrong |
 
-### Seeing what changed
+## Known limitations
 
-- **Click a commit** — its files appear in the Changes tree. Click a file to open
-  it in the diff editor.
-- **Click a branch → "Review my work against …"** — everything your branch adds
-  relative to that one, measured from the merge base, including uncommitted work.
-- **"Compare … with …"** on a branch or commit — any two revisions, directly.
-  Neither side has to involve where you currently are, so you can sit on `main`
-  and compare two other branches.
-- **Cmd/Ctrl-click** commits to select several, **Shift-click** for a run. The
-  combined changeset appears automatically — selecting is the request, there is no
-  button to press. With exactly two selected, *Diff the two instead* answers the
-  other question: how those two states differ.
+Honest list, in the order they are likely to annoy you:
 
-Whichever route you take, the tree states how the comparison was made, because a
-merge-base diff, a direct diff, and a reconstruction answer different questions.
+- **The panel is dark regardless of your theme.** On a light theme it looks wrong.
+- **No row virtualisation.** A large `commitLimit` renders every row; 500 is fine,
+  5000 is not.
+- **A conflicting merge or rebase leaves you mid-operation.** GitHawk reports git's
+  message but offers no abort or resolution.
+- **One repository at a time** — there is no combined view across several.
+- **Repositories are found by scanning on load, not watched.** One cloned while the
+  window is open needs a refresh.
 
-Destructive actions (reset, delete, rebase) require a modal confirmation that
-states what will be lost, and `PerformGitActionUseCase` refuses to run one that
-was not explicitly confirmed. Intent is mapped to git flags by a single pure
-function, `argsFor`, which is where the tests are heaviest: this is the file where
-a wrong flag costs someone their working tree.
+## Contributing
 
-## Development
-
-```bash
-npm install
-```
-
-### The fast loop — standalone webview harness
-
-```bash
-npm run dev          # esbuild watch + Vite dev server on :5173
-```
-
-Open <http://localhost:5173>. The webview runs as an ordinary web page: when
-`acquireVsCodeApi` is absent, `devFixtureHost.ts` stands in for the extension
-host and posts the same DTO the real host sends. Pick a fixture with
-`?topology=linear`, `?topology=single-merge`, or `?topology=nested-branches`.
-
-This is where nearly all UI work happens — full HMR, no VS Code restart, and
-Playwright can drive it like any web app.
-
-### The real thing
-
-```bash
-npm run dev:vscode   # esbuild watch + vite build --watch into dist/
-```
-
-Then press **F5**. The panel opens with `Cmd+9`.
-
-### Rendering a real repository in the harness
-
-Fixtures only prove the code agrees with fixtures. To see real history without
-launching VS Code:
-
-```bash
-npm run dump -- ../some/repo 500     # writes dev-graph.json via the real adapter
-npm run dev:webview                  # in another terminal
-open 'http://localhost:5173/?topology=real'
-
-npm run shot:real artifacts/real.png # screenshot it, and count what was drawn
-npx vite-node scripts/laneStats.ts   # measure lane count and gutter width
-```
-
-### Screenshotting the real thing
-
-The harness cannot reach anything outside the webview — QuickPick menus, the
-sidebar tree, the diff editor. VS Code is Electron, so Playwright can drive the
-actual application:
-
-```bash
-npm run shot:vscode                        # the sample repository, every scene
-npm run shot:vscode:multi                  # a workspace holding several repositories
-```
-
-That launches a real VS Code with the extension loaded, opens the panel, and
-captures the graph, the Changes tree, the grouped branch and commit menus, the
-repository picker, and a multi-commit aggregate. It is also how the documentation
-screenshots are produced, so they show the real UI rather than a mock.
-
-Two things the script has to work around, both documented inline: clicks inside
-the webview need `force: true`, because Playwright resolves the element in a
-doubly-nested Electron iframe and then wrongly reports it as invisible; and the
-first click after the panel is composed is sometimes swallowed while VS Code
-settles focus, so opening a QuickPick is retried.
-
-### Checks
-
-```bash
-npm test                    # Vitest — domain + application
-npm run test:integration    # a real VS Code driving the real extension host
-npm run test:visual         # Playwright — renders, interactions, screenshots
-npm run shots               # refresh the screenshots only
-npm run check               # tsc (host + webview) + svelte-check + eslint
-```
-
-Visual baselines live in `tests/visual/graph.spec.ts-snapshots/` and are
-committed. A layout change shows up as both a failing assertion and a diffable
-picture.
-
-### Fixtures
-
-`src/infrastructure/fixtures/topologies.ts` holds named repository shapes, each
-recording what it is meant to stress. Adding a hard graph case means adding one
-entry there — it then flows into the harness, the unit tests, and the visual
-snapshots at once.
+Bug reports and pull requests are welcome —
+[issues](https://github.com/kfirzvi-com/githawk/issues).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the architecture, how to run it locally,
+and how the three tiers of tests work.
 
 ## Licence
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE). Actually MIT, in the sense that you may fork it,
+ship it, and sell it.

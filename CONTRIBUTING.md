@@ -1,0 +1,161 @@
+# Contributing to GitHawk
+
+Bug reports and pull requests are welcome. This file is the developer's half of the
+documentation — the user-facing half is [README.md](README.md).
+
+```bash
+npm install
+```
+
+## Architecture
+
+Four tiers, with the dependency rule enforced by `eslint-plugin-boundaries` rather
+than by convention:
+
+```
+src/
+  domain/          zero dependencies — entities, the layout algorithm
+  application/     use cases + the host↔webview DTOs and mappers
+  infrastructure/  adapters behind ports (the git CLI, the filesystem)
+  presentation/    host/ (VS Code plumbing) and webview/ (Svelte 5 runes)
+```
+
+`domain` and `application` are platform-free and are bundled into **both** the
+extension host and the webview. That is what lets the layout algorithm run
+client-side without existing twice, and lets it be tested with no VS Code and no
+browser.
+
+Three rules worth knowing before you change anything:
+
+- **`vscode` may only be imported by `presentation/host` and `extension.ts`.**
+  Everything else stays runnable in Node and in a browser. Lint fails otherwise.
+- **Rows and lanes are domain concepts; pixels are not.** The layout service emits
+  `{row, lane}` only. Coordinates live in
+  `presentation/webview/viewmodels/graphGeometry.ts`.
+- **Native UI wherever VS Code already has it.** Menus are QuickPicks, the file
+  list is a `TreeView`, diffs open in the built-in diff editor. The webview draws
+  the graph, which is the one thing VS Code cannot already do.
+
+Two conventions about git itself:
+
+- Arguments are always an array handed to `execFile`, never a shell string. A
+  cloned repository can contain a branch called `; rm -rf ~`.
+- `--force` is emitted in exactly one place (`worktree remove`, after git has
+  already refused and the user has confirmed a second, differently worded
+  question). Everywhere else git's refusal is the desired behaviour, not an
+  obstacle to route around. Intent is mapped to flags by one pure function,
+  `argsFor`, which is where the tests are heaviest — it is the file where a wrong
+  flag costs someone their working tree.
+
+## The fast loop — standalone webview harness
+
+```bash
+npm run dev          # esbuild watch + Vite dev server on :5173
+```
+
+Open <http://localhost:5173>. The webview runs as an ordinary web page: when
+`acquireVsCodeApi` is absent, `devFixtureHost.ts` stands in for the extension host
+and posts the same DTOs the real host sends. Pick a fixture with
+`?topology=linear`, `?topology=single-merge`, or `?topology=nested-branches`; add
+`?repositories=3` or `?worktrees=4` to exercise those.
+
+This is where nearly all UI work happens — full HMR, no VS Code restart, and
+Playwright can drive it like any web app.
+
+## The real thing
+
+```bash
+npm run dev:vscode   # esbuild watch + vite build --watch into dist/
+```
+
+Then press **F5**. The panel opens with `Cmd+9`.
+
+Sample repositories to work against — purpose-built, so break them freely:
+
+```bash
+./scripts/makeSampleRepo.sh       # branches, merges, tags, worktrees, dirty files
+./scripts/makeMultiRepoSample.sh  # a workspace of repositories at several depths
+```
+
+## Rendering a real repository in the harness
+
+Fixtures only prove the code agrees with fixtures. To see real history without
+launching VS Code:
+
+```bash
+npm run dump -- ../some/repo 500     # writes dev-graph.json via the real adapter
+npm run dev:webview                  # in another terminal
+open 'http://localhost:5173/?topology=real'
+
+npm run shot:real artifacts/real.png # screenshot it, and count what was drawn
+npx vite-node scripts/laneStats.ts   # measure lane count and gutter width
+```
+
+## Screenshotting the real thing
+
+The harness cannot reach anything outside the webview — QuickPick menus, the
+sidebar tree, the diff editor. VS Code is Electron, so Playwright can drive the
+actual application:
+
+```bash
+npm run shot:vscode                  # the sample repository, every scene
+npm run shot:vscode:multi            # a workspace holding several repositories
+```
+
+This is also how the README screenshots are produced, so they show the real UI
+rather than a mock.
+
+Two things the script has to work around, both documented inline: clicks inside the
+webview need `force: true`, because Playwright resolves the element in a
+doubly-nested Electron iframe and then wrongly reports it as invisible; and the
+first click after the panel is composed is sometimes swallowed while VS Code
+settles focus, so opening a QuickPick is retried.
+
+## Checks
+
+```bash
+npm run check               # tsc (host + webview) + svelte-check + eslint
+npm test                    # Vitest — domain, application, and real-git adapters
+npm run test:visual         # Playwright — renders, interactions, screenshots
+npm run test:integration    # two real VS Code sessions driving the real host
+npm run shots               # refresh the committed screenshots only
+```
+
+### Why there are three tiers
+
+1. **Vitest** — pure logic, plus adapters tested against **real temporary git
+   repositories**. Not mocked stdout: a fixture only ever proves the parser agrees
+   with whoever wrote it.
+2. **Playwright** — the webview standalone, with committed screenshot baselines.
+   Fast, but blind to anything outside the webview.
+3. **`@vscode/test-electron`** — the real extension host. This tier exists because
+   a comparison silently produced nothing in VS Code while passing in both others.
+   Neither of the others could see it: one has no extension host, the other has no
+   git.
+
+Visual baselines live beside their specs in `tests/visual/*-snapshots/` and are
+committed. A layout change shows up as both a failing assertion and a diffable
+picture.
+
+**Never let a test hook build its own version of what the UI builds.** That has
+hidden a real bug twice here — most recently a branch menu whose test hook
+assembled its own context, so a missing feature tested green. Intercept the real
+code path instead.
+
+## Fixtures
+
+`src/infrastructure/fixtures/topologies.ts` holds named repository shapes, each
+recording what it is meant to stress. Adding a hard graph case means adding one
+entry there — it then flows into the harness, the unit tests, and the visual
+snapshots at once.
+
+## Releasing
+
+```bash
+npm run package                      # check + test + build + vsix
+npx vsce publish                     # VS Code Marketplace
+```
+
+Version numbers follow the Marketplace convention: `major.EVEN.patch` for
+releases, `major.ODD.patch` reserved for its pre-release channel. Versions are
+immutable once published — every fix is a new number.

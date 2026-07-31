@@ -4,8 +4,6 @@ A git graph for VS Code: simple, fast, MIT, no AI and no telemetry. Built becaus
 is unmaintained and carries a problematic licence, and the maintained alternatives lean
 heavily on AI.
 
-Work is tracked in the Basecamp project **Product: GitHawk** (48334046).
-
 ## Architecture — four DDD tiers
 
 ```

@@ -30,5 +30,10 @@ media/icon-1024.png
 # Repo housekeeping
 .gitignore
 
-# Instructions for whoever develops this, not for whoever installs it.
+# For whoever develops GitHawk, not whoever installs it.
 CLAUDE.md
+CONTRIBUTING.md
+
+# README screenshots. The Marketplace fetches these from the repository by
+# URL, so shipping them inside the package would only add weight.
+media/screenshots/**

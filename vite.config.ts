@@ -15,7 +15,10 @@ export default defineConfig({
         // Absolute, so it cannot silently resolve outside the repository.
         outDir: here('dist/webview'),
         emptyOutDir: true,
-        sourcemap: true,
+        // False, not excluded-after-the-fact: the map was already dropped by
+        // .vscodeignore, so emitting it only left a sourceMappingURL comment
+        // in the shipped bundle pointing at a file that is not there.
+        sourcemap: false,
         rollupOptions: {
             // main.ts rather than index.html: the extension host builds its own
             // HTML (it needs a CSP nonce), so predictable asset names matter
