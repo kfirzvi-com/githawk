@@ -1,0 +1,86 @@
+name: CI
+
+# Runs on every pull request, and is called by Release so that nothing reaches
+# the Marketplace without having passed all three test tiers on the exact
+# commit being published. A Marketplace version cannot be withdrawn once it is
+# up — only superseded — so the gate has to be on the merge commit, not on
+# whatever happened to be in someone's working tree.
+on:
+  pull_request:
+  workflow_call:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Types, lint, unit tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+
+      # The vsix building is part of being correct: .vscodeignore drifts, and a
+      # package that fails to assemble should fail here rather than at publish.
+      - name: Package
+        run: npx vsce package --out githawk.vsix
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vsix-${{ github.sha }}
+          path: githawk.vsix
+          retention-days: 14
+
+  visual:
+    name: Visual (webview screenshots)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:visual
+
+      # Uploaded even on failure: on a real regression this holds the diff, and
+      # on a platform with no baseline yet it holds the freshly written one.
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-${{ github.run_id }}
+          path: |
+            artifacts/playwright
+            tests/visual/**/*.png
+          if-no-files-found: ignore
+          retention-days: 14
+
+  integration:
+    name: Integration (real VS Code)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+
+      # VS Code is Electron, so it needs Chromium's shared libraries. Playwright
+      # maintains that list per distro, which is more durable than naming the
+      # packages here — 24.04 renamed half of them with a t64 suffix. xvfb and
+      # libsecret are not on Playwright's list but the extension host wants them.
+      - name: Electron runtime dependencies
+        run: |
+          npx playwright install-deps chromium
+          sudo apt-get install -y xvfb libsecret-1-0
+
+      - run: xvfb-run -a npm run test:integration
