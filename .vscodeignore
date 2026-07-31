@@ -29,3 +29,6 @@ media/icon-1024.png
 
 # Repo housekeeping
 .gitignore
+
+# Instructions for whoever develops this, not for whoever installs it.
+CLAUDE.md
