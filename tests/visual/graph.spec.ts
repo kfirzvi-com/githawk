@@ -47,7 +47,20 @@ for (const topology of TOPOLOGIES) {
             await page.goto(`/?topology=${topology.id}`);
 
             await expect(page.getByTestId('commit-details-empty')).toBeVisible();
-            await page.getByTestId('git-graph').locator('button').first().click();
+
+            /*
+             * The date column rather than the row's centre: ref badges are
+             * their own click targets now, and on a row carrying several the
+             * centre of the row is one of them. Clicking there opens a branch
+             * menu, which is the point of them — but it is not what this test
+             * is about.
+             */
+            const row = page.getByTestId('git-graph').locator('button').first();
+            const box = (await row.boundingBox())!;
+            await page.mouse.click(
+                box.x + box.width - 40,
+                box.y + box.height / 2
+            );
 
             await expect(page.getByTestId('commit-details')).toBeVisible();
             await expect(page.getByText('No Commit Selected')).toBeHidden();
@@ -114,5 +127,68 @@ test.describe('upstream indicators', () => {
         await expect(untracked).toBeVisible();
         await expect(untracked.getByText('↑')).toBeHidden();
         await expect(untracked.getByText('↓')).toBeHidden();
+    });
+});
+
+test.describe('ref badges in the graph', () => {
+    /** Console lines are how the harness reports what the webview asked for. */
+    const posted = (page: import('@playwright/test').Page) => {
+        const lines: string[] = [];
+        page.on('console', (message) => {
+            if (message.text().includes('webview → host')) {
+                lines.push(message.text());
+            }
+        });
+        return lines;
+    };
+
+    test('a branch badge asks the host for that branch’s menu', async ({
+        page,
+    }) => {
+        const lines = posted(page);
+        await page.goto('/?topology=nested-branches');
+
+        const badge = page.getByTestId('ref-badge-action').first();
+        await expect(badge).toBeVisible();
+        const name = (await badge.innerText()).trim();
+
+        await badge.click();
+
+        await expect
+            .poll(() =>
+                lines.some(
+                    (line) =>
+                        line.includes('branch:menu') && line.includes(name)
+                )
+            )
+            .toBe(true);
+    });
+
+    test('clicking a badge does not also select the commit under it', async ({
+        page,
+    }) => {
+        // The badge sits inside the row's button, so without stopping
+        // propagation one click would do both things.
+        const lines = posted(page);
+        await page.goto('/?topology=nested-branches');
+
+        await page.getByTestId('ref-badge-action').first().click();
+
+        await expect
+            .poll(() => lines.some((line) => line.includes('branch:menu')))
+            .toBe(true);
+        expect(lines.some((line) => line.includes('commit:select'))).toBe(false);
+    });
+
+    test('a tag badge stays inert', async ({ page }) => {
+        // Tags have no branch menu, so they are not given a click target that
+        // would do nothing.
+        await page.goto('/?topology=nested-branches');
+        await expect(page.getByTestId('git-graph')).toBeVisible();
+
+        const tags = page.locator('[title^="tag:"]');
+        if ((await tags.count()) > 0) {
+            await expect(tags.first()).not.toHaveAttribute('role', 'button');
+        }
     });
 });

@@ -382,12 +382,35 @@ export class GitActionMenu {
             });
         }
 
+        /*
+         * A commit can copy its hash; a branch could not copy its name — and a
+         * branch name is the thing people actually retype, into a checkout, a
+         * PR description, a CI filter. Selecting it out of the graph is not an
+         * option: the panel is a webview, and the branch list renders it inside
+         * a button.
+         */
+        const clipboard: ActionItem[] = [
+            {
+                label: '$(clippy) Copy branch name',
+                description: branch.name,
+                build: async () => {
+                    await vscode.env.clipboard.writeText(branch.name);
+                    vscode.window.setStatusBarMessage(
+                        `Copied ${branch.name}`,
+                        3000
+                    );
+                    return undefined;
+                },
+            },
+        ];
+
         const items = [
             ...group('Sync', sync),
             ...group('Compare', compare),
             ...group('Check out', checkout),
             ...group('Worktree', worktrees),
             ...group('Bring into current branch', integrate),
+            ...group('Copy', clipboard),
             ...group('Manage', manage),
         ];
 

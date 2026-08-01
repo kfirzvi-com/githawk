@@ -2,6 +2,7 @@
     import type { Branch } from '../../domain/models/Branch';
     import type { Commit } from '../../domain/models/Commit';
     import type { Worktree } from '../../domain/models/Worktree';
+    import { isBranchRef, type Ref } from '../../domain/models/Ref';
     import { GraphLayoutService } from '../../domain/services/GraphLayoutService';
     import {
         BranchMapper,
@@ -180,6 +181,20 @@
         postToHost({ type: 'compare:clear' });
         comparison = null;
     };
+
+    /**
+     * The same request the branch list sends, so a badge in the graph and a row
+     * in the list open one menu rather than two that drift apart. A tag and a
+     * detached HEAD are drawn as badges too and have no branch menu, so only
+     * branch refs are given this.
+     */
+    const openBranchMenu = (ref: Ref) =>
+        postToHost({
+            type: 'branch:menu',
+            name: ref.name,
+            isRemote: ref.kind === 'remoteBranch',
+            isCurrent: ref.isHead,
+        });
 
     const handleToolbarAction = (action: ToolbarAction) => {
         if (action === 'refresh') {
@@ -395,7 +410,14 @@
                                             class="flex flex-shrink-0 items-center gap-1"
                                         >
                                             {#each commit.sortedRefs.slice(0, 3) as ref (ref.kind + ref.name)}
-                                                <RefBadge {ref} />
+                                                <RefBadge
+                                                    {ref}
+                                                    onActivate={
+                                                        isBranchRef(ref)
+                                                            ? openBranchMenu
+                                                            : undefined
+                                                    }
+                                                />
                                             {/each}
                                             {#if commit.refs.length > 3}
                                                 <span

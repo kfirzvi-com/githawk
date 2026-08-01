@@ -37,12 +37,22 @@ All notable changes to GitHawk are documented here, following
   a remote and pruning are confirmed first: both delete tracking refs that the
   reflog cannot restore.
 
+- **"Copy branch name"** on the branch menu, for local, remote, and the
+  checked-out branch. A commit could always copy its hash; a branch name — the
+  one people retype into a checkout, a PR description, or a CI filter — could
+  not be copied at all, and a webview cannot be text-selected.
+- **Branch labels on the graph are click targets**, opening the same menu the
+  branch list does. Tags and a detached HEAD stay inert, because neither has a
+  branch menu to open.
+
 ### Changed
 
 - The branch menu's **Update** group is now **Sync**, and holds push and pull
   alongside the diverged and `gone` warnings that were already there. The
   fast-forward entry for a branch you are not standing on is now worded as a pull,
   since that is what it is asked to do; it still moves only the ref.
+- Clicking a branch label on a commit row opens that branch's menu rather than
+  selecting the commit. Clicking anywhere else on the row still selects it.
 
 ## [0.2.0] — 2026-07-31
 

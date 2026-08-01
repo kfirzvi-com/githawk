@@ -84,6 +84,11 @@ Click a branch, or right-click a commit, and you get a native VS Code menu —
 grouped by topic, with your keyboard shortcuts and theme, not a menu drawn inside a
 webview.
 
+The branch labels drawn on the graph are the same click target as the branch list,
+so a branch is actionable wherever you happen to be looking at it. Both offer
+**"Copy branch name"** — a webview cannot be text-selected, and a branch name is
+what gets retyped into a checkout, a PR description, or a CI filter.
+
 On a commit: create a branch or tag here, check it out, cherry-pick, revert, reset,
 copy the hash. On a branch: push, pull, check out, merge, rebase, rename, delete, or
 delete it on the remote.

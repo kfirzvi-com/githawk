@@ -28,8 +28,26 @@ suite('branch menu grouping', () => {
             'Check out',
             'Worktree',
             'Bring into current branch',
+            'Copy',
             'Manage',
         ]);
+    });
+
+    test('copies a branch name, for every kind of branch', async () => {
+        // A commit could always copy its hash; a branch could not copy its
+        // name, which is the thing people actually retype.
+        for (const [name, isRemote] of [
+            ['main', false],
+            ['origin/main', true],
+            [git(['rev-parse', '--abbrev-ref', 'HEAD']), false],
+        ]) {
+            const { entries } = await menu(name, isRemote);
+            const copy = entries.find((e) => /Copy branch name/.test(e.label));
+
+            assert.ok(copy, `${name} cannot copy its name`);
+            // The description is what gets copied, so it must be the full name.
+            assert.equal(copy.description, name);
+        }
     });
 
     test('offers pull and push for a local branch, always', async () => {

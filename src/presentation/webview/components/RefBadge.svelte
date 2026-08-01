@@ -3,9 +3,32 @@
 
     interface Props {
         ref: Ref;
+        /**
+         * Opens this ref's menu. Only branches have one, so a tag or a detached
+         * HEAD badge is left inert rather than given an action that does
+         * nothing.
+         */
+        onActivate?: (ref: Ref) => void;
     }
 
-    let { ref }: Props = $props();
+    let { ref, onActivate }: Props = $props();
+
+    /*
+     * role="button" rather than a real one: the badge is rendered inside the
+     * commit row's <button>, and a nested button is invalid HTML that browsers
+     * silently restructure — which moves the badge out of the row.
+     *
+     * The click is stopped from reaching the row, so opening a branch's menu
+     * does not also re-select the commit underneath it.
+     */
+    const activate = (event: Event) => {
+        if (!onActivate) {
+            return;
+        }
+        event.stopPropagation();
+        event.preventDefault();
+        onActivate(ref);
+    };
 
     /*
      * Markers are CSS shapes, not glyphs. Emoji and the rarer Unicode symbols
@@ -57,8 +80,21 @@
 </script>
 
 <span
-    class="inline-flex max-w-[13rem] flex-shrink-0 items-center gap-1.5 rounded border px-1.5 py-0.5 text-[10px] leading-none whitespace-nowrap {style.badge}"
-    title={`${style.label}: ${ref.name}`}
+    class="inline-flex max-w-[13rem] flex-shrink-0 items-center gap-1.5 rounded border px-1.5 py-0.5 text-[10px] leading-none whitespace-nowrap {style.badge} {onActivate
+        ? 'cursor-pointer hover:brightness-125'
+        : ''}"
+    title={onActivate
+        ? `${style.label}: ${ref.name} — click for its actions`
+        : `${style.label}: ${ref.name}`}
+    data-testid={onActivate ? 'ref-badge-action' : undefined}
+    role={onActivate ? 'button' : undefined}
+    tabindex={onActivate ? 0 : undefined}
+    onclick={activate}
+    onkeydown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            activate(event);
+        }
+    }}
 >
     <span
         aria-hidden="true"
