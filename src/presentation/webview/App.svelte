@@ -30,8 +30,22 @@
     } from './viewmodels/toolbar';
     import { anchorAt, scrollTopFor } from './viewmodels/scrollAnchor';
     import { defaultMetrics } from './viewmodels/graphGeometry';
-    import { onHostMessage, postToHost } from './vscodeApi';
     import { tick } from 'svelte';
+    import PaneHandle from './components/PaneHandle.svelte';
+    import {
+        readPaneVisibility,
+        withPane,
+        type Pane,
+    } from './viewmodels/panes';
+    import {
+        onHostMessage,
+        postToHost,
+        readWebviewState,
+        writeWebviewState,
+    } from './vscodeApi';
+
+    /** Persisted, so folding a pane away survives the panel being rebuilt. */
+    const PANES_STATE_KEY = 'panes';
 
     const layoutService = new GraphLayoutService();
 
@@ -52,6 +66,7 @@
     let worktrees = $state<Worktree[]>([]);
     /** The graph's scroll container, so a reload can keep the reader's place. */
     let graphScroller = $state<HTMLDivElement | null>(null);
+    let panes = $state(readPaneVisibility(readWebviewState(PANES_STATE_KEY)));
 
     /** Layout is derived, never stored: one source of truth for the graph. */
     const graph = $derived(
@@ -198,6 +213,11 @@
             isRemote: ref.kind === 'remoteBranch',
             isCurrent: ref.isHead,
         });
+
+    const togglePane = (pane: Pane) => {
+        panes = withPane(panes, pane, !panes[pane]);
+        writeWebviewState(PANES_STATE_KEY, panes);
+    };
 
     const handleToolbarAction = (action: ToolbarAction) => {
         if (action === 'refresh') {
@@ -367,23 +387,32 @@
         {/if}
 
         <div class="flex flex-1 overflow-hidden">
-            <div
-                class="w-64 flex-shrink-0 border-r border-gray-700 bg-gray-850"
-            >
-                <BranchList
-                    {branches}
-                    {worktrees}
-                    onOpenMenu={(branch) =>
-                        postToHost({
-                            type: 'branch:menu',
-                            name: branch.name,
-                            isRemote: branch.isRemote,
-                            isCurrent: branch.isCurrent,
-                        })}
-                    onOpenWorktreeMenu={(path) =>
-                        postToHost({ type: 'worktree:menu', path })}
-                />
-            </div>
+            {#if panes.branches}
+                <div class="w-64 flex-shrink-0 bg-gray-850">
+                    <BranchList
+                        {branches}
+                        {worktrees}
+                        onOpenMenu={(branch) =>
+                            postToHost({
+                                type: 'branch:menu',
+                                name: branch.name,
+                                isRemote: branch.isRemote,
+                                isCurrent: branch.isCurrent,
+                            })}
+                        onOpenWorktreeMenu={(path) =>
+                            postToHost({ type: 'worktree:menu', path })}
+                    />
+                </div>
+            {/if}
+            <!-- Always rendered, collapsed or not: the way back is in the same
+                 place as the way out, so folding a pane away cannot hide its
+                 own control. -->
+            <PaneHandle
+                pane="branches"
+                side="left"
+                visible={panes.branches}
+                onToggle={togglePane}
+            />
 
             <div class="flex flex-1 flex-col overflow-hidden">
                 <div
@@ -481,24 +510,30 @@
                 </div>
             </div>
 
-            <div
-                class="w-80 flex-shrink-0 border-l border-gray-700 bg-gray-850"
-            >
-                {#if showAggregate && comparison}
-                    <ComparisonSummary
-                        {comparison}
-                        commits={selectedCommits}
-                    />
-                {:else}
-                    <CommitDetails
-                        {selectedCommit}
-                        totals={selectedCommitTotals}
-                        onCopyHash={(hash) =>
-                            postToHost({ type: 'commit:copyHash', hash })}
-                        onSelectParent={selectParentByHash}
-                    />
-                {/if}
-            </div>
+            <PaneHandle
+                pane="details"
+                side="right"
+                visible={panes.details}
+                onToggle={togglePane}
+            />
+            {#if panes.details}
+                <div class="w-80 flex-shrink-0 bg-gray-850">
+                    {#if showAggregate && comparison}
+                        <ComparisonSummary
+                            {comparison}
+                            commits={selectedCommits}
+                        />
+                    {:else}
+                        <CommitDetails
+                            {selectedCommit}
+                            totals={selectedCommitTotals}
+                            onCopyHash={(hash) =>
+                                postToHost({ type: 'commit:copyHash', hash })}
+                            onSelectParent={selectParentByHash}
+                        />
+                    {/if}
+                </div>
+            {/if}
         </div>
     {/if}
 </div>

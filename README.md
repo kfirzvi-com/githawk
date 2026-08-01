@@ -58,6 +58,12 @@ The sidebar is surfaced the first time and then left alone — pulling focus on
 every click would make the graph unbrowsable. To ask for it deliberately, once it
 has been closed or covered, right-click a commit and choose **"Show changes in
 the sidebar"**.
+### Give the graph the room
+
+The panel is short and splits its width three ways. Either side pane folds away
+with the thin handle beside it — the handle stays where it is when the pane is
+gone, so the way back is where the way out was — and the graph takes the space.
+GitHawk remembers which panes you had.
 
 ### Review a whole branch, or any set of commits
 

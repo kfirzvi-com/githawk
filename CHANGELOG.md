@@ -56,6 +56,12 @@ All notable changes to GitHawk are documented here, following
   since that is what it is asked to do; it still moves only the ref.
 - Clicking a branch label on a commit row opens that branch's menu rather than
   selecting the commit. Clicking anywhere else on the row still selects it.
+- **The branch list and the commit details pane fold away.** The graph lives in
+  the bottom panel, which is short and splits its width three ways, so the thing
+  the panel exists to draw had the least room of the three. A thin handle on
+  either side of the graph toggles its pane, and stays put when the pane is gone
+  — the way back is where the way out was. The choice is remembered across the
+  panel being hidden, rebuilt, and the window reloaded.
 
 ## [0.2.0] — 2026-07-31
 
