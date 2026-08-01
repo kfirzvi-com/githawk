@@ -137,6 +137,27 @@ Visual baselines live beside their specs in `tests/visual/*-snapshots/` and are
 committed. A layout change shows up as both a failing assertion and a diffable
 picture.
 
+### Running two checkouts at once
+
+Working in git worktrees means two checkouts want the same dev-server port and the
+same integration fixtures. Both failures are silent — Playwright reuses whichever
+dev server answers on the port and diffs *that* branch's rendering against *these*
+baselines. `scripts/harness.ts` reads three environment variables so a worktree can
+keep to itself; every default reproduces the single-checkout behaviour exactly.
+
+| Variable | Default | Why set it |
+| --- | --- | --- |
+| `GITHAWK_DEV_PORT` | `5173` | One port per checkout. The dev server is `strictPort`, so a clash fails loudly instead of drifting to 5174. |
+| `GITHAWK_INTEGRATION_DIR` | `$TMPDIR/githawk-integration-<checkout>` | Already unique per directory; override only to put the throwaway repositories somewhere specific. |
+| `GITHAWK_VSCODE_CACHE` | `.vscode-test` in the checkout | Safe to share, and worth sharing — it is ~1.9 GB of downloaded VS Code per checkout. |
+
+A `.env`-style export in each worktree is enough:
+
+```bash
+export GITHAWK_DEV_PORT=5181
+export GITHAWK_VSCODE_CACHE=~/.cache/githawk/vscode-test
+```
+
 **Never let a test hook build its own version of what the UI builds.** That has
 hidden a real bug twice here — most recently a branch menu whose test hook
 assembled its own context, so a missing feature tested green. Intercept the real

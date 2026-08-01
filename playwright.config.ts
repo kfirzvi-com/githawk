@@ -1,4 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
+import { devServerPort } from './scripts/harness';
+
+const baseURL = `http://localhost:${devServerPort()}`;
 
 /**
  * Drives the webview standalone against the Vite dev server. The page under
@@ -10,13 +13,18 @@ export default defineConfig({
     fullyParallel: true,
     reporter: process.env.CI ? 'github' : [['list']],
     use: {
-        baseURL: 'http://localhost:5173',
+        baseURL,
         ...devices['Desktop Chrome'],
     },
-    // Reuse a dev server if one is already running, otherwise start one.
+    /*
+     * Reuse a dev server if one is already running, otherwise start one. Safe
+     * only because the port comes from GITHAWK_DEV_PORT: with a hardcoded port
+     * this reuses whichever checkout got there first and diffs its rendering
+     * against these baselines.
+     */
     webServer: {
         command: 'npm run dev:webview',
-        url: 'http://localhost:5173',
+        url: baseURL,
         reuseExistingServer: true,
         timeout: 60_000,
     },
