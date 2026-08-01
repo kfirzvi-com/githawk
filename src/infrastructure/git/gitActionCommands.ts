@@ -74,6 +74,52 @@ export function argsFor(action: GitAction): string[] {
         case 'push':
             return ['push'];
 
+        case 'pushBranch':
+            /*
+             * The branch is named on both sides of the refspec rather than left
+             * to `push.default`: with `matching` — still the default on old
+             * configurations — a bare `git push <remote>` pushes every branch
+             * whose name exists on the remote, which is emphatically not what
+             * "push this branch" means.
+             *
+             * No `+` prefix and no --force, so a non-fast-forward is refused.
+             */
+            return [
+                'push',
+                ...(action.setUpstream ? ['--set-upstream'] : []),
+                action.remote,
+                `refs/heads/${action.branch}:refs/heads/${action.branch}`,
+            ];
+
+        case 'pullBranch':
+            // Named explicitly, so the pull cannot be redirected by a stale or
+            // surprising upstream configuration.
+            return ['pull', action.remote, action.branch];
+
+        case 'addRemote':
+            return ['remote', 'add', action.name, action.url];
+
+        case 'renameRemote':
+            return ['remote', 'rename', action.from, action.to];
+
+        case 'removeRemote':
+            // `remove`, not the `rm` alias: identical to git, clearer in a log.
+            return ['remote', 'remove', action.name];
+
+        case 'setRemoteUrl':
+            // Sets the fetch URL. A separate push URL is left alone, because
+            // overwriting a deliberate fork setup silently is worse than making
+            // someone run one command.
+            return ['remote', 'set-url', action.name, action.url];
+
+        case 'fetchRemote':
+            return action.prune
+                ? ['fetch', '--prune', action.name]
+                : ['fetch', action.name];
+
+        case 'pruneRemote':
+            return ['remote', 'prune', action.name];
+
         case 'updateBranchFromUpstream':
             /*
              * A refspec fetch writes straight to the local branch ref, so the

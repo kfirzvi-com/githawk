@@ -344,3 +344,157 @@ describe('updating a branch you are not on', () => {
         expect(usesNetwork({ type: 'checkoutBranch', name: 'x' })).toBe(false);
     });
 });
+
+describe('pushing and pulling one named branch', () => {
+    test('names the branch on both sides of the refspec', () => {
+        /*
+         * Not `git push origin main`, which defers to push.default — under the
+         * `matching` setting still present in old configurations that pushes
+         * every branch the remote already has, which is not what the menu
+         * entry says it does.
+         */
+        expect(
+            argsFor({
+                type: 'pushBranch',
+                remote: 'origin',
+                branch: 'feature/x',
+                setUpstream: false,
+            })
+        ).toEqual([
+            'push',
+            'origin',
+            'refs/heads/feature/x:refs/heads/feature/x',
+        ]);
+    });
+
+    test('sets the upstream when publishing a branch for the first time', () => {
+        expect(
+            argsFor({
+                type: 'pushBranch',
+                remote: 'origin',
+                branch: 'feature/x',
+                setUpstream: true,
+            })
+        ).toEqual([
+            'push',
+            '--set-upstream',
+            'origin',
+            'refs/heads/feature/x:refs/heads/feature/x',
+        ]);
+    });
+
+    test('never forces a push', () => {
+        // A refused non-fast-forward is the safety property. Overwriting a
+        // colleague's commits must not be one flag away.
+        const args = argsFor({
+            type: 'pushBranch',
+            remote: 'origin',
+            branch: 'main',
+            setUpstream: false,
+        });
+
+        expect(args).not.toContain('--force');
+        expect(args).not.toContain('--force-with-lease');
+        expect(args.some((arg) => arg.startsWith('+'))).toBe(false);
+    });
+
+    test('pulls from a named remote and branch rather than the configured one', () => {
+        expect(
+            argsFor({ type: 'pullBranch', remote: 'origin', branch: 'main' })
+        ).toEqual(['pull', 'origin', 'main']);
+    });
+
+    test('both reach the network, and both need a branch checked out', () => {
+        const push: GitAction = {
+            type: 'pushBranch',
+            remote: 'origin',
+            branch: 'main',
+            setUpstream: false,
+        };
+        const pull: GitAction = {
+            type: 'pullBranch',
+            remote: 'origin',
+            branch: 'main',
+        };
+
+        expect(usesNetwork(push)).toBe(true);
+        expect(usesNetwork(pull)).toBe(true);
+        // A push writes a ref on the server, not here; a pull merges into HEAD.
+        expect(requiresCheckedOutBranch(pull)).toBe(true);
+        expect(isDestructive(push)).toBe(false);
+    });
+});
+
+describe('remote management commands', () => {
+    test('adds, renames, and re-points a remote', () => {
+        expect(
+            argsFor({
+                type: 'addRemote',
+                name: 'upstream',
+                url: 'git@github.com:owner/repo.git',
+            })
+        ).toEqual([
+            'remote',
+            'add',
+            'upstream',
+            'git@github.com:owner/repo.git',
+        ]);
+        expect(
+            argsFor({ type: 'renameRemote', from: 'origin', to: 'upstream' })
+        ).toEqual(['remote', 'rename', 'origin', 'upstream']);
+        expect(
+            argsFor({
+                type: 'setRemoteUrl',
+                name: 'origin',
+                url: 'https://example.com/r.git',
+            })
+        ).toEqual([
+            'remote',
+            'set-url',
+            'origin',
+            'https://example.com/r.git',
+        ]);
+    });
+
+    test('removes a remote, and prunes what it no longer has', () => {
+        expect(argsFor({ type: 'removeRemote', name: 'origin' })).toEqual([
+            'remote',
+            'remove',
+            'origin',
+        ]);
+        expect(argsFor({ type: 'pruneRemote', name: 'origin' })).toEqual([
+            'remote',
+            'prune',
+            'origin',
+        ]);
+    });
+
+    test('fetches one remote, with and without pruning', () => {
+        expect(
+            argsFor({ type: 'fetchRemote', name: 'origin', prune: true })
+        ).toEqual(['fetch', '--prune', 'origin']);
+        expect(
+            argsFor({ type: 'fetchRemote', name: 'origin', prune: false })
+        ).toEqual(['fetch', 'origin']);
+    });
+
+    test('removing and pruning are destructive, and say why', () => {
+        // Both delete refs that nothing in the reflog brings back: removing
+        // takes every tracking branch with it, and pruning trusts a remote
+        // that may simply be unreachable.
+        for (const action of [
+            { type: 'removeRemote', name: 'origin' },
+            { type: 'pruneRemote', name: 'origin' },
+        ] satisfies GitAction[]) {
+            expect(isDestructive(action)).toBe(true);
+            expect(destructiveReason(action)).toBeTruthy();
+        }
+
+        expect(
+            isDestructive({ type: 'addRemote', name: 'x', url: 'u' })
+        ).toBe(false);
+        expect(
+            isDestructive({ type: 'fetchRemote', name: 'origin', prune: true })
+        ).toBe(false);
+    });
+});

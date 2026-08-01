@@ -26,6 +26,33 @@ export type GitAction =
     | { type: 'pull' }
     | { type: 'push' }
     /**
+     * Pushes one named branch, rather than whatever `push.default` decides.
+     * `setUpstream` publishes a branch that has never been pushed, which is the
+     * only way the first push of a new branch does anything useful.
+     *
+     * No force, ever: git refusing a non-fast-forward is the desired behaviour.
+     */
+    | {
+          type: 'pushBranch';
+          remote: string;
+          branch: string;
+          setUpstream: boolean;
+      }
+    /**
+     * Pulls into the *current* branch. A branch that is not checked out cannot
+     * be pulled into — that is updateBranchFromUpstream, which writes the ref
+     * directly and leaves the working tree alone.
+     */
+    | { type: 'pullBranch'; remote: string; branch: string }
+    | { type: 'addRemote'; name: string; url: string }
+    | { type: 'renameRemote'; from: string; to: string }
+    /** Drops the remote and every remote-tracking branch under it. */
+    | { type: 'removeRemote'; name: string }
+    | { type: 'setRemoteUrl'; name: string; url: string }
+    | { type: 'fetchRemote'; name: string; prune: boolean }
+    /** Deletes tracking branches for refs the remote no longer has. */
+    | { type: 'pruneRemote'; name: string }
+    /**
      * Advances a local branch to its upstream without checking it out.
      * Fast-forward only — git refuses anything else, which is the desired
      * behaviour rather than a limitation to work around.
@@ -77,6 +104,15 @@ export function isDestructive(action: GitAction): boolean {
             // Deletes a directory from disk. Git refuses a dirty one without
             // --force, but a clean directory still disappears.
             return true;
+        case 'removeRemote':
+            // Takes every remote-tracking branch under it with it, and nothing
+            // in the reflog brings those back.
+            return true;
+        case 'pruneRemote':
+            // Deletes tracking refs. Harmless when the remote really has
+            // dropped those branches, and not when the remote is simply
+            // unreachable and answering with nothing.
+            return true;
         default:
             return false;
     }
@@ -110,6 +146,10 @@ export function destructiveReason(action: GitAction): string | undefined {
             return action.force
                 ? 'deletes the worktree directory along with any uncommitted or untracked files in it'
                 : 'deletes the worktree directory from disk';
+        case 'removeRemote':
+            return `removes ${action.name} and every remote-tracking branch under it`;
+        case 'pruneRemote':
+            return `deletes the tracking branches ${action.name} no longer has`;
         default:
             return undefined;
     }
@@ -125,6 +165,10 @@ export function usesNetwork(action: GitAction): boolean {
         action.type === 'fetch' ||
         action.type === 'pull' ||
         action.type === 'push' ||
+        action.type === 'pushBranch' ||
+        action.type === 'pullBranch' ||
+        action.type === 'fetchRemote' ||
+        action.type === 'pruneRemote' ||
         action.type === 'updateBranchFromUpstream' ||
         action.type === 'deleteRemoteBranch'
     );
@@ -136,6 +180,7 @@ export function requiresCheckedOutBranch(action: GitAction): boolean {
         action.type === 'mergeBranch' ||
         action.type === 'rebaseOnto' ||
         action.type === 'pull' ||
+        action.type === 'pullBranch' ||
         action.type === 'push'
     );
 }

@@ -20,10 +20,10 @@ suite('branch menu grouping', () => {
         // group this menu can produce is present.
         const { separators } = await menu('main');
 
-        // Update first: "does this branch need anything?" is the usual reason to
+        // Sync first: "does this branch need anything?" is the usual reason to
         // open the menu at all.
         assert.deepEqual(separators, [
-            'Update',
+            'Sync',
             'Compare',
             'Check out',
             'Worktree',
@@ -32,7 +32,17 @@ suite('branch menu grouping', () => {
         ]);
     });
 
-    test('puts the update entry first when a branch is behind', async () => {
+    test('offers pull and push for a local branch, always', async () => {
+        // Not only when there is something to do: "where is push?" should have
+        // the same answer every time the menu opens.
+        const { entries } = await menu('main');
+        const labels = entries.map((e) => e.label).join('\n');
+
+        assert.match(labels, /Pull main from origin\/main/);
+        assert.match(labels, /Push main to origin/);
+    });
+
+    test('puts the pull entry first when a branch is behind, and says so', async () => {
         // A colleague pushes to main while we sit on feature/reporting.
         const scratch = `${root()}-collab`;
         execFileSync('git', ['clone', '--quiet', `${root()}-remote`, scratch]);
@@ -45,11 +55,38 @@ suite('branch menu grouping', () => {
 
         const { separators, entries } = await menu('main');
 
-        assert.equal(separators[0], 'Update');
-        assert.match(entries[0].label, /Update from origin\/main/);
+        assert.equal(separators[0], 'Sync');
+        assert.match(entries[0].label, /Pull main from origin\/main/);
         // The count lives in the description, where QuickPick shows it dimmed.
         assert.match(entries[0].description ?? '', /behind/);
+        // main is not checked out here, so it is a ref write rather than a pull.
         assert.match(entries[0].description ?? '', /no checkout/);
+    });
+
+    test('offers to publish a branch that tracks nothing', async () => {
+        git(['branch', 'never-pushed']);
+        try {
+            const { entries } = await menu('never-pushed');
+            const publish = entries.find((e) => /Publish/.test(e.label));
+
+            assert.ok(
+                publish,
+                `no publish entry: ${JSON.stringify(entries.map((e) => e.label))}`
+            );
+            assert.match(publish.description ?? '', /only here/);
+            // Nothing to pull from, so pull is absent rather than broken.
+            assert.ok(!entries.some((e) => /^\$\(cloud-download\) Pull/.test(e.label)));
+        } finally {
+            git(['branch', '-D', 'never-pushed']);
+        }
+    });
+
+    test('offers neither push nor pull for a remote-tracking branch', async () => {
+        // origin/main is a local mirror of someone else's branch; pushing it is
+        // not a thing git can be asked to do.
+        const { separators } = await menu('origin/main', true);
+
+        assert.ok(!separators.includes('Sync'));
     });
 
     test('offers remote-only actions for a remote branch', async () => {

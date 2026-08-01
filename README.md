@@ -85,17 +85,36 @@ grouped by topic, with your keyboard shortcuts and theme, not a menu drawn insid
 webview.
 
 On a commit: create a branch or tag here, check it out, cherry-pick, revert, reset,
-copy the hash. On a branch: check out, merge, rebase, rename, delete, or delete it
-on the remote.
+copy the hash. On a branch: push, pull, check out, merge, rebase, rename, delete, or
+delete it on the remote.
+
+**Push and pull are per branch, and always there.** The **Sync** group at the top
+of a branch's menu offers both every time, with the state in the description —
+`3 behind`, `nothing to push`, `already up to date` — rather than appearing only
+when there is something to do. A branch that has never been pushed offers
+**"Publish"** instead, which sets its upstream so the next push needs no arguments.
+There is no `--force` anywhere, so git refusing a non-fast-forward is left to
+refuse.
 
 **`main` is behind while you are on a feature branch?** That does not need a
-checkout. Click the branch and choose **"Update from origin/main"** — the ref moves
-and your working tree, index, and HEAD are untouched. There is deliberately no
-`--force`, so a diverged branch is reported rather than overwritten. The branch
-list shows ↓ behind, ↑ ahead, or `gone` at a glance, and
+checkout. Pulling a branch you are *not* standing on writes the ref directly — your
+working tree, index, and HEAD are untouched — and the menu says so. The branch list
+shows ↓ behind, ↑ ahead, or `gone` at a glance, and
 **`GitHawk: Update All Branches From Upstream`** does every eligible one at once.
 
 Anything destructive asks first, and says what will be lost.
+
+### Manage remotes
+
+**`GitHawk: Manage Remotes`** lists every remote with its URL, and a remote with a
+separate push URL — the fork workflow, reading from upstream and writing to your own
+copy — shows both, because being shown one of two is how you push somewhere you did
+not mean to.
+
+Add, rename, re-point, or remove one; fetch a single remote with pruning from the
+list without opening anything; or prune deleted branches without fetching. Removing
+a remote and pruning both ask first: they delete tracking refs, and nothing in the
+reflog brings those back.
 
 ### Work across several repositories
 
@@ -160,6 +179,7 @@ tool in the right directory. It reads nothing and sends nothing.
 | `GitHawk: Refresh Git Graph` | Also rescans for new repositories |
 | `GitHawk: Switch Repository` | |
 | `GitHawk: Manage Worktrees` | |
+| `GitHawk: Manage Remotes` | Add, rename, re-point, remove, fetch, prune |
 | `GitHawk: Start An AI CLI Here` | |
 | `GitHawk: Update All Branches From Upstream` | Fast-forwards every branch that can be |
 | `GitHawk: Show Log` | GitHawk's own output, when something goes wrong |

@@ -156,6 +156,15 @@
       {
         "command": "gitHawk.worktreeItems",
         "title": "GitHawk: Describe The Worktree Manager"
+      },
+      {
+        "command": "gitHawk.manageRemotes",
+        "title": "GitHawk: Manage Remotes",
+        "icon": "$(cloud)"
+      },
+      {
+        "command": "gitHawk.remotes",
+        "title": "GitHawk: List Remotes"
       }
     ],
     "keybindings": [

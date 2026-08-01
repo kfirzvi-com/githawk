@@ -6,6 +6,7 @@ import {
 } from './infrastructure/git/GitCliRepository';
 import { GitCliComparer } from './infrastructure/git/GitCliComparer';
 import { GitCliWorktreeReader } from './infrastructure/git/GitCliWorktreeReader';
+import { GitCliRemoteReader } from './infrastructure/git/GitCliRemoteReader';
 import { GitCliWriter } from './infrastructure/git/GitCliWriter';
 import { ChangeDecorationProvider } from './presentation/host/ChangeDecorationProvider';
 import {
@@ -101,7 +102,8 @@ export async function activate(
         comparisons,
         changedFiles,
         repositories,
-        createWorktreeReader
+        createWorktreeReader,
+        createRemoteReader
     );
 
     context.subscriptions.push(
@@ -148,6 +150,13 @@ export async function activate(
         ),
         vscode.commands.registerCommand('gitHawk.manageWorktrees', () =>
             provider.createWorktreeMenu().showManager()
+        ),
+        vscode.commands.registerCommand('gitHawk.manageRemotes', () =>
+            provider.createRemoteMenu().showManager()
+        ),
+        // Reports the remotes as the extension sees them.
+        vscode.commands.registerCommand('gitHawk.remotes', () =>
+            provider.createRemoteMenu().managerItemsForTesting()
         ),
         vscode.commands.registerCommand('gitHawk.startAiTool', () =>
             provider.createWorktreeMenu().startAiToolHere()
@@ -303,6 +312,10 @@ function createGitComparer(): GitCliComparer {
 
 function createWorktreeReader(): GitCliWorktreeReader {
     return new GitCliWorktreeReader(activeRepositoryRoot());
+}
+
+function createRemoteReader(): GitCliRemoteReader {
+    return new GitCliRemoteReader(activeRepositoryRoot());
 }
 
 /**

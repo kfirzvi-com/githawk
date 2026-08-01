@@ -92,3 +92,8 @@ export function repositoryRootArgs(): string[] {
 export function gitDirectoriesArgs(): string[] {
     return ['rev-parse', '--path-format=absolute', '--git-dir', '--git-common-dir'];
 }
+
+/** `-v` rather than a bare list: without it git prints names and no URLs. */
+export function remoteListArgs(): string[] {
+    return ['remote', '-v'];
+}

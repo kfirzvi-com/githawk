@@ -36,6 +36,12 @@ export interface BranchContext {
      * refuse to check it out again, so the menu offers that worktree instead.
      */
     checkedOutIn?: { path: string; name: string };
+    /**
+     * The repository's remotes, for publishing a branch that tracks nothing.
+     * Named rather than assumed to be `origin`: a fork checkout often has two,
+     * and pushing a new branch to the wrong one is not obvious afterwards.
+     */
+    remoteNames: string[];
 }
 
 /** What the menu asks the worktree UI to do; the doing belongs elsewhere. */
@@ -235,58 +241,7 @@ export class GitActionMenu {
     }
 
     async showForBranch(branch: BranchContext): Promise<void> {
-        const upstream = branch.upstream;
-
-        // Updating comes first: it is the most frequent reason to open this menu,
-        // and the counts are the answer to "does this branch need anything?".
-        const update: ActionItem[] = [];
-        if (upstream && !branch.isRemote) {
-            if (upstream.canFastForward && !branch.isCurrent) {
-                update.push({
-                    label: `$(cloud-download) Update from ${upstream.name}`,
-                    description: `${upstream.behind} behind — fast-forward, no checkout`,
-                    build: async () => ({
-                        type: 'updateBranchFromUpstream',
-                        branch: branch.name,
-                        remote: remoteOf(upstream.name),
-                        remoteBranch: remoteBranchOf(upstream.name),
-                    }),
-                });
-            } else if (branch.isCurrent && upstream.behind > 0) {
-                update.push({
-                    label: `$(cloud-download) Pull ${upstream.behind} commit(s) from ${upstream.name}`,
-                    // git refuses a refspec fetch into the current branch, so the
-                    // same intent has to be expressed as a pull.
-                    description: 'this branch is checked out, so it is a pull',
-                    build: async () => ({ type: 'pull' }),
-                });
-            } else if (upstream.hasDiverged) {
-                update.push({
-                    label: `$(warning) Diverged from ${upstream.name}`,
-                    description: `${upstream.ahead} ahead, ${upstream.behind} behind`,
-                    build: async () => {
-                        // Choosing between a merge and a rebase is the user's call.
-                        const choice = await vscode.window.showWarningMessage(
-                            `${branch.name} and ${upstream.name} have both moved on.`,
-                            {
-                                modal: true,
-                                detail: `${branch.name} has ${upstream.ahead} commit(s) the remote does not, and ${upstream.behind} the other way. It cannot be advanced without merging or rebasing, which needs it checked out.`,
-                            },
-                            `Check out ${branch.name}`
-                        );
-                        return choice
-                            ? { type: 'checkoutBranch', name: branch.name }
-                            : undefined;
-                    },
-                });
-            } else if (upstream.isGone) {
-                update.push({
-                    label: `$(warning) ${upstream.name} no longer exists`,
-                    description: 'the remote branch was deleted',
-                    build: async () => undefined,
-                });
-            }
-        }
+        const sync = this.syncEntries(branch);
 
         const compare: ActionItem[] = [];
         if (!branch.isCurrent) {
@@ -428,7 +383,7 @@ export class GitActionMenu {
         }
 
         const items = [
-            ...group('Update', update),
+            ...group('Sync', sync),
             ...group('Compare', compare),
             ...group('Check out', checkout),
             ...group('Worktree', worktrees),
@@ -444,6 +399,144 @@ export class GitActionMenu {
         }
 
         await this.show(items, branch.name);
+    }
+
+    /**
+     * Push and pull for one named branch, and the two states in which neither
+     * is the right answer.
+     *
+     * One group rather than an entry that appears only when there is something
+     * to do: "where is push?" should have the same answer every time the menu
+     * opens, and whether it will move anything belongs in the description. The
+     * counts are read from the repository by the caller, not from the webview,
+     * because they go stale the moment anything fetches.
+     */
+    private syncEntries(branch: BranchContext): ActionItem[] {
+        // A remote-tracking ref is a local mirror of someone else's branch;
+        // pushing or pulling it is not a thing you can do.
+        if (branch.isRemote) {
+            return [];
+        }
+
+        const upstream = branch.upstream;
+        const entries: ActionItem[] = [];
+
+        if (upstream?.isGone) {
+            entries.push({
+                label: `$(warning) ${upstream.name} no longer exists`,
+                description: 'the remote branch was deleted',
+                build: async () => undefined,
+            });
+        } else if (upstream?.hasDiverged) {
+            entries.push(this.divergedEntry(branch, upstream));
+        } else if (upstream) {
+            entries.push({
+                label: `$(cloud-download) Pull ${branch.name} from ${upstream.name}`,
+                description: describePull(upstream.behind, branch.isCurrent),
+                build: async () =>
+                    branch.isCurrent
+                        ? {
+                              type: 'pullBranch',
+                              remote: remoteOf(upstream.name),
+                              branch: remoteBranchOf(upstream.name),
+                          }
+                        : /*
+                           * git refuses a refspec fetch into the checked-out
+                           * branch, and refuses to pull into one that is not
+                           * checked out — so the same intent is two different
+                           * commands depending on where HEAD is.
+                           */
+                          {
+                              type: 'updateBranchFromUpstream',
+                              branch: branch.name,
+                              remote: remoteOf(upstream.name),
+                              remoteBranch: remoteBranchOf(upstream.name),
+                          },
+            });
+        }
+
+        entries.push(this.pushEntry(branch));
+        return entries;
+    }
+
+    private pushEntry(branch: BranchContext): ActionItem {
+        const upstream = branch.upstream;
+        const published = upstream !== undefined && !upstream.isGone;
+
+        if (published) {
+            return {
+                label: `$(cloud-upload) Push ${branch.name} to ${remoteOf(upstream.name)}`,
+                description: describePush(upstream),
+                build: async () => ({
+                    type: 'pushBranch',
+                    remote: remoteOf(upstream.name),
+                    branch: branch.name,
+                    setUpstream: false,
+                }),
+            };
+        }
+
+        return {
+            label: `$(cloud-upload) Publish ${branch.name}…`,
+            description:
+                upstream?.isGone === true
+                    ? 'recreates the branch on the remote'
+                    : 'this branch exists only here',
+            build: async () => {
+                const remote = await this.pickRemote(branch.remoteNames);
+                return remote
+                    ? {
+                          type: 'pushBranch',
+                          remote,
+                          branch: branch.name,
+                          // The point of a first push: without it the branch is
+                          // pushed and still tracks nothing, so every later
+                          // push needs naming again.
+                          setUpstream: true,
+                      }
+                    : undefined;
+            },
+        };
+    }
+
+    /** No prompt for the overwhelmingly common single-remote case. */
+    private async pickRemote(names: string[]): Promise<string | undefined> {
+        if (names.length === 0) {
+            vscode.window.showWarningMessage(
+                'This repository has no remotes. Add one first — GitHawk: Manage Remotes.'
+            );
+            return undefined;
+        }
+        if (names.length === 1) {
+            return names[0];
+        }
+        return vscode.window.showQuickPick(names, {
+            title: 'Publish to which remote?',
+        });
+    }
+
+    private divergedEntry(
+        branch: BranchContext,
+        upstream: NonNullable<BranchContext['upstream']>
+    ): ActionItem {
+        return {
+            label: `$(warning) Diverged from ${upstream.name}`,
+            description: `${upstream.ahead} ahead, ${upstream.behind} behind`,
+            build: async () => {
+                // Choosing between a merge and a rebase is the user's call.
+                const choice = await vscode.window.showWarningMessage(
+                    `${branch.name} and ${upstream.name} have both moved on.`,
+                    {
+                        modal: true,
+                        detail: `${branch.name} has ${upstream.ahead} commit(s) the remote does not, and ${upstream.behind} the other way. It cannot be advanced without merging or rebasing, which needs it checked out.`,
+                    },
+                    `Check out ${branch.name}`
+                );
+                return choice
+                    ? { type: 'checkoutBranch', name: branch.name }
+                    : undefined;
+            },
+        };
     }
 
     /**
@@ -576,6 +669,21 @@ async function promptForName(
     });
 
     return entered?.trim() || undefined;
+}
+
+function describePull(behind: number, isCurrent: boolean): string {
+    if (behind === 0) {
+        return 'already up to date';
+    }
+    return isCurrent
+        ? `${behind} behind`
+        : `${behind} behind — fast-forward, no checkout`;
+}
+
+function describePush(upstream: NonNullable<BranchContext['upstream']>): string {
+    return upstream.ahead === 0
+        ? 'nothing to push'
+        : `${upstream.ahead} commit(s) the remote does not have`;
 }
 
 /** `origin/feature/x` → `origin`. Remote names cannot contain a slash. */

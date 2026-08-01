@@ -19,8 +19,10 @@ import { CHANGED_FILES_VIEW_ID, ChangedFilesTree } from './ChangedFilesTree';
 import { RepositoryRegistry } from './RepositoryRegistry';
 import { ActionRunner } from './ActionRunner';
 import { WorktreeMenu } from './WorktreeMenu';
+import { RemoteMenu } from './RemoteMenu';
 import { ListWorktreesUseCase } from '../../application/usecases/ListWorktreesUseCase';
 import type { IWorktreeReader } from '../../domain/repositories/IWorktreeReader';
+import type { IRemoteReader } from '../../domain/repositories/IRemoteReader';
 import { WorktreeMapper } from '../../application/dto/mappers';
 import { baseName } from '../../domain/services/paths';
 import { log } from './log';
@@ -35,6 +37,7 @@ export const GITHAWK_VIEW_ID = 'gitHawkView';
 export type GitRepositoryFactory = () => IGitRepository;
 export type GitWriterFactory = () => IGitWriter;
 export type WorktreeReaderFactory = () => IWorktreeReader;
+export type RemoteReaderFactory = () => IRemoteReader;
 
 /**
  * `focus` puts the Changes view in front, for an action the user explicitly asked
@@ -69,7 +72,8 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
         private readonly comparisons: ComparisonController,
         private readonly changedFiles: ChangedFilesTree,
         private readonly repositories: RepositoryRegistry,
-        private readonly createWorktreeReader: WorktreeReaderFactory
+        private readonly createWorktreeReader: WorktreeReaderFactory,
+        private readonly createRemoteReader: RemoteReaderFactory
     ) {}
 
     resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -456,7 +460,29 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
                   }
                 : undefined,
             checkedOutIn: worktreeHolding(branch),
+            remoteNames: await this.remoteNames(),
         };
+    }
+
+    /**
+     * Never allowed to cost the menu: a repository with a broken remote
+     * configuration should still offer everything that does not need one.
+     */
+    private async remoteNames(): Promise<string[]> {
+        try {
+            return (await this.createRemoteReader().list()).map((r) => r.name);
+        } catch (error) {
+            log.warn(`could not list remotes: ${describeError(error)}`);
+            return [];
+        }
+    }
+
+    /** Exposed so a command can open the manager without going via the webview. */
+    createRemoteMenu(): RemoteMenu {
+        return new RemoteMenu({
+            listRemotes: () => this.createRemoteReader().list(),
+            runner: new ActionRunner(this.createWriter(), () => this.refresh()),
+        });
     }
 
     /** See gitHawk.branchMenuEntries: structure only, nothing shown. */

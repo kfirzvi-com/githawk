@@ -150,6 +150,24 @@ export function describe(action: GitAction): string {
             return 'Pull';
         case 'push':
             return 'Push';
+        case 'pushBranch':
+            return action.setUpstream
+                ? `Publish ${action.branch} to ${action.remote}`
+                : `Push ${action.branch} to ${action.remote}`;
+        case 'pullBranch':
+            return `Pull ${action.branch} from ${action.remote}`;
+        case 'addRemote':
+            return `Add remote ${action.name}`;
+        case 'renameRemote':
+            return `Rename remote ${action.from} to ${action.to}`;
+        case 'removeRemote':
+            return `Remove remote ${action.name}`;
+        case 'setRemoteUrl':
+            return `Change the URL of ${action.name}`;
+        case 'fetchRemote':
+            return `Fetch ${action.name}`;
+        case 'pruneRemote':
+            return `Prune ${action.name}`;
         case 'updateBranchFromUpstream':
             return `Update ${action.branch} from ${action.remote}/${action.remoteBranch}`;
         case 'deleteRemoteBranch':

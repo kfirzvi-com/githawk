@@ -23,6 +23,26 @@ All notable changes to GitHawk are documented here, following
   rather than sliding down as new commits arrive above it, and a selected commit
   that no longer exists after an amend or a rebase is dropped rather than left
   describing history that has gone.
+- **Push and pull one named branch, from its own menu.** A new **Sync** group,
+  first, offering both every time rather than only when there is something to do
+  — the state goes in the description (`3 behind`, `nothing to push`, `already up
+  to date`). A branch that tracks nothing offers **Publish**, which sets the
+  upstream so later pushes need no arguments, and asks which remote when there is
+  more than one. Pulling a branch that is not checked out still writes the ref
+  directly rather than touching the working tree; pulling the current branch is a
+  pull, because git refuses a refspec fetch into it. No `--force` anywhere.
+- **`GitHawk: Manage Remotes`** — add, rename, re-point, or remove a remote, fetch
+  one with pruning, or prune deleted branches without fetching. Fetch and push
+  URLs are listed separately when they differ, as a fork checkout's do. Removing
+  a remote and pruning are confirmed first: both delete tracking refs that the
+  reflog cannot restore.
+
+### Changed
+
+- The branch menu's **Update** group is now **Sync**, and holds push and pull
+  alongside the diverged and `gone` warnings that were already there. The
+  fast-forward entry for a branch you are not standing on is now worded as a pull,
+  since that is what it is asked to do; it still moves only the ref.
 
 ## [0.2.0] — 2026-07-31
 
