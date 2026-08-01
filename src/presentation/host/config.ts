@@ -12,6 +12,20 @@ export const DEFAULT_SCAN_DEPTH = 2;
 
 export const SCAN_DEPTH_SETTING = 'repositoryScanDepth';
 
+export const AUTO_REFRESH_SETTING = 'autoRefresh';
+
+/**
+ * On by default: a graph that does not match the repository is worse than no
+ * graph, because it looks authoritative. The setting exists for the case the
+ * watcher cannot serve well — a repository on a network filesystem, where every
+ * event costs a round trip.
+ */
+export function autoRefreshEnabled(): boolean {
+    return vscode.workspace
+        .getConfiguration(CONFIG_SECTION)
+        .get<boolean>(AUTO_REFRESH_SETTING, true);
+}
+
 export interface AiTool {
     /** Shown in the picker and used as the terminal's name. */
     name: string;

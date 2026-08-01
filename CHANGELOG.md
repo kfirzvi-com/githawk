@@ -3,6 +3,23 @@
 All notable changes to GitHawk are documented here, following
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- The graph reloads by itself when the repository changes. A commit, checkout,
+  fetch, rebase, or stash made in a terminal, in VS Code's own Source Control
+  view, or by a tool running in a worktree now reaches the panel without pressing
+  Refresh. GitHawk watches git's metadata — `HEAD`, `refs`, `packed-refs`, the
+  index, and the in-progress operation markers — in both the per-worktree and the
+  shared git directory, so a commit made in another worktree of the same
+  repository counts too. Writes are coalesced, so one rebase is one reload rather
+  than one per replayed commit. Turn it off with `gitHawk.autoRefresh`.
+- A reload keeps your place: the row at the top of the viewport stays there
+  rather than sliding down as new commits arrive above it, and a selected commit
+  that no longer exists after an amend or a rebase is dropped rather than left
+  describing history that has gone.
+
 ## [0.2.0] — 2026-07-31
 
 First public release, marked **Preview** on the Marketplace. Everything listed

@@ -42,6 +42,11 @@
           "maximum": 100000,
           "description": "How many commits to read from history. Higher values show more of the graph and take longer to load."
         },
+        "gitHawk.autoRefresh": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Reload the graph when the repository changes, so a commit, checkout, fetch, rebase or stash made outside GitHawk — in a terminal, in the Source Control view, or by another tool — shows up without pressing Refresh.\n\nGitHawk watches git's own metadata (`HEAD`, `refs`, `packed-refs`, the index), never your working tree, and waits for an operation to settle before reloading. Turn it off if the repository lives on a slow network filesystem, where each event costs a round trip."
+        },
         "gitHawk.repositoryScanDepth": {
           "type": "number",
           "default": 2,

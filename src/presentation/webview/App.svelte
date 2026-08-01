@@ -24,7 +24,10 @@
     } from './viewmodels/selection';
     import Toolbar from './components/Toolbar.svelte';
     import type { ToolbarAction } from './viewmodels/toolbar';
+    import { anchorAt, scrollTopFor } from './viewmodels/scrollAnchor';
+    import { defaultMetrics } from './viewmodels/graphGeometry';
     import { onHostMessage, postToHost } from './vscodeApi';
+    import { tick } from 'svelte';
 
     const layoutService = new GraphLayoutService();
 
@@ -43,6 +46,8 @@
     let activeRepositoryRoot = $state<string | undefined>(undefined);
     /** Working trees of the active repository. One is the common case. */
     let worktrees = $state<Worktree[]>([]);
+    /** The graph's scroll container, so a reload can keep the reader's place. */
+    let graphScroller = $state<HTMLDivElement | null>(null);
 
     /** Layout is derived, never stored: one source of truth for the graph. */
     const graph = $derived(
@@ -88,14 +93,29 @@
     $effect(() =>
         onHostMessage((message) => {
             switch (message.type) {
-                case 'graph:loaded':
+                case 'graph:loaded': {
+                    // Captured before the rows change, restored after. A reload
+                    // the reader did not ask for must not move the page under
+                    // them, and a new commit arrives at the top of the list.
+                    const anchor = anchorAt(
+                        graphScroller?.scrollTop ?? 0,
+                        defaultMetrics.rowH,
+                        rowOrder
+                    );
+
                     commits = message.graph.commits.map(CommitMapper.fromDto);
                     branches = message.graph.branches.map(BranchMapper.fromDto);
                     hasMoreHistory = message.graph.hasMoreHistory;
                     primaryBranchName = message.graph.primaryBranchName;
                     errorMessage = null;
                     isLoading = false;
+
+                    dropVanishedCommitsFromSelection();
+                    if (anchor) {
+                        void restoreScroll(anchor);
+                    }
                     break;
+                }
                 case 'graph:error':
                     errorMessage = message.message;
                     isLoading = false;
@@ -125,6 +145,41 @@
             }
         })
     );
+
+    /**
+     * `rowOrder` is derived from the commits that were just assigned, so the
+     * new positions only exist once Svelte has flushed them.
+     */
+    const restoreScroll = async (
+        anchor: NonNullable<ReturnType<typeof anchorAt>>
+    ) => {
+        await tick();
+        const scrollTop = scrollTopFor(anchor, defaultMetrics.rowH, rowOrder);
+        if (scrollTop !== null && graphScroller) {
+            graphScroller.scrollTop = scrollTop;
+        }
+    };
+
+    /**
+     * An amend, a rebase, or a reset can take the selected commit out of the
+     * graph. Keeping it selected leaves the details panel describing a commit
+     * that is no longer reachable, and its files in a tree that can no longer
+     * open them.
+     */
+    const dropVanishedCommitsFromSelection = () => {
+        const present = new Set(rowOrder);
+        const surviving = selection.hashes.filter((hash) => present.has(hash));
+        if (surviving.length === selection.hashes.length) {
+            return;
+        }
+
+        selection = { ...selection, hashes: surviving };
+        if (selectedCommit && !present.has(selectedCommit.hash)) {
+            selectedCommit = null;
+        }
+        postToHost({ type: 'compare:clear' });
+        comparison = null;
+    };
 
     const handleToolbarAction = (action: ToolbarAction) => {
         if (action === 'refresh') {
@@ -308,7 +363,11 @@
             </div>
 
             <div class="flex flex-1 flex-col overflow-hidden">
-                <div class="flex-1 overflow-auto bg-gray-800">
+                <div
+                    bind:this={graphScroller}
+                    class="flex-1 overflow-auto bg-gray-800"
+                    data-testid="graph-scroller"
+                >
                     {#if graph}
                         <GitGraph
                             {graph}

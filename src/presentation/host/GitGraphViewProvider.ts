@@ -51,6 +51,14 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
     private hasRevealedChanges = false;
     /** Which repository the Changes tree currently describes. */
     private lastRepositoryRoot?: string;
+    /**
+     * The last graph actually sent to the webview, and how many have been sent.
+     *
+     * Recorded from the message itself rather than rebuilt, so the test hook
+     * below cannot pass while the webview is being sent something else.
+     */
+    private lastSentGraph?: { head?: string; commits: number };
+    private graphsSent = 0;
 
     constructor(
         private readonly extensionUri: vscode.Uri,
@@ -118,10 +126,30 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
     private async sendGraph(): Promise<void> {
         try {
             const useCase = new LoadGitGraphUseCase(this.createRepository());
-            this.post({ type: 'graph:loaded', graph: await useCase.execute() });
+            const graph = await useCase.execute();
+
+            this.post({ type: 'graph:loaded', graph });
+
+            this.lastSentGraph = {
+                head: graph.commits[0]?.hash,
+                commits: graph.commits.length,
+            };
+            this.graphsSent += 1;
         } catch (error) {
             this.post({ type: 'graph:error', message: describeError(error) });
         }
+    }
+
+    /**
+     * See gitHawk.graphSnapshot. What the webview was last given, so a test can
+     * tell a reload that happened from one that was merely scheduled.
+     */
+    graphSnapshotForTesting():
+        | { head?: string; commits: number; loads: number }
+        | undefined {
+        return this.lastSentGraph
+            ? { ...this.lastSentGraph, loads: this.graphsSent }
+            : undefined;
     }
 
     /**

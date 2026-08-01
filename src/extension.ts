@@ -18,7 +18,13 @@ import { PerformGitActionUseCase } from './application/usecases/PerformGitAction
 import { ComparisonController } from './presentation/host/ComparisonController';
 import { FileSystemRepositoryLocator } from './infrastructure/fs/FileSystemRepositoryLocator';
 import { RepositoryRegistry } from './presentation/host/RepositoryRegistry';
-import { CONFIG_SECTION, SCAN_DEPTH_SETTING } from './presentation/host/config';
+import { RepositoryWatcher } from './presentation/host/RepositoryWatcher';
+import { GitCliDirectoryReader } from './infrastructure/git/GitCliDirectoryReader';
+import {
+    AUTO_REFRESH_SETTING,
+    CONFIG_SECTION,
+    SCAN_DEPTH_SETTING,
+} from './presentation/host/config';
 import { initialiseLog, log } from './presentation/host/log';
 import {
     GITHAWK_VIEW_ID,
@@ -83,6 +89,11 @@ export async function activate(
     });
     changedFiles.attach(changesView);
 
+    const watcher = new RepositoryWatcher(
+        (root) => new GitCliDirectoryReader(root)
+    );
+    context.subscriptions.push(watcher);
+
     const provider = new GitGraphViewProvider(
         context.extensionUri,
         createGitRepository,
@@ -112,7 +123,14 @@ export async function activate(
         vscode.commands.registerCommand('gitHawk.refresh', () =>
             repositories.refresh()
         ),
-        repositories.onDidChange(() => provider.refresh()),
+        repositories.onDidChange(() => {
+            provider.refresh();
+            // The scan may have chosen a different repository, and the watcher
+            // is only ever pointed at one.
+            void watcher.watch(repositories.active?.root);
+        }),
+        // A reload, not a rescan: the repository moved, the set of them did not.
+        watcher.onDidChange(() => provider.refresh()),
         /*
          * With no argument this shows the picker. With one it switches directly,
          * which makes the command usable from a keybinding or a task — and is how
@@ -193,6 +211,11 @@ export async function activate(
             'gitHawk.compareCommits',
             (hashes: string[]) => provider.compareCommitsForTesting(hashes ?? [])
         ),
+        // What the webview was last sent, so the integration tests can watch
+        // for a reload rather than sleep and hope.
+        vscode.commands.registerCommand('gitHawk.graphSnapshot', () =>
+            provider.graphSnapshotForTesting()
+        ),
         vscode.commands.registerCommand('gitHawk.showLog', () => log.show()),
         // Returns a branch menu's structure without showing it, so the
         // integration tests can assert the grouping.
@@ -235,6 +258,13 @@ export async function activate(
                 )
             ) {
                 void repositories.refresh();
+            } else if (
+                event.affectsConfiguration(
+                    `${CONFIG_SECTION}.${AUTO_REFRESH_SETTING}`
+                )
+            ) {
+                // Re-reads the setting: installs the watchers, or removes them.
+                void watcher.watch(repositories.active?.root);
             } else if (event.affectsConfiguration(CONFIG_SECTION)) {
                 provider.refresh();
             }

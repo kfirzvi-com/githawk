@@ -104,6 +104,14 @@ menus, comparisons, and the Changes tree.
 Submodules, linked worktrees, and repositories nested inside a monorepo are all
 found. How deep it looks is [`gitHawk.repositoryScanDepth`](#settings).
 
+### Keep up with the repository
+
+Commit in a terminal, check out from the Source Control view, let an agent rebase
+in a worktree — the graph reloads on its own. GitHawk watches git's metadata, not
+your working tree, and waits for an operation to finish rather than redrawing on
+every step of a rebase. Your place in the history is kept: the row you are
+looking at stays where it is instead of sliding down as commits arrive above it.
+
 ### Manage worktrees
 
 ![The worktree manager](media/screenshots/worktrees.png)
@@ -135,6 +143,7 @@ tool in the right directory. It reads nothing and sends nothing.
 | Setting | Default | What it does |
 | --- | --- | --- |
 | `gitHawk.commitLimit` | `500` | How many commits to read. Higher shows more and loads slower. |
+| `gitHawk.autoRefresh` | `true` | Reload the graph when the repository changes outside GitHawk. Watches git's metadata, never your working tree. |
 | `gitHawk.repositoryScanDepth` | `2` | Directory levels below each opened folder to search for repositories. `0` searches the folders only; `2` covers a folder of projects, or a folder of buckets each holding projects. |
 | `gitHawk.aiTools` | Claude Code, Codex, Gemini CLI, opencode | Commands offered by "Start an AI CLI here". |
 

@@ -80,3 +80,15 @@ export function worktreeListArgs(): string[] {
 export function repositoryRootArgs(): string[] {
     return ['rev-parse', '--show-toplevel'];
 }
+
+/**
+ * The per-worktree git directory and the shared one, in that order, one per
+ * line. They differ only in a linked worktree — see GitDirectories.
+ *
+ * `--path-format=absolute` because `--git-common-dir` is otherwise relative to
+ * the working directory, and a watcher needs a path it can hand to the
+ * filesystem rather than one that depends on where git happened to run.
+ */
+export function gitDirectoriesArgs(): string[] {
+    return ['rev-parse', '--path-format=absolute', '--git-dir', '--git-common-dir'];
+}
