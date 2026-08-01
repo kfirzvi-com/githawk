@@ -68,6 +68,37 @@ export function toPlainObject<T>(value: T): T {
     return JSON.parse(JSON.stringify(value)) as T;
 }
 
+/**
+ * Reads one key out of the webview's persisted state.
+ *
+ * VS Code keeps this across a panel being hidden and rebuilt, and across a
+ * window reload, which is the difference between a layout preference and a
+ * layout preference that resets every morning. Standalone in the harness both
+ * of these are no-ops, so the dev page always starts from the defaults.
+ */
+export function readWebviewState(key: string): unknown {
+    const state = api.getState();
+    return typeof state === 'object' && state !== null
+        ? (state as Record<string, unknown>)[key]
+        : undefined;
+}
+
+/**
+ * Writes one key, preserving the rest. setState replaces the whole object, so
+ * writing a key naively is how the *other* keys quietly disappear.
+ */
+export function writeWebviewState(key: string, value: unknown): void {
+    const state = api.getState();
+    const existing =
+        typeof state === 'object' && state !== null
+            ? (state as Record<string, unknown>)
+            : {};
+
+    // Plain-copied for the same reason messages are: state can be a Svelte
+    // proxy, and what is stored must be structured-cloneable.
+    api.setState({ ...existing, [key]: toPlainObject(value) });
+}
+
 /** Subscribes to host messages. Returns an unsubscribe function. */
 export function onHostMessage(
     handler: (message: HostToWebviewMessage) => void
