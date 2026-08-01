@@ -29,9 +29,18 @@
         type ToolbarAction,
     } from './viewmodels/toolbar';
     import { anchorAt, scrollTopFor } from './viewmodels/scrollAnchor';
-    import { defaultMetrics } from './viewmodels/graphGeometry';
+    import {
+        defaultMetrics,
+        graphWidth,
+    } from './viewmodels/graphGeometry';
     import { tick } from 'svelte';
     import PaneHandle from './components/PaneHandle.svelte';
+    import WorkingTreeRow from './components/WorkingTreeRow.svelte';
+    import {
+        cleanWorkingTree,
+        isClean,
+        type WorkingTreeStatus,
+    } from '../../domain/models/WorkingTreeStatus';
     import {
         readPaneVisibility,
         withPane,
@@ -67,6 +76,9 @@
     /** The graph's scroll container, so a reload can keep the reader's place. */
     let graphScroller = $state<HTMLDivElement | null>(null);
     let panes = $state(readPaneVisibility(readWebviewState(PANES_STATE_KEY)));
+    /** Counts only; the files themselves go to the Changes tree as usual. */
+    let workingTree = $state<WorkingTreeStatus>(cleanWorkingTree);
+    let workingTreeSelected = $state(false);
 
     /** Layout is derived, never stored: one source of truth for the graph. */
     const graph = $derived(
@@ -78,6 +90,31 @@
         branches.find((b) => b.isCurrent)?.name ?? null
     );
     const rowOrder = $derived(graph?.commits.map((c) => c.hash) ?? []);
+    const workingTreeIsClean = $derived(isClean(workingTree));
+    /**
+     * The working-tree row shares the graph's scroll container and sits above
+     * row 0, so every commit is that much further down than its index says.
+     * Scroll anchoring maps pixels to rows arithmetically — rows are a fixed
+     * height, which is what makes it cheap — so it has to be told.
+     */
+    const graphScrollOffset = $derived(
+        workingTreeIsClean ? 0 : defaultMetrics.rowH
+    );
+    /**
+     * The same width GitGraph reserves for its lanes, computed the same way, so
+     * the working-tree marker sits above the commit dots rather than beside
+     * them. The row cannot live inside GitGraph: that component maps rows to
+     * pixels by index, and a row that is not a commit would shift every node
+     * off its edge.
+     */
+    const graphGutterWidth = $derived(
+        graph
+            ? graphWidth(
+                  graph.nodes.reduce((max, node) => Math.max(max, node.lane), 0),
+                  defaultMetrics
+              )
+            : 0
+    );
     const selectedHashes = $derived(new Set(selection.hashes));
     const selectionIsContiguous = $derived(
         isContiguous(rowOrder, selection.hashes)
@@ -117,7 +154,7 @@
                     // the reader did not ask for must not move the page under
                     // them, and a new commit arrives at the top of the list.
                     const anchor = anchorAt(
-                        graphScroller?.scrollTop ?? 0,
+                        (graphScroller?.scrollTop ?? 0) - graphScrollOffset,
                         defaultMetrics.rowH,
                         rowOrder
                     );
@@ -161,6 +198,15 @@
                 case 'worktrees:loaded':
                     worktrees = message.worktrees.map(WorktreeMapper.fromDto);
                     break;
+                case 'workingTree:loaded':
+                    workingTree = message.status;
+                    // Committing everything removes the row; leaving it
+                    // selected would keep a changeset on screen that no longer
+                    // has anything in it.
+                    if (isClean(message.status)) {
+                        workingTreeSelected = false;
+                    }
+                    break;
             }
         })
     );
@@ -175,7 +221,9 @@
         await tick();
         const scrollTop = scrollTopFor(anchor, defaultMetrics.rowH, rowOrder);
         if (scrollTop !== null && graphScroller) {
-            graphScroller.scrollTop = scrollTop;
+            // Re-read rather than captured: committing everything takes the
+            // working-tree row away, and the rows below it move up by one.
+            graphScroller.scrollTop = scrollTop + graphScrollOffset;
         }
     };
 
@@ -235,6 +283,10 @@
     };
 
     const handleSelectCommit = (commit: Commit, modifiers: SelectModifiers) => {
+        // The two selections are mutually exclusive: "these commits, and also
+        // whatever is uncommitted" is a different question, and the branch
+        // menu's "Review my work against…" is the one that answers it.
+        workingTreeSelected = false;
         selection = applySelection(
             selection,
             rowOrder,
@@ -243,6 +295,16 @@
         );
         selectedCommit = commit;
         requestChangesForSelection();
+    };
+
+    const selectWorkingTree = () => {
+        workingTreeSelected = true;
+        selection = emptySelection;
+        selectedCommit = null;
+        // Not debounced, unlike a commit selection: this row cannot be part of
+        // a range, so one click is the whole request.
+        clearTimeout(pendingRequest);
+        postToHost({ type: 'workingTree:select' });
     };
 
     /**
@@ -420,6 +482,17 @@
                     class="flex-1 overflow-auto bg-gray-800"
                     data-testid="graph-scroller"
                 >
+                    {#if graph && !workingTreeIsClean}
+                        <!-- Above the graph and inside its scroller, because it
+                             belongs at the newest end of the history and should
+                             scroll away with it. -->
+                        <WorkingTreeRow
+                            status={workingTree}
+                            gutterWidth={graphGutterWidth}
+                            selected={workingTreeSelected}
+                            onSelect={selectWorkingTree}
+                        />
+                    {/if}
                     {#if graph}
                         <GitGraph
                             {graph}

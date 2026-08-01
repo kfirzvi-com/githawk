@@ -7,6 +7,7 @@ import {
 import { GitCliComparer } from './infrastructure/git/GitCliComparer';
 import { GitCliWorktreeReader } from './infrastructure/git/GitCliWorktreeReader';
 import { GitCliRemoteReader } from './infrastructure/git/GitCliRemoteReader';
+import { GitCliWorkingTreeReader } from './infrastructure/git/GitCliWorkingTreeReader';
 import { GitCliWriter } from './infrastructure/git/GitCliWriter';
 import { ChangeDecorationProvider } from './presentation/host/ChangeDecorationProvider';
 import {
@@ -104,6 +105,8 @@ export async function activate(
         repositories,
         createWorktreeReader,
         createRemoteReader
+,
+        createWorkingTreeReader
     );
 
     context.subscriptions.push(
@@ -225,6 +228,15 @@ export async function activate(
         vscode.commands.registerCommand('gitHawk.graphSnapshot', () =>
             provider.graphSnapshotForTesting()
         ),
+        // Reachable without the panel open, so a keybinding can go straight
+        // from editing to reviewing what has been edited.
+        vscode.commands.registerCommand('gitHawk.showUncommittedChanges', () =>
+            provider.compareWorkingTree()
+        ),
+        // Reports the working tree as the extension sees it.
+        vscode.commands.registerCommand('gitHawk.workingTree', () =>
+            provider.workingTreeForTesting()
+        ),
         vscode.commands.registerCommand('gitHawk.showLog', () => log.show()),
         // Returns a branch menu's structure without showing it, so the
         // integration tests can assert the grouping.
@@ -316,6 +328,10 @@ function createWorktreeReader(): GitCliWorktreeReader {
 
 function createRemoteReader(): GitCliRemoteReader {
     return new GitCliRemoteReader(activeRepositoryRoot());
+}
+
+function createWorkingTreeReader(): GitCliWorkingTreeReader {
+    return new GitCliWorkingTreeReader(activeRepositoryRoot());
 }
 
 /**

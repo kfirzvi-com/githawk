@@ -23,6 +23,11 @@ import { RemoteMenu } from './RemoteMenu';
 import { ListWorktreesUseCase } from '../../application/usecases/ListWorktreesUseCase';
 import type { IWorktreeReader } from '../../domain/repositories/IWorktreeReader';
 import type { IRemoteReader } from '../../domain/repositories/IRemoteReader';
+import type { IWorkingTreeReader } from '../../domain/repositories/IWorkingTreeReader';
+import {
+    cleanWorkingTree,
+    type WorkingTreeStatus,
+} from '../../domain/models/WorkingTreeStatus';
 import { WorktreeMapper } from '../../application/dto/mappers';
 import { baseName } from '../../domain/services/paths';
 import { log } from './log';
@@ -38,6 +43,7 @@ export type GitRepositoryFactory = () => IGitRepository;
 export type GitWriterFactory = () => IGitWriter;
 export type WorktreeReaderFactory = () => IWorktreeReader;
 export type RemoteReaderFactory = () => IRemoteReader;
+export type WorkingTreeReaderFactory = () => IWorkingTreeReader;
 
 /**
  * `focus` puts the Changes view in front, for an action the user explicitly asked
@@ -74,6 +80,8 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
         private readonly repositories: RepositoryRegistry,
         private readonly createWorktreeReader: WorktreeReaderFactory,
         private readonly createRemoteReader: RemoteReaderFactory
+,
+        private readonly createWorkingTreeReader: WorkingTreeReaderFactory
     ) {}
 
     resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -95,6 +103,7 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
         this.sendRepositories();
         void this.sendGraph();
         void this.sendWorktrees();
+        void this.sendWorkingTree();
     }
 
     /** Re-reads the repository and pushes it to the webview, if one is open. */
@@ -104,6 +113,7 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
             this.sendRepositories();
             void this.sendGraph();
             void this.sendWorktrees();
+            void this.sendWorkingTree();
         }
     }
 
@@ -188,6 +198,27 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
         }
     }
 
+    /**
+     * Separate from the graph for the reason the worktree list is: a status
+     * that cannot be read — a repository mid-operation, a filesystem that is
+     * being slow — must cost the row, not the panel. A clean tree is reported
+     * as clean, so the row goes away as readily as it appears.
+     */
+    private async sendWorkingTree(): Promise<void> {
+        try {
+            this.post({
+                type: 'workingTree:loaded',
+                status: await this.createWorkingTreeReader().read(),
+            });
+        } catch (error) {
+            log.warn(`could not read the working tree: ${describeError(error)}`);
+            this.post({
+                type: 'workingTree:loaded',
+                status: cleanWorkingTree,
+            });
+        }
+    }
+
     private handleMessage(message: WebviewToHostMessage): void {
         log.debug(`webview → host: ${message.type}`, JSON.stringify(message));
 
@@ -209,6 +240,14 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
             case 'commit:select':
                 // Clicking a commit fills the Changes tree with what it changed.
                 void this.compareCommits([message.hash], 'ifUnseen');
+                break;
+            case 'workingTree:select':
+                // Everything uncommitted, staged or not, as one changeset —
+                // the same comparison the commit menu's "against my working
+                // tree" runs, from the row that represents it. 'ifUnseen'
+                // because clicking a row is browsing, not a request for the
+                // sidebar.
+                void this.compareWorkingTree('ifUnseen');
                 break;
             case 'commit:menu':
                 void this.showCommitMenu(message.hash);
@@ -330,6 +369,28 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
      */
     async compareCommitsForTesting(hashes: string[]): Promise<void> {
         await this.compareCommits(hashes, 'focus');
+    }
+
+    /**
+     * Everything uncommitted, as one changeset. Backs both the row above the
+     * graph and the command, so a keybinding reaches it without the panel being
+     * open.
+     */
+    async compareWorkingTree(reveal: RevealMode = 'focus'): Promise<void> {
+        await this.runComparison(
+            {
+                kind: 'twoRefs',
+                left: 'HEAD',
+                right: 'WORKTREE',
+                rightIsWorkingTree: true,
+            },
+            reveal
+        );
+    }
+
+    /** See gitHawk.workingTree: the counts as the extension reads them. */
+    async workingTreeForTesting(): Promise<WorkingTreeStatus> {
+        return this.createWorkingTreeReader().read();
     }
 
     private async runComparison(

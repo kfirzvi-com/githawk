@@ -165,6 +165,15 @@
       {
         "command": "gitHawk.remotes",
         "title": "GitHawk: List Remotes"
+      },
+      {
+        "command": "gitHawk.showUncommittedChanges",
+        "title": "GitHawk: Show Uncommitted Changes",
+        "icon": "$(git-commit)"
+      },
+      {
+        "command": "gitHawk.workingTree",
+        "title": "GitHawk: Report Uncommitted Changes"
       }
     ],
     "keybindings": [

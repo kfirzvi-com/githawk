@@ -97,3 +97,15 @@ export function gitDirectoriesArgs(): string[] {
 export function remoteListArgs(): string[] {
     return ['remote', '-v'];
 }
+
+/**
+ * Counts, not contents — the file list comes from the comparison machinery.
+ *
+ * `-z` because a path may contain a newline, which git otherwise handles by
+ * quoting the path, giving a second format to parse. `--untracked-files=normal`
+ * is stated rather than assumed: `status.showUntrackedFiles=no` in a user's
+ * config would otherwise silently drop them from the count.
+ */
+export function statusArgs(): string[] {
+    return ['status', '--porcelain', '-z', '--untracked-files=normal'];
+}
