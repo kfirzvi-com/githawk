@@ -13,6 +13,7 @@ export interface CommitContext {
 
 /** What the menu asks for; resolving and running it belongs elsewhere. */
 export type CompareRequest =
+    | { kind: 'ownChanges'; hash: string }
     | { kind: 'myWorkAgainst'; base: string }
     | { kind: 'pickAgainst'; left: string; leftLabel: string }
     | { kind: 'againstWorkingTree'; left: string; leftLabel: string };
@@ -41,6 +42,13 @@ export interface BranchContext {
 export type WorktreeRequest =
     | { kind: 'open'; path: string }
     | { kind: 'createForBranch'; branch: string };
+
+/** A menu as a test can read it: what it offers, and how it is grouped. */
+export interface MenuEntries {
+    separators: string[];
+    labels: string[];
+    entries: { label: string; description?: string }[];
+}
 
 interface ActionItem extends vscode.QuickPickItem {
     /**
@@ -98,6 +106,24 @@ export class GitActionMenu {
 
     async showForCommit(commit: CommitContext): Promise<void> {
         const compare: ActionItem[] = [
+            /*
+             * Selecting a commit already fills the Changes tree, but only shows
+             * it the first time — pulling focus to the sidebar on every click
+             * would make the graph unbrowsable. That leaves no way to ask for it
+             * deliberately once the view has been closed or covered, which is
+             * what this entry is.
+             */
+            {
+                label: '$(list-tree) Show changes in the sidebar',
+                description: `${commit.shortHash} — the files this commit changed`,
+                build: async () => {
+                    await this.onCompareRequested?.({
+                        kind: 'ownChanges',
+                        hash: commit.hash,
+                    });
+                    return undefined;
+                },
+            },
             {
                 label: '$(diff) Compare with…',
                 description: 'another branch, tag, or commit',
@@ -425,20 +451,28 @@ export class GitActionMenu {
      * integration tests can assert the grouping — a QuickPick cannot be inspected
      * once it is on screen.
      */
-    async entriesForBranch(branch: BranchContext): Promise<{
-        separators: string[];
-        labels: string[];
-        entries: { label: string; description?: string }[];
-    }> {
+    async entriesForBranch(branch: BranchContext): Promise<MenuEntries> {
+        return this.capture(() => this.showForBranch(branch));
+    }
+
+    /** See entriesForBranch. */
+    async entriesForCommit(commit: CommitContext): Promise<MenuEntries> {
+        return this.capture(() => this.showForCommit(commit));
+    }
+
+    /**
+     * Runs the real construction with the presentation swapped out, so a test
+     * reads exactly the menu a user would get. Rebuilding the items here instead
+     * is how a missing feature once tested green.
+     */
+    private async capture(build: () => Promise<void>): Promise<MenuEntries> {
         const captured: ActionItem[] = [];
         const original = this.show.bind(this);
-        // Intercept rather than duplicate the construction, so the test sees
-        // exactly what a user would.
         this.show = async (items: ActionItem[]) => {
             captured.push(...items);
         };
         try {
-            await this.showForBranch(branch);
+            await build();
         } finally {
             this.show = original;
         }

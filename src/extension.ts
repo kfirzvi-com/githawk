@@ -224,6 +224,10 @@ export async function activate(
             (name: string, isRemote = false) =>
                 provider.branchMenuEntriesForTesting(name, isRemote)
         ),
+        vscode.commands.registerCommand(
+            'gitHawk.commitMenuEntries',
+            (hash: string) => provider.commitMenuEntriesForTesting(hash)
+        ),
         vscode.commands.registerCommand('gitHawk.updateAllBranches', () =>
             updateAllBranches(provider)
         ),

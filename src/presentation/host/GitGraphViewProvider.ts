@@ -8,8 +8,10 @@ import type { IGitRepository } from '../../domain/repositories/IGitRepository';
 import type { IGitWriter } from '../../domain/repositories/IGitWriter';
 import {
     BranchContext,
+    CommitContext,
     CompareRequest,
     GitActionMenu,
+    MenuEntries,
     WorktreeRequest,
 } from './GitActionMenu';
 import { ComparisonController } from './ComparisonController';
@@ -243,6 +245,12 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
     /** Handles the comparison entries offered by the commit and branch menus. */
     async handleCompareRequest(request: CompareRequest): Promise<void> {
         switch (request.kind) {
+            case 'ownChanges':
+                // 'focus' rather than 'ifUnseen': this was asked for explicitly,
+                // so putting the sidebar in front is the whole point of it.
+                await this.compareCommits([request.hash], 'focus');
+                return;
+
             case 'myWorkAgainst':
                 await this.runComparison(
                     {
@@ -369,26 +377,38 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
      */
     private async showCommitMenu(hash: string): Promise<void> {
         try {
-            const repository = await this.createRepository().getRepository();
-            const commit = repository.getCommit(hash);
-            if (!commit) {
+            const context = await this.commitContext(hash);
+            if (!context) {
                 vscode.window.showWarningMessage(
                     'That commit is no longer in the loaded history. Refresh and try again.'
                 );
                 return;
             }
 
-            await this.createMenu().showForCommit({
-                hash: commit.hash,
-                shortHash: commit.shortHash,
-                // Subject only: the menu title must stay one line.
-                subject: commit.subject,
-                branchNames: commit.branchNames,
-                tagNames: commit.tagNames,
-            });
+            await this.createMenu().showForCommit(context);
         } catch (error) {
             vscode.window.showErrorMessage(describeError(error));
         }
+    }
+
+    /** Shared with the test hook, for the reason branchContext is. */
+    private async commitContext(
+        hash: string
+    ): Promise<CommitContext | undefined> {
+        const repository = await this.createRepository().getRepository();
+        const commit = repository.getCommit(hash);
+        if (!commit) {
+            return undefined;
+        }
+
+        return {
+            hash: commit.hash,
+            shortHash: commit.shortHash,
+            // Subject only: the menu title must stay one line.
+            subject: commit.subject,
+            branchNames: commit.branchNames,
+            tagNames: commit.tagNames,
+        };
     }
 
     /**
@@ -443,14 +463,18 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
     async branchMenuEntriesForTesting(
         name: string,
         isRemote: boolean
-    ): Promise<{
-        separators: string[];
-        labels: string[];
-        entries: { label: string; description?: string }[];
-    }> {
+    ): Promise<MenuEntries> {
         return this.createMenu().entriesForBranch(
             await this.branchContext(name, isRemote)
         );
+    }
+
+    /** See gitHawk.commitMenuEntries: structure only, nothing shown. */
+    async commitMenuEntriesForTesting(
+        hash: string
+    ): Promise<MenuEntries | undefined> {
+        const context = await this.commitContext(hash);
+        return context ? this.createMenu().entriesForCommit(context) : undefined;
     }
 
     private createMenu(): GitActionMenu {

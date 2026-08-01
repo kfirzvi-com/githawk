@@ -15,6 +15,10 @@ All notable changes to GitHawk are documented here, following
   shared git directory, so a commit made in another worktree of the same
   repository counts too. Writes are coalesced, so one rebase is one reload rather
   than one per replayed commit. Turn it off with `gitHawk.autoRefresh`.
+- **"Show changes in the sidebar"** on the commit menu, first under Compare.
+  Selecting a commit has always filled the Changes tree, but the view is only
+  surfaced once — after that there was no way to ask for it back without
+  selecting a different commit and returning.
 - A reload keeps your place: the row at the top of the viewport stays there
   rather than sliding down as new commits arrive above it, and a selected commit
   that no longer exists after an amend or a rebase is dropped rather than left

@@ -54,6 +54,11 @@ Click a commit: its full message, author, date, and hash appear on the right, an
 its files fill the **Changes** tree in the sidebar. Click a file to open it in
 VS Code's own diff editor.
 
+The sidebar is surfaced the first time and then left alone — pulling focus on
+every click would make the graph unbrowsable. To ask for it deliberately, once it
+has been closed or covered, right-click a commit and choose **"Show changes in
+the sidebar"**.
+
 ### Review a whole branch, or any set of commits
 
 ![Several commits selected, with their combined changes](media/screenshots/review-commits.png)
