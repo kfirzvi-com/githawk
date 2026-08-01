@@ -2,6 +2,7 @@ import { RepositoryLocation } from '../../domain/models/RepositoryLocation';
 import { ComparisonDto } from './ComparisonDto';
 import { GitGraphDto } from './GitGraphDto';
 import { WorktreeDto } from './WorktreeDto';
+import { WorkingTreeStatus } from '../../domain/models/WorkingTreeStatus';
 
 /**
  * Every message crossing the webview boundary, in both directions.
@@ -26,11 +27,19 @@ export type HostToWebviewMessage =
           activeRoot?: string;
       }
     /** Sent alongside the graph, so the sidebar can list the working trees. */
-    | { type: 'worktrees:loaded'; worktrees: WorktreeDto[] };
+    | { type: 'worktrees:loaded'; worktrees: WorktreeDto[] }
+    /**
+     * Counts of what is uncommitted, for the row above the graph. Sent even
+     * when everything is clean, because the row has to disappear as well as
+     * appear.
+     */
+    | { type: 'workingTree:loaded'; status: WorkingTreeStatus };
 
 export type WebviewToHostMessage =
     | { type: 'graph:refresh' }
     | { type: 'commit:select'; hash: string }
+    /** Show everything uncommitted, as one changeset against HEAD. */
+    | { type: 'workingTree:select' }
     /** Opens the native action menu for a commit. */
     | { type: 'commit:menu'; hash: string }
     | { type: 'commit:copyHash'; hash: string }

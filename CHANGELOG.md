@@ -56,6 +56,18 @@ All notable changes to GitHawk are documented here, following
   since that is what it is asked to do; it still moves only the ref.
 - Clicking a branch label on a commit row opens that branch's menu rather than
   selecting the commit. Clicking anywhere else on the row still selects it.
+- **Uncommitted work has a row in the graph.** Above the newest commit whenever
+  there is anything to show, with what kind — `2 staged, 1 modified, 3
+  untracked` — and gone again when the tree is clean. Selecting it fills the
+  Changes tree with everything uncommitted as one changeset against `HEAD`, the
+  same comparison `GitHawk: Show Uncommitted Changes` runs. Its marker is hollow
+  and dashed rather than a commit dot, and nothing draws a line from it to
+  `HEAD`: the graph reads every ref, so the topmost row is frequently not the
+  commit the changes sit on.
+
+  Untracked files are counted in the row but are not in the changeset — `git
+  diff HEAD` has no blob to compare a file git has never seen against. The row's
+  tooltip says so.
 - **The branch list and the commit details pane fold away.** The graph lives in
   the bottom panel, which is short and splits its width three ways, so the thing
   the panel exists to draw had the least room of the three. A thin handle on

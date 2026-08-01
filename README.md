@@ -58,6 +58,27 @@ The sidebar is surfaced the first time and then left alone — pulling focus on
 every click would make the graph unbrowsable. To ask for it deliberately, once it
 has been closed or covered, right-click a commit and choose **"Show changes in
 the sidebar"**.
+### See what you have not committed
+
+![The graph panel](media/screenshots/graph.png)
+
+A row above the newest commit, whenever there is anything uncommitted, saying
+what kind — `2 staged, 1 modified, 3 untracked`. Click it and the **Changes**
+tree fills with everything uncommitted, as one changeset against `HEAD`. The row
+disappears when the tree is clean, so its presence is the answer to "is there
+anything here?".
+
+Its marker is hollow and dashed rather than a commit dot, because it is not a
+commit: nothing points at it, it has no hash, and it looks different the moment
+you save a file. Nothing draws a line from it to `HEAD` either — the graph reads
+every ref, so the topmost row is often not the commit your changes sit on, and a
+line saying otherwise would be wrong more often than right.
+
+One honest gap: untracked files are counted in the row but are not in the
+changeset. `git diff HEAD` has nothing to compare a file git has never seen
+against. `GitHawk: Show Uncommitted Changes` opens the same comparison without
+the panel.
+
 ### Give the graph the room
 
 The panel is short and splits its width three ways. Either side pane folds away
@@ -193,6 +214,7 @@ tool in the right directory. It reads nothing and sends nothing.
 | `GitHawk: Switch Repository` | |
 | `GitHawk: Manage Worktrees` | |
 | `GitHawk: Manage Remotes` | Add, rename, re-point, remove, fetch, prune |
+| `GitHawk: Show Uncommitted Changes` | Everything uncommitted, against `HEAD` |
 | `GitHawk: Start An AI CLI Here` | |
 | `GitHawk: Update All Branches From Upstream` | Fast-forwards every branch that can be |
 | `GitHawk: Show Log` | GitHawk's own output, when something goes wrong |

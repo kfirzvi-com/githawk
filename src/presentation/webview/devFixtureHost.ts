@@ -6,6 +6,7 @@ import type {
     WebviewToHostMessage,
 } from '../../application/dto/messages';
 import { HARNESS_TO_HOST_EVENT } from './vscodeApi';
+import { cleanWorkingTree } from '../../domain/models/WorkingTreeStatus';
 import { LoadGitGraphUseCase } from '../../application/usecases/LoadGitGraphUseCase';
 import { InMemoryGitRepository } from '../../infrastructure/fixtures/InMemoryGitRepository';
 import {
@@ -31,6 +32,7 @@ export async function startFixtureHost(): Promise<void> {
     announceRepositories(Number(parameters.get('repositories') ?? '0'));
     const worktreeCount = Number(parameters.get('worktrees') ?? '0');
     announceWorktrees(worktreeCount);
+    announceWorkingTree(parameters.get('dirty'));
 
     const requestedId = parameters.get('topology');
 
@@ -122,6 +124,30 @@ function announceRepositories(count: number): void {
         type: 'repositories:loaded',
         repositories,
         activeRoot: repositories[0].root,
+    });
+}
+
+/**
+ * The working tree, parameterised as `?dirty=staged,unstaged,untracked,conflicted`
+ * — four counts, any of which may be omitted. `?dirty=2,1` is two staged and one
+ * modified. Absent means a clean tree, which is what the row's absence means.
+ */
+function announceWorkingTree(spec: string | null): void {
+    if (spec === null) {
+        post({ type: 'workingTree:loaded', status: cleanWorkingTree });
+        return;
+    }
+
+    const [staged = 0, unstaged = 0, untracked = 0, conflicted = 0] = spec
+        .split(',')
+        .map((part) => {
+            const value = Number(part.trim());
+            return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+        });
+
+    post({
+        type: 'workingTree:loaded',
+        status: { staged, unstaged, untracked, conflicted },
     });
 }
 
@@ -239,6 +265,15 @@ function answerRequests(): void {
                     comparison: fixtureComparison(
                         `${message.hashes.length} selected commits`,
                         'replay'
+                    ),
+                });
+                break;
+            case 'workingTree:select':
+                post({
+                    type: 'comparison:loaded',
+                    comparison: fixtureComparison(
+                        'HEAD → working tree',
+                        'direct'
                     ),
                 });
                 break;
