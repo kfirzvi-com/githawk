@@ -1,13 +1,80 @@
 @import 'tailwindcss';
 
 /*
- * Tailwind v4 theme extensions. Kept minimal on purpose: the dark-only grays
- * below are inherited from the prototype and are scheduled to be replaced by
- * VS Code theme tokens.
+ * The panel's palette, named by role and resolved from VS Code's own theme.
+ *
+ * Every token is `var(--vscode-…, <fallback>)`, and every fallback is the exact
+ * colour this panel used when it was dark-only. That is deliberate: inside VS
+ * Code the variables are present and the panel follows the user's theme, and in
+ * the standalone dev harness — which has no extension host and therefore none of
+ * them — the page renders precisely as it did before, so the screenshot
+ * baselines still describe something real.
+ *
+ * Named by role rather than by shade for the same reason a domain type beats a
+ * string: `bg-pane` survives a change of palette, `bg-gray-850` is a claim about
+ * a colour that stops being true the moment someone picks a light theme.
  */
 @theme {
-    --color-gray-850: #1a1a1a;
-    --color-gray-900: #0d1117;
+    /* Surfaces, in the order they stack. */
+    --color-app: var(--vscode-panel-background, #0d1117);
+    --color-graph: var(--vscode-editor-background, #1f2937);
+    --color-pane: var(--vscode-sideBar-background, #1a1a1a);
+    --color-control: var(--vscode-button-secondaryBackground, #374151);
+    --color-control-hover: var(--vscode-toolbar-hoverBackground, #4b5563);
+
+    /* Rules and outlines. */
+    --color-line: var(--vscode-panel-border, #374151);
+    --color-line-strong: var(--vscode-widget-border, #4b5563);
+
+    /*
+     * Four weights of text. VS Code offers two — foreground and
+     * descriptionForeground — so the pairs collapse under a real theme, which
+     * is correct: a theme that wanted six greys would provide six.
+     */
+    --color-fg: var(--vscode-foreground, #f3f4f6);
+    --color-fg-soft: var(--vscode-foreground, #e5e7eb);
+    --color-fg-muted: var(--vscode-descriptionForeground, #d1d5db);
+    --color-fg-dim: var(--vscode-descriptionForeground, #9ca3af);
+    --color-fg-faint: var(--vscode-disabledForeground, #6b7280);
+
+    /* The one primary action, styled as VS Code styles its buttons. */
+    --color-accent: var(--vscode-button-background, #2563eb);
+    --color-accent-hover: var(--vscode-button-hoverBackground, #3b82f6);
+    --color-on-accent: var(--vscode-button-foreground, #ffffff);
+
+    /*
+     * Row states come from the list tokens rather than from a tinted grey, so
+     * selection looks like selection everywhere else in the editor.
+     */
+    --color-hover: var(--vscode-list-hoverBackground, rgb(55 65 81 / 0.4));
+    --color-selected: var(
+        --vscode-list-activeSelectionBackground,
+        rgb(37 99 235 / 0.2)
+    );
+    --color-marked: var(
+        --vscode-editor-findMatchHighlightBackground,
+        rgb(245 158 11 / 0.15)
+    );
+
+    /*
+     * Meaning-carrying hues. Mostly from VS Code's chart palette — the one set
+     * of tokens themes are expected to keep distinguishable from each other and
+     * legible against their own background.
+     *
+     * Not orange, though. `charts-orange` is `rgba(234, 92, 0, 0.33)` in both
+     * default themes: it is a highlight *fill*, and using it as a text colour
+     * renders warnings at a third of their opacity — nearly invisible on white.
+     * Warnings therefore come from `editorWarning-foreground`, which is opaque
+     * in both and is what the editor itself uses to say the same thing.
+     */
+    --color-info: var(--vscode-charts-blue, #93c5fd);
+    --color-info-strong: var(--vscode-charts-blue, #60a5fa);
+    --color-ok: var(--vscode-charts-green, #4ade80);
+    --color-warn: var(--vscode-editorWarning-foreground, #fbbf24);
+    --color-warn-soft: var(--vscode-editorWarning-foreground, #fde68a);
+    --color-danger: var(--vscode-charts-red, #f87171);
+    --color-special: var(--vscode-charts-purple, #d8b4fe);
+
     --font-sans: Inter, system-ui, sans-serif;
     --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
 }
@@ -56,8 +123,16 @@ body {
     background: var(--vscode-scrollbarSlider-hoverBackground, #777);
 }
 
+/*
+ * A hairline separating a dot from a lane line running behind it, plus a little
+ * lift. Both were tuned against a dark background: a white hairline vanishes on
+ * a light theme and the drop shadow turns into a smudge.
+ *
+ * `currentColor` at low alpha works either way — it inherits the text colour,
+ * which a theme has already chosen to contrast with its own background.
+ */
 .commit-dot {
     box-shadow:
-        0 0 0 1px rgb(255 255 255 / 0.1),
-        0 1px 3px rgb(0 0 0 / 0.3);
+        0 0 0 1px color-mix(in srgb, currentColor 12%, transparent),
+        0 1px 3px color-mix(in srgb, currentColor 22%, transparent);
 }

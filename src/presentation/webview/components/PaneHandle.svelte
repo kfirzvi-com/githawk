@@ -28,7 +28,7 @@
 
 <button
     type="button"
-    class="group flex w-3 flex-shrink-0 cursor-pointer items-center justify-center border-gray-700 bg-gray-850 hover:bg-gray-700 {side ===
+    class="group flex w-3 flex-shrink-0 cursor-pointer items-center justify-center border-line bg-pane hover:bg-control {side ===
     'left'
         ? 'border-r'
         : 'border-l'}"

@@ -58,6 +58,18 @@ export function edgePath(edge: GraphEdge, m: GraphMetrics): string {
     return `M ${from.x} ${from.y} C ${from.x} ${control1Y}, ${to.x} ${control2Y}, ${to.x} ${to.y}`;
 }
 
+/**
+ * Lane colours are identity, not chrome, so they are fixed rather than taken
+ * from the theme: a lane has to stay the same colour as the eye follows it down
+ * the graph, and it has to be distinguishable from the seven beside it. VS
+ * Code's chart tokens are a palette of five that themes are free to reorder.
+ *
+ * These are mid-saturation hues chosen to hold their contrast against a white
+ * background and a near-black one, which is what lets them stay fixed while
+ * everything around them follows the theme. They are drawn as SVG presentation
+ * attributes, where `var()` is not supported, so they could not be tokens
+ * without moving the graph's paint into a stylesheet.
+ */
 const LANE_COLORS = [
     '#3b82f6',
     '#10b981',

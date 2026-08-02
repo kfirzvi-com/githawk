@@ -79,12 +79,12 @@
         {#each graph.commits as commit, index (commit.hash)}
             <button
                 type="button"
-                class="flex w-full items-center text-left hover:bg-gray-700/40 {comparedHashes.has(
+                class="flex w-full items-center text-left hover:bg-hover {comparedHashes.has(
                     commit.hash
                 )
-                    ? 'bg-amber-500/15 ring-1 ring-inset ring-amber-500/40'
+                    ? 'bg-warn/15 ring-1 ring-inset ring-warn/40'
                     : selectedHash === commit.hash
-                      ? 'bg-blue-600/20'
+                      ? 'bg-selected'
                       : ''}"
                 style="height:{metrics.rowH}px;"
                 onclick={(event) =>

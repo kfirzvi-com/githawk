@@ -355,16 +355,16 @@
     };
 </script>
 
-<div class="flex h-screen flex-col bg-gray-900 font-sans text-gray-100">
+<div class="flex h-screen flex-col bg-app font-sans text-fg">
     {#if isLoading}
         <div class="flex h-full flex-col items-center justify-center">
             <div
-                class="mb-4 h-8 w-8 animate-spin rounded-full border-b-2 border-blue-400"
+                class="mb-4 h-8 w-8 animate-spin rounded-full border-b-2 border-info-strong"
             ></div>
-            <div class="text-lg font-medium text-gray-200">
+            <div class="text-lg font-medium text-fg-soft">
                 Loading Git Repository
             </div>
-            <div class="mt-2 text-sm text-gray-400">
+            <div class="mt-2 text-sm text-fg-dim">
                 Reading commit history…
             </div>
         </div>
@@ -372,14 +372,14 @@
         <div
             class="flex h-full flex-col items-center justify-center p-8 text-center"
         >
-            <div class="mb-2 text-lg font-medium text-red-300">
+            <div class="mb-2 text-lg font-medium text-danger">
                 Could not load the graph
             </div>
-            <p class="max-w-md text-sm text-gray-400">{errorMessage}</p>
+            <p class="max-w-md text-sm text-fg-dim">{errorMessage}</p>
             <div class="mt-4 flex items-center gap-2">
                 <button
                     type="button"
-                    class="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-500"
+                    class="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-on-accent hover:bg-accent-hover"
                     onclick={() => handleToolbarAction('refresh')}
                 >
                     Try again
@@ -390,7 +390,7 @@
                     <button
                         type="button"
                         data-testid="repository-picker-error"
-                        class="rounded-md border border-gray-600 bg-gray-700 px-3 py-1.5 text-xs font-medium text-gray-200 hover:bg-gray-600"
+                        class="rounded-md border border-line-strong bg-control px-3 py-1.5 text-xs font-medium text-fg-soft hover:bg-control-hover"
                         onclick={() =>
                             postToHost({ type: 'repository:menu' })}
                     >
@@ -400,7 +400,7 @@
             </div>
         </div>
     {:else}
-        <div class="flex-shrink-0 border-b border-gray-700">
+        <div class="flex-shrink-0 border-b border-line">
             <Toolbar
                 {currentBranchName}
                 {repositories}
@@ -415,12 +415,12 @@
             <!-- Only shown once a multi-selection exists, so the normal case
                  keeps its full height. -->
             <div
-                class="flex flex-shrink-0 items-center gap-3 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs"
+                class="flex flex-shrink-0 items-center gap-3 border-b border-warn/30 bg-warn/10 px-4 py-2 text-xs"
             >
-                <span class="font-medium text-amber-100">
+                <span class="font-medium text-warn-soft">
                     {selection.hashes.length} commits selected
                 </span>
-                <span class="text-amber-200/70">
+                <span class="text-warn-soft/70">
                     {selectionIsContiguous
                         ? 'contiguous range'
                         : 'not contiguous — will be reconstructed'}
@@ -431,7 +431,7 @@
                          other question, how the two states differ. -->
                     <button
                         type="button"
-                        class="rounded border border-amber-500/50 px-2 py-1 font-medium text-amber-100 hover:bg-amber-500/20"
+                        class="rounded border border-warn/50 px-2 py-1 font-medium text-warn-soft hover:bg-warn/20"
                         onclick={compareTwoSelected}
                         title="How do these two commits differ?"
                     >
@@ -440,7 +440,7 @@
                 {/if}
                 <button
                     type="button"
-                    class="text-amber-200/80 underline hover:text-amber-100"
+                    class="text-warn-soft/80 underline hover:text-warn-soft"
                     onclick={clearSelection}
                 >
                     Clear
@@ -450,7 +450,7 @@
 
         <div class="flex flex-1 overflow-hidden">
             {#if panes.branches}
-                <div class="w-64 flex-shrink-0 bg-gray-850">
+                <div class="w-64 flex-shrink-0 bg-pane">
                     <BranchList
                         {branches}
                         {worktrees}
@@ -479,7 +479,7 @@
             <div class="flex flex-1 flex-col overflow-hidden">
                 <div
                     bind:this={graphScroller}
-                    class="flex-1 overflow-auto bg-gray-800"
+                    class="flex-1 overflow-auto bg-graph"
                     data-testid="graph-scroller"
                 >
                     {#if graph && !workingTreeIsClean}
@@ -511,7 +511,7 @@
                                      never wraps and the date never shifts. -->
                                 <div class="flex items-center gap-3">
                                     <span
-                                        class="w-16 flex-shrink-0 font-mono text-xs whitespace-nowrap text-blue-300"
+                                        class="w-16 flex-shrink-0 font-mono text-xs whitespace-nowrap text-info"
                                     >
                                         {commit.shortHash}
                                     </span>
@@ -531,7 +531,7 @@
                                             {/each}
                                             {#if commit.refs.length > 3}
                                                 <span
-                                                    class="text-[10px] text-gray-500"
+                                                    class="text-[10px] text-fg-faint"
                                                     title={commit.sortedRefs
                                                         .slice(3)
                                                         .map((r) => r.name)
@@ -543,19 +543,19 @@
                                         </span>
                                     {/if}
                                     <span
-                                        class="min-w-0 flex-1 truncate text-sm font-medium text-gray-100"
+                                        class="min-w-0 flex-1 truncate text-sm font-medium text-fg"
                                         title={commit.message}
                                     >
                                         {commit.subject}
                                     </span>
                                     <span
-                                        class="w-32 flex-shrink-0 truncate text-right text-xs whitespace-nowrap text-gray-400"
+                                        class="w-32 flex-shrink-0 truncate text-right text-xs whitespace-nowrap text-fg-dim"
                                         title={commit.author}
                                     >
                                         {commit.author}
                                     </span>
                                     <span
-                                        class="w-20 flex-shrink-0 pr-3 text-right text-xs whitespace-nowrap tabular-nums text-gray-500"
+                                        class="w-20 flex-shrink-0 pr-3 text-right text-xs whitespace-nowrap tabular-nums text-fg-faint"
                                     >
                                         {commit.timestamp.toLocaleDateString()}
                                     </span>
@@ -564,10 +564,10 @@
                         </GitGraph>
                         {#if hasMoreHistory}
                             <div
-                                class="border-t border-gray-700 px-3 py-2 text-center text-xs text-gray-500"
+                                class="border-t border-line px-3 py-2 text-center text-xs text-fg-faint"
                             >
                                 Older history not shown — raise
-                                <code class="text-gray-400">
+                                <code class="text-fg-dim">
                                     gitHawk.commitLimit
                                 </code>
                                 to load more.
@@ -575,7 +575,7 @@
                         {/if}
                     {:else}
                         <div
-                            class="flex h-full items-center justify-center text-sm text-gray-400"
+                            class="flex h-full items-center justify-center text-sm text-fg-dim"
                         >
                             This repository has no commits yet.
                         </div>
@@ -590,7 +590,7 @@
                 onToggle={togglePane}
             />
             {#if panes.details}
-                <div class="w-80 flex-shrink-0 bg-gray-850">
+                <div class="w-80 flex-shrink-0 bg-pane">
                     {#if showAggregate && comparison}
                         <ComparisonSummary
                             {comparison}

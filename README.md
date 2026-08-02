@@ -6,8 +6,8 @@ account, no cloud. MIT licensed.
 ![The GitHawk graph panel](media/screenshots/graph.png)
 
 > **Preview.** Everything documented here works and is covered by tests. What it
-> does not do yet: follow your colour theme (the panel is dark whatever your
-> theme), stay fast on very long histories, or help you out of a conflicted merge.
+> does not do yet: stay fast on very long histories, or help you out of a
+> conflicted merge.
 
 ## Install
 
@@ -38,6 +38,14 @@ maintained alternatives keep adding AI to a tool whose entire job is drawing lin
 between commits.
 
 ## What it does
+
+### Look like the rest of your editor
+
+Every colour comes from VS Code's own theme tokens, so the panel is light on a
+light theme and high-contrast on a high-contrast one. Only the lane colours are
+fixed: a lane has to keep its colour as your eye follows it down the graph, and
+stay distinct from the seven beside it, so they are eight hues chosen to hold
+their contrast against white and near-black alike.
 
 ### Read the graph
 
@@ -228,7 +236,6 @@ tool in the right directory. It reads nothing and sends nothing.
 
 Honest list, in the order they are likely to annoy you:
 
-- **The panel is dark regardless of your theme.** On a light theme it looks wrong.
 - **No row virtualisation.** A large `commitLimit` renders every row; 500 is fine,
   5000 is not.
 - **A conflicting merge or rebase leaves you mid-operation.** GitHawk reports git's

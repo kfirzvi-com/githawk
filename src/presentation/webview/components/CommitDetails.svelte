@@ -68,24 +68,24 @@
         data-testid="commit-details"
     >
         <div
-            class="flex flex-shrink-0 items-baseline justify-between gap-2 border-b border-gray-700 px-4 py-3"
+            class="flex flex-shrink-0 items-baseline justify-between gap-2 border-b border-line px-4 py-3"
         >
             <h2
-                class="text-sm font-semibold tracking-wide text-gray-200 uppercase"
+                class="text-sm font-semibold tracking-wide text-fg-soft uppercase"
             >
                 Commit
             </h2>
-            <span class="flex items-center gap-2 text-[11px] text-gray-500">
+            <span class="flex items-center gap-2 text-[11px] text-fg-faint">
                 {#if selectedCommit.isMergeCommit}
                     <span
-                        class="rounded border border-purple-500/30 bg-purple-500/15 px-1.5 py-0.5 text-purple-200"
+                        class="rounded border border-special/30 bg-special/15 px-1.5 py-0.5 text-special"
                     >
                         merge
                     </span>
                 {/if}
                 {#if selectedCommit.isRootCommit}
                     <span
-                        class="rounded border border-gray-600 bg-gray-700/50 px-1.5 py-0.5 text-gray-300"
+                        class="rounded border border-line-strong bg-control/50 px-1.5 py-0.5 text-fg-muted"
                     >
                         root
                     </span>
@@ -98,7 +98,7 @@
                  summary and everything after it as prose, and so should we. -->
             <div class="space-y-2">
                 <p
-                    class="text-sm leading-snug font-semibold text-gray-100"
+                    class="text-sm leading-snug font-semibold text-fg"
                     style="overflow-wrap:anywhere;"
                 >
                     {selectedCommit.subject || '(no message)'}
@@ -107,7 +107,7 @@
                     <!-- Preserves the author's own line breaks and indentation,
                          which carry meaning in bullet lists and trailers. -->
                     <pre
-                        class="font-sans text-xs leading-relaxed whitespace-pre-wrap text-gray-300"
+                        class="font-sans text-xs leading-relaxed whitespace-pre-wrap text-fg-muted"
                         style="overflow-wrap:anywhere;">{selectedCommit.body}</pre>
                 {/if}
             </div>
@@ -124,36 +124,36 @@
                 <!-- The files themselves are in the Changes tree; this is the
                      shape of the change, next to the message that explains it. -->
                 <div
-                    class="flex items-baseline gap-3 border-t border-gray-700/70 pt-4 text-xs tabular-nums"
+                    class="flex items-baseline gap-3 border-t border-line/70 pt-4 text-xs tabular-nums"
                 >
-                    <span class="text-gray-200">
+                    <span class="text-fg-soft">
                         {`${totals.files} ${
                             totals.files === 1 ? 'file changed' : 'files changed'
                         }`}
                     </span>
-                    <span class="text-green-400">+{totals.insertions}</span>
-                    <span class="text-red-400">−{totals.deletions}</span>
+                    <span class="text-ok">+{totals.insertions}</span>
+                    <span class="text-danger">−{totals.deletions}</span>
                     {#if totals.binaryFiles > 0}
-                        <span class="text-gray-500">
+                        <span class="text-fg-faint">
                             {`${totals.binaryFiles} binary`}
                         </span>
                     {/if}
                 </div>
             {/if}
 
-            <div class="space-y-3 border-t border-gray-700/70 pt-4">
+            <div class="space-y-3 border-t border-line/70 pt-4">
                 <div class="flex items-center gap-3">
                     <div
-                        class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-600 text-sm font-medium text-white"
+                        class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-info-strong to-special text-sm font-medium text-on-accent"
                     >
                         {initial}
                     </div>
                     <div class="min-w-0">
-                        <p class="truncate text-sm text-gray-200">
+                        <p class="truncate text-sm text-fg-soft">
                             {selectedCommit.author || 'Unknown'}
                         </p>
                         {#if selectedCommit.authorEmail}
-                            <p class="truncate text-[11px] text-gray-500">
+                            <p class="truncate text-[11px] text-fg-faint">
                                 {selectedCommit.authorEmail}
                             </p>
                         {/if}
@@ -161,10 +161,10 @@
                 </div>
 
                 <div class="space-y-1">
-                    <p class="text-xs text-gray-300">
+                    <p class="text-xs text-fg-muted">
                         {relative(selectedCommit.timestamp)}
                     </p>
-                    <p class="text-[11px] text-gray-500">
+                    <p class="text-[11px] text-fg-faint">
                         {absolute(selectedCommit.timestamp)}
                     </p>
                 </div>
@@ -174,47 +174,47 @@
                          committer is noise. When it differs it is the explanation
                          for a date that otherwise looks wrong. -->
                     <div
-                        class="rounded border border-gray-700 bg-gray-800/60 px-2 py-1.5 text-[11px] text-gray-400"
+                        class="rounded border border-line bg-graph/60 px-2 py-1.5 text-[11px] text-fg-dim"
                     >
-                        <p class="text-gray-300">Committed separately</p>
+                        <p class="text-fg-muted">Committed separately</p>
                         {#if selectedCommit.committer && selectedCommit.committer !== selectedCommit.author}
                             <p>by {selectedCommit.committer}</p>
                         {/if}
                         {#if selectedCommit.committedAt}
                             <p>{absolute(selectedCommit.committedAt)}</p>
                         {/if}
-                        <p class="mt-1 text-gray-500 italic">
+                        <p class="mt-1 text-fg-faint italic">
                             Typical of a rebase, cherry-pick, or applied patch.
                         </p>
                     </div>
                 {/if}
             </div>
 
-            <div class="space-y-1.5 border-t border-gray-700/70 pt-4">
+            <div class="space-y-1.5 border-t border-line/70 pt-4">
                 <div class="flex items-center justify-between gap-2">
                     <span
-                        class="text-[11px] font-medium tracking-wider text-gray-500 uppercase"
+                        class="text-[11px] font-medium tracking-wider text-fg-faint uppercase"
                     >
                         Commit hash
                     </span>
                     <button
                         type="button"
-                        class="text-[11px] text-gray-400 underline hover:text-gray-200"
+                        class="text-[11px] text-fg-dim underline hover:text-fg-soft"
                         onclick={() => onCopyHash?.(selectedCommit.hash)}
                     >
                         Copy
                     </button>
                 </div>
                 <code
-                    class="block rounded border border-gray-700 bg-gray-800 p-2 font-mono text-[11px] break-all text-blue-300"
+                    class="block rounded border border-line bg-graph p-2 font-mono text-[11px] break-all text-info"
                 >
                     {selectedCommit.hash}
                 </code>
             </div>
 
-            <div class="space-y-1.5 border-t border-gray-700/70 pt-4">
+            <div class="space-y-1.5 border-t border-line/70 pt-4">
                 <span
-                    class="text-[11px] font-medium tracking-wider text-gray-500 uppercase"
+                    class="text-[11px] font-medium tracking-wider text-fg-faint uppercase"
                 >
                     {selectedCommit.parentHashes.length === 1
                         ? 'Parent'
@@ -225,7 +225,7 @@
                         {#each selectedCommit.parentHashes as parent (parent)}
                             <button
                                 type="button"
-                                class="rounded bg-gray-700 px-2 py-1 font-mono text-[11px] text-gray-300 hover:bg-gray-600 hover:text-gray-100"
+                                class="rounded bg-control px-2 py-1 font-mono text-[11px] text-fg-muted hover:bg-control-hover hover:text-fg"
                                 title={`Select ${parent}`}
                                 onclick={() => onSelectParent?.(parent)}
                             >
@@ -234,7 +234,7 @@
                         {/each}
                     </div>
                 {:else}
-                    <p class="text-xs text-gray-500 italic">
+                    <p class="text-xs text-fg-faint italic">
                         None — this is the first commit.
                     </p>
                 {/if}
@@ -247,10 +247,10 @@
         data-testid="commit-details-empty"
     >
         <div
-            class="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-700"
+            class="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-control"
         >
             <svg
-                class="h-8 w-8 text-gray-400"
+                class="h-8 w-8 text-fg-dim"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -264,10 +264,10 @@
                 ></path>
             </svg>
         </div>
-        <h3 class="mb-2 text-lg font-medium text-gray-300">
+        <h3 class="mb-2 text-lg font-medium text-fg-muted">
             No Commit Selected
         </h3>
-        <p class="text-sm text-gray-400">
+        <p class="text-sm text-fg-dim">
             Click a commit to see its details, or select several to review them
             together.
         </p>
