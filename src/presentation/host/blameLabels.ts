@@ -54,3 +54,60 @@ export function shortAge(date: Date, now: Date): string {
 function truncate(text: string, max: number): string {
     return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
 }
+
+/**
+ * The IntelliJ-style column: a date and a name, on every line, at a fixed
+ * width so the code beside it stays aligned.
+ *
+ * `8/11/20 Wenningd` — the date carries the precision and the name carries the
+ * identity, and both are truncated rather than wrapped because the column's
+ * whole value is that it is the same width on every line.
+ */
+export function columnLabel(block: BlameBlock, width: number): string {
+    if (block.commit.isUncommitted) {
+        return pad('uncommitted', width);
+    }
+
+    const date = shortDate(block.commit.authoredAt);
+    const name = firstName(block.commit.author);
+    const room = width - date.length - 1;
+
+    return pad(`${date} ${name.slice(0, Math.max(0, room))}`, width);
+}
+
+/** `8/11/20`. Short enough for a column, exact enough to sort by eye. */
+export function shortDate(date: Date): string {
+    const year = `${date.getFullYear()}`.slice(2);
+    return `${date.getMonth() + 1}/${date.getDate()}/${year}`;
+}
+
+/**
+ * Padded with a non-breaking space: a decoration's contentText collapses runs
+ * of ordinary spaces, so a plain space would not hold the column open.
+ */
+function pad(text: string, width: number): string {
+    return text.length >= width
+        ? text.slice(0, width)
+        : text + '\u00a0'.repeat(width - text.length);
+}
+
+/**
+ * How old this block is relative to the rest of the file, from 0 (the oldest
+ * line here) to 1 (the newest).
+ *
+ * Relative rather than absolute, which is what makes the heat map readable: in
+ * a file untouched for three years everything would be maximally hot on an
+ * absolute scale, and the whole point is to show which parts of *this* file are
+ * older than the rest of it.
+ */
+export function relativeAge(
+    at: Date,
+    oldest: Date,
+    newest: Date
+): number {
+    const span = newest.getTime() - oldest.getTime();
+    if (span <= 0) {
+        return 1;
+    }
+    return Math.min(1, Math.max(0, (at.getTime() - oldest.getTime()) / span));
+}

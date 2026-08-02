@@ -21,9 +21,20 @@ export const BLAME_STYLE_SETTING = 'blame.style';
  * text beside the line numbers — see BlameDecorator — and which compromise is
  * least bad is a matter of taste.
  */
-export type BlameStyle = 'off' | 'gutter' | 'inline' | 'endOfLine';
+export type BlameStyle =
+    | 'off'
+    | 'column'
+    | 'gutter'
+    | 'inline'
+    | 'endOfLine';
 
-const BLAME_STYLES: BlameStyle[] = ['off', 'gutter', 'inline', 'endOfLine'];
+const BLAME_STYLES: BlameStyle[] = [
+    'off',
+    'column',
+    'gutter',
+    'inline',
+    'endOfLine',
+];
 
 export function blameStyle(): BlameStyle {
     const configured = vscode.workspace
