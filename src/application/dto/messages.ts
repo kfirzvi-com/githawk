@@ -33,7 +33,9 @@ export type HostToWebviewMessage =
      * when everything is clean, because the row has to disappear as well as
      * appear.
      */
-    | { type: 'workingTree:loaded'; status: WorkingTreeStatus };
+    | { type: 'workingTree:loaded'; status: WorkingTreeStatus }
+    /** Select and scroll to a commit chosen somewhere other than the graph. */
+    | { type: 'commit:reveal'; hash: string };
 
 export type WebviewToHostMessage =
     | { type: 'graph:refresh' }

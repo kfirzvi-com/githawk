@@ -1,0 +1,132 @@
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+import { GitCliBlameReader } from './GitCliBlameReader';
+import { TemporaryRepository } from './testing/temporaryRepository';
+
+describe('GitCliBlameReader', () => {
+    let repo: TemporaryRepository | undefined;
+
+    const write = (name: string, ...lines: string[]) =>
+        writeFileSync(join(repo!.path, name), lines.join('\n') + '\n');
+
+    afterEach(() => {
+        repo?.dispose();
+        repo = undefined;
+    });
+
+    it('attributes a whole file to the commit that added it', async () => {
+        repo = TemporaryRepository.create();
+        write('poem.txt', 'one', 'two', 'three');
+        repo.git(['add', 'poem.txt']);
+        repo.git(['commit', '-m', 'add the poem']);
+
+        const blame = await new GitCliBlameReader(repo.path).read('poem.txt');
+
+        expect(blame.blocks).toHaveLength(1);
+        expect(blame.blocks[0]).toMatchObject({ startLine: 1, endLine: 3 });
+        expect(blame.blocks[0].commit.author).toBe('Test Author');
+        expect(blame.blocks[0].commit.summary).toBe('add the poem');
+    });
+
+    /**
+     * The reason blocks exist. One commit editing the middle of a file gives
+     * three runs, not three-lines-worth of identical labels.
+     */
+    it('splits a file into one block per run of lines', async () => {
+        repo = TemporaryRepository.create();
+        write('poem.txt', 'one', 'two', 'three');
+        repo.git(['add', 'poem.txt']);
+        repo.git(['commit', '-m', 'first']);
+
+        write('poem.txt', 'one', 'CHANGED', 'three');
+        repo.git(['commit', '-am', 'second']);
+
+        const blame = await new GitCliBlameReader(repo.path).read('poem.txt');
+
+        expect(
+            blame.blocks.map((b) => [b.startLine, b.endLine, b.commit.summary])
+        ).toEqual([
+            [1, 1, 'first'],
+            [2, 2, 'second'],
+            [3, 3, 'first'],
+        ]);
+    });
+
+    /**
+     * The same commit touching two separate parts of a file is two edits to a
+     * reader, so they must not merge into one block spanning the lines between.
+     */
+    it('does not join two runs from the same commit across a gap', async () => {
+        repo = TemporaryRepository.create();
+        write('poem.txt', 'one', 'two', 'three');
+        repo.git(['add', 'poem.txt']);
+        repo.git(['commit', '-m', 'first']);
+
+        write('poem.txt', 'EDITED', 'two', 'EDITED');
+        repo.git(['commit', '-am', 'second']);
+
+        const blame = await new GitCliBlameReader(repo.path).read('poem.txt');
+
+        expect(blame.blocks).toHaveLength(3);
+        expect(blame.blocks[0].commit.hash).toBe(blame.blocks[2].commit.hash);
+        expect(blame.blocks[1].commit.summary).toBe('first');
+    });
+
+    it('reports uncommitted lines as uncommitted', async () => {
+        repo = TemporaryRepository.create();
+        write('poem.txt', 'one', 'two');
+        repo.git(['add', 'poem.txt']);
+        repo.git(['commit', '-m', 'first']);
+
+        write('poem.txt', 'one', 'two', 'not committed yet');
+
+        const blame = await new GitCliBlameReader(repo.path).read('poem.txt');
+        const last = blame.blocks[blame.blocks.length - 1];
+
+        expect(last.commit.isUncommitted).toBe(true);
+        // Git names the current user here, which reads as though it was
+        // committed by them.
+        expect(last.commit.author).toBe('You');
+        expect(last.startLine).toBe(3);
+    });
+
+    it('carries the authored date, not the commit date', async () => {
+        repo = TemporaryRepository.create();
+        write('poem.txt', 'one');
+        repo.git(['add', 'poem.txt']);
+        repo.git([
+            '-c',
+            'user.name=Test Author',
+            'commit',
+            '--date',
+            '2020-03-04T05:06:07+00:00',
+            '-m',
+            'dated',
+        ]);
+
+        const blame = await new GitCliBlameReader(repo.path).read('poem.txt');
+
+        expect(blame.blocks[0].commit.authoredAt.getUTCFullYear()).toBe(2020);
+        expect(blame.blocks[0].commit.authoredAt.getUTCMonth()).toBe(2);
+    });
+
+    it('handles a commit with an empty message', async () => {
+        repo = TemporaryRepository.create();
+        write('poem.txt', 'one');
+        repo.git(['add', 'poem.txt']);
+        repo.git(['commit', '--allow-empty-message', '-m', '']);
+
+        const blame = await new GitCliBlameReader(repo.path).read('poem.txt');
+        const commit = blame.blocks[0].commit;
+
+        expect(blame.blocks).toHaveLength(1);
+        /*
+         * Git does not leave `summary` empty or absent — it substitutes the
+         * hash in parentheses, the same placeholder `log --oneline` uses. Passed
+         * through rather than replaced with wording of our own, so a reader who
+         * recognises it from git recognises it here.
+         */
+        expect(commit.summary).toBe(`(${commit.hash})`);
+    });
+});

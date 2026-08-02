@@ -140,3 +140,17 @@ export function stashListArgs(): string[] {
         `--format=%gd${UNIT_SEPARATOR}%H${UNIT_SEPARATOR}%gs${UNIT_SEPARATOR}%aI${UNIT_SEPARATOR}%an${UNIT_SEPARATOR}%P${RECORD_SEPARATOR}`,
     ];
 }
+
+/**
+ * Who last touched each line of one file.
+ *
+ * `--porcelain` rather than the human format: it reports each commit's details
+ * once and then refers back to it, which is both cheaper on a large file and
+ * unambiguous — the human format packs author, date and line into one string
+ * that a name containing a bracket can break.
+ *
+ * `--` before the path so a file called `-f` is a file rather than a flag.
+ */
+export function blameArgs(path: string): string[] {
+    return ['blame', '--porcelain', '--', path];
+}

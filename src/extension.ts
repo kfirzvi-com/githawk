@@ -9,6 +9,8 @@ import { GitCliWorktreeReader } from './infrastructure/git/GitCliWorktreeReader'
 import { GitCliRemoteReader } from './infrastructure/git/GitCliRemoteReader';
 import { GitCliStashReader } from './infrastructure/git/GitCliStashReader';
 import { GitCliWorkingTreeReader } from './infrastructure/git/GitCliWorkingTreeReader';
+import { GitCliBlameReader } from './infrastructure/git/GitCliBlameReader';
+import { BlameDecorator } from './presentation/host/BlameDecorator';
 import { GitCliWriter } from './infrastructure/git/GitCliWriter';
 import { ChangeDecorationProvider } from './presentation/host/ChangeDecorationProvider';
 import {
@@ -25,6 +27,7 @@ import { RepositoryWatcher } from './presentation/host/RepositoryWatcher';
 import { GitCliDirectoryReader } from './infrastructure/git/GitCliDirectoryReader';
 import {
     AUTO_REFRESH_SETTING,
+    BLAME_STYLE_SETTING,
     CONFIG_SECTION,
     SCAN_DEPTH_SETTING,
 } from './presentation/host/config';
@@ -96,6 +99,12 @@ export async function activate(
         (root) => new GitCliDirectoryReader(root)
     );
     context.subscriptions.push(watcher);
+
+    const blame = new BlameDecorator(
+        (root) => new GitCliBlameReader(root),
+        () => repositories.active?.root
+    );
+    context.subscriptions.push(blame);
 
     const provider = new GitGraphViewProvider(
         context.extensionUri,
@@ -250,6 +259,15 @@ export async function activate(
         vscode.commands.registerCommand('gitHawk.workingTree', () =>
             provider.workingTreeForTesting()
         ),
+        /*
+         * The link out of a blame hover. Selecting the commit also fills the
+         * Changes tree, which is the same thing clicking it in the graph does —
+         * so arriving from the editor and arriving from the graph leave you in
+         * the same place.
+         */
+        vscode.commands.registerCommand('gitHawk.revealCommit', (hash: string) =>
+            provider.revealCommit(hash)
+        ),
         vscode.commands.registerCommand('gitHawk.showLog', () => log.show()),
         // Returns a branch menu's structure without showing it, so the
         // integration tests can assert the grouping.
@@ -284,6 +302,19 @@ export async function activate(
             REVISION_SCHEME,
             new RevisionContentProvider(createGitComparer)
         ),
+        // Blame belongs to a file, so it is redrawn when the file being looked
+        // at changes, when its content changes, and when the repository moves
+        // underneath it.
+        vscode.window.onDidChangeActiveTextEditor((editor) =>
+            blame.decorate(editor)
+        ),
+        vscode.workspace.onDidSaveTextDocument((document) => {
+            if (
+                document === vscode.window.activeTextEditor?.document
+            ) {
+                void blame.decorate(vscode.window.activeTextEditor);
+            }
+        }),
         // A new folder changes which repositories exist, so it needs a rescan
         // rather than a reload.
         vscode.workspace.onDidChangeWorkspaceFolders(() =>
@@ -296,6 +327,12 @@ export async function activate(
                 )
             ) {
                 void repositories.refresh();
+            } else if (
+                event.affectsConfiguration(
+                    `${CONFIG_SECTION}.${BLAME_STYLE_SETTING}`
+                )
+            ) {
+                void blame.decorate(vscode.window.activeTextEditor);
             } else if (
                 event.affectsConfiguration(
                     `${CONFIG_SECTION}.${AUTO_REFRESH_SETTING}`
@@ -312,6 +349,8 @@ export async function activate(
     // Everything above is registered; the graph can now wait for the scan that
     // tells it which repository to read.
     await repositories.refresh();
+    // A file is usually already open when the extension activates.
+    void blame.decorate(vscode.window.activeTextEditor);
 }
 
 /**

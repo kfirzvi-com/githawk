@@ -203,6 +203,23 @@
                 case 'worktrees:loaded':
                     worktrees = message.worktrees.map(WorktreeMapper.fromDto);
                     break;
+                case 'commit:reveal': {
+                    // Arriving from a blame hover. The commit may be below the
+                    // fold, so selecting it is not enough to show it.
+                    const commit = graph?.commits.find(
+                        (candidate) => candidate.hash === message.hash
+                    );
+                    if (commit) {
+                        workingTreeSelected = false;
+                        selection = applySelection(selection, rowOrder, commit.hash, {
+                            toggle: false,
+                            range: false,
+                        });
+                        selectedCommit = commit;
+                        void scrollCommitIntoView(commit.hash);
+                    }
+                    break;
+                }
                 case 'workingTree:loaded':
                     workingTree = message.status;
                     // Committing everything removes the row; leaving it
@@ -300,6 +317,25 @@
         );
         selectedCommit = commit;
         requestChangesForSelection();
+    };
+
+    /**
+     * Centres a row rather than merely bringing it to an edge: a commit
+     * revealed from somewhere else needs its neighbours visible to be worth
+     * revealing at all.
+     */
+    const scrollCommitIntoView = async (hash: string) => {
+        await tick();
+        const index = rowOrder.indexOf(hash);
+        if (index < 0 || !graphScroller) {
+            return;
+        }
+
+        const target =
+            index * defaultMetrics.rowH +
+            graphScrollOffset -
+            graphScroller.clientHeight / 2;
+        graphScroller.scrollTop = Math.max(0, target);
     };
 
     const selectWorkingTree = () => {

@@ -406,6 +406,19 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
         );
     }
 
+    /**
+     * Selects a commit from outside the graph — the link in a blame hover.
+     * Runs the same comparison a click in the graph does, so arriving from the
+     * editor leaves you where arriving from the graph would.
+     */
+    async revealCommit(hash: string): Promise<void> {
+        await vscode.commands.executeCommand(
+            'workbench.view.extension.gitHawkPanel'
+        );
+        this.post({ type: 'commit:reveal', hash });
+        await this.compareCommits([hash], 'focus');
+    }
+
     /** See gitHawk.changesRevealed. */
     revealsForTesting(): number {
         return this.reveals;
