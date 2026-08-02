@@ -14,6 +14,29 @@ export const SCAN_DEPTH_SETTING = 'repositoryScanDepth';
 
 export const AUTO_REFRESH_SETTING = 'autoRefresh';
 
+export const BLAME_STYLE_SETTING = 'blame.style';
+
+/**
+ * Where a blame annotation is drawn. Three, because VS Code has no way to put
+ * text beside the line numbers — see BlameDecorator — and which compromise is
+ * least bad is a matter of taste.
+ */
+export type BlameStyle = 'off' | 'gutter' | 'inline' | 'endOfLine';
+
+const BLAME_STYLES: BlameStyle[] = ['off', 'gutter', 'inline', 'endOfLine'];
+
+export function blameStyle(): BlameStyle {
+    const configured = vscode.workspace
+        .getConfiguration(CONFIG_SECTION)
+        .get<string>(BLAME_STYLE_SETTING, 'off');
+
+    // Hand-edited settings are untrusted input; an unknown value means off
+    // rather than a crash on every editor change.
+    return (BLAME_STYLES as string[]).includes(configured)
+        ? (configured as BlameStyle)
+        : 'off';
+}
+
 /**
  * On by default: a graph that does not match the repository is worse than no
  * graph, because it looks authoritative. The setting exists for the case the

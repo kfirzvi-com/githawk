@@ -29,7 +29,9 @@
   "categories": [
     "SCM Providers"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "configuration": {
@@ -41,6 +43,18 @@
           "minimum": 1,
           "maximum": 100000,
           "description": "How many commits to read from history. Higher values show more of the graph and take longer to load."
+        },
+        "gitHawk.blame.style": {
+          "type": "string",
+          "enum": ["off", "gutter", "inline", "endOfLine"],
+          "default": "off",
+          "enumDescriptions": [
+            "No blame annotations.",
+            "Beside the line numbers. Text there has to be drawn as an image, so it does not follow your editor font.",
+            "At the start of the line, which shifts the code to the right.",
+            "At the end of the line, out of the way of the code."
+          ],
+          "markdownDescription": "Show who last changed each block of lines, in the editor.\n\nOne label per run of lines from the same commit, rather than one per line. Hover it for the full message, the author, the date, and a link that selects that commit in the graph."
         },
         "gitHawk.autoRefresh": {
           "type": "boolean",
@@ -174,6 +188,10 @@
       {
         "command": "gitHawk.remotes",
         "title": "GitHawk: List Remotes"
+      },
+      {
+        "command": "gitHawk.revealCommit",
+        "title": "GitHawk: Show A Commit In The Graph"
       },
       {
         "command": "gitHawk.showUncommittedChanges",
