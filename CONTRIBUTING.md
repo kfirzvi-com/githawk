@@ -137,6 +137,31 @@ Visual baselines live beside their specs in `tests/visual/*-snapshots/` and are
 committed. A layout change shows up as both a failing assertion and a diffable
 picture.
 
+### Screenshots are committed twice
+
+Every baseline exists as `<name>-darwin.png` and `<name>-linux.png`, because
+contributors work on macOS and CI runs on `ubuntu-24.04`. `npm run shots` writes
+only the platform you are on, so **a UI change passes locally and fails CI** until
+the other half is updated.
+
+The Playwright container is not a shortcut. `mcr.microsoft.com/playwright` renders
+with a different font set from the runner's, and its baselines disagree with CI by
+thousands of pixels — layout identical, text metrics not. Only the runner renders
+what the runner will compare against.
+
+So the loop for a change that moves a screenshot is:
+
+1. `npm run shots` locally, and eyeball what changed.
+2. Push, and let the visual job fail once.
+3. Download the `visual-<run-id>` artifact from that run and copy its
+   `*-actual.png` files over the matching `*-linux.png` baselines.
+4. Push again.
+
+One wrinkle: the artifact also contains `tests/visual/**/*.png`, and those are the
+*committed* baselines rather than the new renders — useful only for a screenshot
+that has no baseline yet, which Playwright writes rather than diffs. Everything
+else comes from `*-actual.png`.
+
 ### Running two checkouts at once
 
 Working in git worktrees means two checkouts want the same dev-server port and the
@@ -172,11 +197,39 @@ snapshots at once.
 
 ## Releasing
 
+Publishing is CI's job, not a laptop's — `.github/workflows/release.yml` is the
+only thing holding a Marketplace token, and it runs all three test tiers on the
+exact commit being published first. A version cannot be withdrawn once it is up,
+only superseded, so the gate has to be on the commit rather than on whatever
+happened to be in someone's working tree.
+
+Two channels on one number line:
+
+| Version | Channel | Triggered by |
+| --- | --- | --- |
+| `X.Y.0` | stable | pushing the tag `vX.Y.0` |
+| `X.Y.<commits>` | pre-release | pushing to `main` |
+
+Patch `0` is reserved for stable and every other patch is a pre-release build, so
+no version is ever published on both channels — which the Marketplace forbids,
+and enforces by refusing to reissue a version at all. The pre-release number is
+the repository's commit count, and is never committed back to `main`: the commit
+is the identity of a build, the number only has to sort.
+
+Cutting a stable release means bumping `package.json` to `X.Y.0`, dating its
+CHANGELOG section, and pushing the commit and its tag **together**:
+
 ```bash
-npm run package                      # check + test + build + vsix
-npx vsce publish                     # VS Code Marketplace
+git push --atomic origin main vX.Y.0
 ```
 
-Version numbers follow the Marketplace convention: `major.EVEN.patch` for
-releases, `major.ODD.patch` reserved for its pre-release channel. Versions are
-immutable once published — every fix is a new number.
+Atomically because the workflow checks whether `HEAD` carries a tag: it must not
+see the commit arrive on `main` before the tag exists, or it will publish that
+commit as a pre-release and take a number higher than the stable one, locking the
+stable version out for good.
+
+To try a build locally without publishing anything:
+
+```bash
+npm run package                      # check + test + build + vsix
+```

@@ -2,7 +2,7 @@
   "name": "githawk",
   "displayName": "GitHawk",
   "description": "A simple, fast git graph for VS Code. MIT licensed. No AI, no telemetry.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "license": "MIT",
   "preview": true,
   "icon": "media/icon.png",

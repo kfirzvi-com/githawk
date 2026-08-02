@@ -3,7 +3,11 @@
 All notable changes to GitHawk are documented here, following
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.3.0] — 2026-08-02
+
+Still marked **Preview** on the Marketplace: the known limitations at the bottom
+of the README are real, and a 1.0 should not have them. Everything below shipped
+to the pre-release channel first, as 0.2.48 through 0.2.60.
 
 ### Added
 
