@@ -98,3 +98,44 @@ suite('blame', () => {
         assert.equal(comparison.method, 'singleCommit');
     });
 });
+
+suite('turning blame on and off', () => {
+    const style = () =>
+        vscode.workspace.getConfiguration('gitHawk').get('blame.style');
+
+    suiteSetup(async () => {
+        await vscode.extensions.getExtension(EXTENSION_ID).activate();
+    });
+
+    teardown(async () => {
+        await vscode.workspace
+            .getConfiguration('gitHawk')
+            .update('blame.style', undefined, vscode.ConfigurationTarget.Global);
+    });
+
+    test('is off until asked for', () => {
+        // The default matters: blame is a thing you flick on to answer one
+        // question, not something that should appear unbidden.
+        assert.equal(style(), 'off');
+    });
+
+    test('the toggle turns it on, and off again', async () => {
+        await vscode.commands.executeCommand('gitHawk.toggleBlame');
+        assert.equal(style(), 'column');
+
+        await vscode.commands.executeCommand('gitHawk.toggleBlame');
+        assert.equal(style(), 'off');
+    });
+
+    test('coming back on restores the placement that was on', async () => {
+        await vscode.workspace
+            .getConfiguration('gitHawk')
+            .update('blame.style', 'endOfLine', vscode.ConfigurationTarget.Global);
+
+        await vscode.commands.executeCommand('gitHawk.toggleBlame');
+        assert.equal(style(), 'off');
+
+        await vscode.commands.executeCommand('gitHawk.toggleBlame');
+        assert.equal(style(), 'endOfLine', 'the toggle forgot the placement');
+    });
+});

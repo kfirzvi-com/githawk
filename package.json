@@ -189,6 +189,11 @@
         "title": "GitHawk: List Remotes"
       },
       {
+        "command": "gitHawk.toggleBlame",
+        "title": "GitHawk: Toggle Blame Annotations",
+        "icon": "$(person)"
+      },
+      {
         "command": "gitHawk.blame",
         "title": "GitHawk: Report Blame For A File"
       },
@@ -254,6 +259,19 @@
       ]
     },
     "menus": {
+      "editor/context": [
+        {
+          "command": "gitHawk.toggleBlame",
+          "group": "navigation@9"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "gitHawk.toggleBlame",
+          "when": "resourceScheme == file",
+          "group": "navigation@9"
+        }
+      ],
       "view/title": [
         {
           "command": "gitHawk.clearChanges",
@@ -268,6 +286,14 @@
         },
         {
           "command": "gitHawk.stashes",
+          "when": "false"
+        },
+        {
+          "command": "gitHawk.blame",
+          "when": "false"
+        },
+        {
+          "command": "gitHawk.revealCommit",
           "when": "false"
         },
         {
