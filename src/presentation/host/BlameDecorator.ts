@@ -2,7 +2,12 @@ import * as vscode from 'vscode';
 import type { Blame, BlameBlock } from '../../domain/models/Blame';
 import type { IBlameReader } from '../../domain/repositories/IBlameReader';
 import { blameStyle, type BlameStyle } from './config';
-import { gutterLabel, inlineLabel } from './blameLabels';
+import {
+    columnLabel,
+    gutterLabel,
+    inlineLabel,
+    relativeAge,
+} from './blameLabels';
 import { log } from './log';
 
 /**
@@ -72,6 +77,10 @@ export class BlameDecorator implements vscode.Disposable {
         }
 
         const now = new Date();
+        if (style === 'column') {
+            this.decorateColumn(editor, blame);
+            return;
+        }
         if (style === 'gutter') {
             this.decorateGutter(editor, blame, now);
             return;
@@ -83,6 +92,47 @@ export class BlameDecorator implements vscode.Disposable {
                 this.optionsFor(block, style, now, editor.document)
             )
         );
+    }
+
+    /**
+     * IntelliJ's annotate column: every line labelled, one fixed width, and an
+     * age heat map behind it so a run of lines from one commit reads as a
+     * block without needing a separator.
+     *
+     * Every line rather than every block start, deliberately. It is the same
+     * information — a run of identical labels sharing one background *is* the
+     * block — but it survives scrolling into the middle of a run, which a label
+     * only on the first line does not.
+     */
+    private decorateColumn(editor: vscode.TextEditor, blame: Blame): void {
+        const dates = blame.blocks
+            .filter((block) => !block.commit.isUncommitted)
+            .map((block) => block.commit.authoredAt.getTime());
+        const oldest = new Date(Math.min(...dates, Date.now()));
+        const newest = new Date(Math.max(...dates, 0));
+
+        const options: vscode.DecorationOptions[] = [];
+        for (const block of blame.blocks) {
+            const text = columnLabel(block, COLUMN_WIDTH);
+            const background = heat(
+                block.commit.isUncommitted
+                    ? 1
+                    : relativeAge(block.commit.authoredAt, oldest, newest)
+            );
+            const message = hover(block);
+
+            for (let line = block.startLine; line <= block.endLine; line++) {
+                options.push({
+                    range: new vscode.Range(line - 1, 0, line - 1, 0),
+                    hoverMessage: message,
+                    renderOptions: {
+                        before: { contentText: text, backgroundColor: background },
+                    },
+                });
+            }
+        }
+
+        editor.setDecorations(this.typeFor('column'), options);
     }
 
     /**
@@ -161,6 +211,9 @@ export class BlameDecorator implements vscode.Disposable {
     private typeFor(
         style: Exclude<BlameStyle, 'off' | 'gutter'>
     ): vscode.TextEditorDecorationType {
+        if (style === 'column') {
+            return this.columnType();
+        }
         const existing = this.types.get(style);
         if (existing) {
             return existing;
@@ -190,6 +243,31 @@ export class BlameDecorator implements vscode.Disposable {
         return created;
     }
 
+    /**
+     * The column's own type. `width` in `ch` holds it open even on a line the
+     * label does not fill, which is what keeps the code beside it aligned;
+     * without it the column breathes line by line and the effect is lost.
+     */
+    private columnType(): vscode.TextEditorDecorationType {
+        const existing = this.types.get('column');
+        if (existing) {
+            return existing;
+        }
+
+        const created = vscode.window.createTextEditorDecorationType({
+            before: {
+                color: new vscode.ThemeColor(
+                    'editorLineNumber.foreground'
+                ) as unknown as string,
+                width: `${COLUMN_WIDTH + 1}ch`,
+                margin: '0 0.6em 0 0',
+                textDecoration: 'none; white-space: pre',
+            },
+        });
+        this.types.set('column', created);
+        return created;
+    }
+
     private clear(editor: vscode.TextEditor): void {
         for (const type of this.types.values()) {
             editor.setDecorations(type, []);
@@ -204,6 +282,22 @@ export class BlameDecorator implements vscode.Disposable {
         this.types.clear();
         this.disposeGutterTypes();
     }
+}
+
+/** Wide enough for `8/11/20` and eight characters of a name. */
+const COLUMN_WIDTH = 16;
+
+/**
+ * The age heat map: warm and more opaque for the oldest lines in the file,
+ * fading to nothing for the newest.
+ *
+ * One hue at varying alpha rather than a colour scale, so it tints whatever the
+ * editor's background is instead of fighting it — the same reason the panel's
+ * row states come from VS Code's list tokens.
+ */
+function heat(newness: number): string {
+    const alpha = 0.26 * (1 - newness);
+    return alpha < 0.02 ? 'transparent' : `rgba(226, 116, 40, ${alpha.toFixed(3)})`;
 }
 
 /**
