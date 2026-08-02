@@ -64,9 +64,14 @@ the sidebar"**.
 
 A row above the newest commit, whenever there is anything uncommitted, saying
 what kind — `2 staged, 1 modified, 3 untracked`. Click it and the **Changes**
-tree fills with everything uncommitted, as one changeset against `HEAD`. The row
-disappears when the tree is clean, so its presence is the answer to "is there
-anything here?".
+tree fills with everything uncommitted, as one changeset against `HEAD`, and
+comes to the front. The row disappears when the tree is clean, so its presence
+is the answer to "is there anything here?".
+
+Unlike a commit, clicking this row surfaces the sidebar every time. Browsing the
+graph is many clicks across many commits and the sidebar should not chase each
+one; there is only ever one of these rows, so clicking it is only ever a request
+to see the files.
 
 Its marker is hollow and dashed rather than a commit dot, because it is not a
 commit: nothing points at it, it has no hash, and it looks different the moment

@@ -22,6 +22,30 @@ suite('uncommitted changes', () => {
         await vscode.extensions.getExtension(EXTENSION_ID).activate();
     });
 
+    /**
+     * The reason this row is not treated like a commit. Browsing the graph is
+     * many clicks across many commits, so the sidebar is surfaced once and then
+     * left alone; there is exactly one working-tree row and nothing to browse
+     * through, so every click on it is a request to see the files.
+     */
+    test('brings the sidebar to the front every time, not just the first', async () => {
+        const before = await vscode.commands.executeCommand(
+            'gitHawk.changesRevealed'
+        );
+
+        await vscode.commands.executeCommand('gitHawk.showUncommittedChanges');
+        const once = await vscode.commands.executeCommand(
+            'gitHawk.changesRevealed'
+        );
+        await vscode.commands.executeCommand('gitHawk.showUncommittedChanges');
+        const twice = await vscode.commands.executeCommand(
+            'gitHawk.changesRevealed'
+        );
+
+        assert.equal(once, before + 1, 'the first selection did not reveal');
+        assert.equal(twice, once + 1, 'the second selection did not reveal');
+    });
+
     test('shows tracked changes against HEAD', async () => {
         await vscode.commands.executeCommand('gitHawk.showUncommittedChanges');
         const comparison = await vscode.commands.executeCommand(
