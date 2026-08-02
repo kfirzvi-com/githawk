@@ -39,40 +39,40 @@
     const style = $derived.by(() => {
         if (ref.isHead) {
             return {
-                badge: 'border-blue-400 bg-blue-500/25 text-blue-100 font-semibold',
-                marker: 'bg-blue-300',
-                shape: 'rounded-full ring-1 ring-blue-200/60',
+                badge: 'border-info-strong bg-accent-hover/25 text-info font-semibold',
+                marker: 'bg-info',
+                shape: 'rounded-full ring-1 ring-info/60',
                 label: 'checked out branch',
             };
         }
         switch (ref.kind) {
             case 'localBranch':
                 return {
-                    badge: 'border-blue-500/40 bg-blue-500/15 text-blue-200',
-                    marker: 'bg-blue-400',
+                    badge: 'border-info-strong/40 bg-accent-hover/15 text-info',
+                    marker: 'bg-info-strong',
                     shape: 'rounded-sm',
                     label: 'branch',
                 };
             case 'remoteBranch':
                 return {
-                    badge: 'border-gray-600 bg-gray-700/40 text-gray-400',
-                    marker: 'bg-gray-500',
+                    badge: 'border-line-strong bg-hover text-fg-dim',
+                    marker: 'bg-fg-faint',
                     shape: 'rounded-full',
                     label: 'remote branch',
                 };
             case 'tag':
                 return {
-                    badge: 'border-amber-500/40 bg-amber-500/15 text-amber-200',
-                    marker: 'bg-amber-400',
+                    badge: 'border-warn/40 bg-warn/15 text-warn-soft',
+                    marker: 'bg-warn',
                     // Rotated square reads as a tag without needing an icon font.
                     shape: 'rotate-45',
                     label: 'tag',
                 };
             case 'head':
                 return {
-                    badge: 'border-purple-400/50 bg-purple-500/20 text-purple-200',
-                    marker: 'bg-purple-300',
-                    shape: 'rounded-full ring-1 ring-purple-200/60',
+                    badge: 'border-special/50 bg-special/20 text-special',
+                    marker: 'bg-special',
+                    shape: 'rounded-full ring-1 ring-special/60',
                     label: 'detached HEAD',
                 };
         }

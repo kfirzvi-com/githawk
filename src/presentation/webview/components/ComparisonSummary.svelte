@@ -20,40 +20,40 @@
 </script>
 
 <div class="flex h-full flex-col overflow-hidden">
-    <div class="flex-shrink-0 space-y-3 border-b border-gray-700 px-4 py-3">
+    <div class="flex-shrink-0 space-y-3 border-b border-line px-4 py-3">
         <div>
             <p
-                class="text-sm font-semibold tracking-wide text-gray-200 uppercase"
+                class="text-sm font-semibold tracking-wide text-fg-soft uppercase"
             >
                 {comparison.label}
             </p>
-            <p class="mt-0.5 text-[11px] text-gray-500">
+            <p class="mt-0.5 text-[11px] text-fg-faint">
                 {methodLabel[comparison.method]}
             </p>
         </div>
 
         <div class="flex items-baseline gap-3 text-sm tabular-nums">
-            <span class="text-gray-200">
+            <span class="text-fg-soft">
                 {`${comparison.totals.files} ${
                     comparison.totals.files === 1 ? 'file' : 'files'
                 }`}
             </span>
-            <span class="text-green-400">+{comparison.totals.insertions}</span>
-            <span class="text-red-400">−{comparison.totals.deletions}</span>
+            <span class="text-ok">+{comparison.totals.insertions}</span>
+            <span class="text-danger">−{comparison.totals.deletions}</span>
             {#if comparison.totals.binaryFiles > 0}
-                <span class="text-xs text-gray-500">
+                <span class="text-xs text-fg-faint">
                     {`${comparison.totals.binaryFiles} binary`}
                 </span>
             {/if}
         </div>
 
-        <p class="text-[11px] leading-snug text-gray-400">
+        <p class="text-[11px] leading-snug text-fg-dim">
             {comparison.methodExplanation}
         </p>
 
         {#if comparison.skipped.length > 0}
             <div
-                class="rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-200"
+                class="rounded border border-warn/30 bg-warn/10 px-2 py-1.5 text-[11px] text-warn-soft"
             >
                 <p class="font-medium">
                     {comparison.skipped.length === 1
@@ -73,8 +73,8 @@
             </div>
         {/if}
 
-        <p class="text-[11px] text-gray-500">
-            The changed files are in the <span class="text-gray-300">Changes</span
+        <p class="text-[11px] text-fg-faint">
+            The changed files are in the <span class="text-fg-muted">Changes</span
             > view in the sidebar.
         </p>
     </div>
@@ -82,7 +82,7 @@
     {#if commits.length > 1}
         <div class="min-h-0 flex-1 overflow-y-auto">
             <p
-                class="px-4 pt-3 pb-1 text-[11px] font-medium tracking-wider text-gray-500 uppercase"
+                class="px-4 pt-3 pb-1 text-[11px] font-medium tracking-wider text-fg-faint uppercase"
             >
                 {`Included commits (${commits.length})`}
             </p>
@@ -95,10 +95,10 @@
                             ? 'opacity-50'
                             : ''}"
                     >
-                        <code class="flex-shrink-0 font-mono text-blue-300">
+                        <code class="flex-shrink-0 font-mono text-info">
                             {commit.shortHash}
                         </code>
-                        <span class="min-w-0 flex-1 truncate text-gray-300">
+                        <span class="min-w-0 flex-1 truncate text-fg-muted">
                             {commit.subject}
                         </span>
                     </li>

@@ -7,6 +7,25 @@ All notable changes to GitHawk are documented here, following
 
 ### Added
 
+- **The panel follows your VS Code theme.** Every colour in the webview now
+  comes from VS Code's own tokens — surfaces from the editor, side bar and panel
+  backgrounds, text from `foreground` and `descriptionForeground`, the primary
+  button from the button tokens, row hover and selection from the list tokens.
+  On a light theme GitHawk is light; on a high-contrast theme it is
+  high-contrast. It was previously dark whatever you had chosen, which is the
+  limitation the README led with.
+
+  Lane colours stay fixed. They are identity rather than chrome — a lane has to
+  keep its colour as your eye follows it down the graph, and stay distinct from
+  the seven beside it — so they are eight mid-saturation hues chosen to hold
+  their contrast against white and near-black alike.
+
+  Warnings deliberately do not use `charts-orange`: it is
+  `rgba(234, 92, 0, 0.33)` in both default themes, a highlight fill rather than
+  a foreground, and text drawn in it is nearly invisible on white. They use
+  `editorWarning-foreground`, which is what the editor uses to say the same
+  thing.
+
 - The graph reloads by itself when the repository changes. A commit, checkout,
   fetch, rebase, or stash made in a terminal, in VS Code's own Source Control
   view, or by a tool running in a worktree now reaches the panel without pressing

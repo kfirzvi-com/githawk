@@ -46,8 +46,8 @@
 
 <button
     type="button"
-    class="flex w-full items-center border-b border-dashed border-gray-700 text-left hover:bg-gray-700/40 {selected
-        ? 'bg-blue-600/20'
+    class="flex w-full items-center border-b border-dashed border-line text-left hover:bg-hover {selected
+        ? 'bg-selected'
         : ''}"
     style="height:{metrics.rowH}px;"
     data-testid="working-tree-row"
@@ -72,21 +72,21 @@
         -->
         <span
             aria-hidden="true"
-            class="rounded-full border border-dashed border-amber-400/80"
+            class="rounded-full border border-dashed border-warn/80"
             style="width:{metrics.dotRadius * 2}px; height:{metrics.dotRadius * 2}px;"
         ></span>
     </div>
     <div class="flex min-w-0 flex-1 items-center gap-3 pl-2">
         <span
-            class="w-16 flex-shrink-0 font-mono text-xs whitespace-nowrap text-amber-300/70"
+            class="w-16 flex-shrink-0 font-mono text-xs whitespace-nowrap text-warn/70"
         >
             —
         </span>
-        <span class="min-w-0 flex-1 truncate text-sm font-medium text-amber-100">
+        <span class="min-w-0 flex-1 truncate text-sm font-medium text-warn-soft">
             Uncommitted changes
         </span>
         <span
-            class="flex-shrink-0 truncate pr-3 text-right text-xs whitespace-nowrap text-amber-200/70"
+            class="flex-shrink-0 truncate pr-3 text-right text-xs whitespace-nowrap text-warn-soft/70"
             data-testid="working-tree-summary"
         >
             {summary}
