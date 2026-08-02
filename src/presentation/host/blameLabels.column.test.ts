@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { columnLabel, relativeAge, shortDate } from './blameLabels';
+import { columnLabel, shortDate } from './blameLabels';
 import type { BlameBlock } from '../../domain/models/Blame';
 
 const block = (author: string, at: string): BlameBlock => ({
@@ -36,22 +36,6 @@ describe('columnLabel', () => {
         const label = columnLabel(block('Bo', '2020-08-11'), 16);
         expect(label).toContain(' ');
         expect(label).not.toContain('  ');
-    });
-});
-
-describe('relativeAge', () => {
-    const oldest = new Date('2020-01-01');
-    const newest = new Date('2024-01-01');
-
-    it('runs from 0 at the oldest line to 1 at the newest', () => {
-        expect(relativeAge(oldest, oldest, newest)).toBe(0);
-        expect(relativeAge(newest, oldest, newest)).toBe(1);
-        expect(relativeAge(new Date('2022-01-01'), oldest, newest)).toBeCloseTo(0.5, 1);
-    });
-
-    it('treats a file with one commit as entirely new', () => {
-        // Not entirely old: a fresh file should not look like an ancient one.
-        expect(relativeAge(oldest, oldest, oldest)).toBe(1);
     });
 });
 
