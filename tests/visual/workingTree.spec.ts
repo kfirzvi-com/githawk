@@ -88,7 +88,14 @@ test('selecting it clears the commit selection, and the other way round', async 
 
     await row(page).click();
     await expect(row(page)).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByTestId('commit-details-empty')).toBeVisible();
+    /*
+     * That the *populated* details pane has gone, rather than that the empty
+     * one is showing. Both are true for a moment, and then the host answers
+     * with the uncommitted changeset and the aggregate summary replaces the
+     * pane altogether — so asserting the empty state is a race with the reply,
+     * which it loses about one run in four.
+     */
+    await expect(page.getByTestId('commit-details')).toHaveCount(0);
 
     await page.mouse.click(box.x + box.width - 40, box.y + box.height / 2);
     await expect(row(page)).toHaveAttribute('aria-pressed', 'false');
