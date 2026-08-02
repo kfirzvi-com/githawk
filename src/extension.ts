@@ -104,8 +104,7 @@ export async function activate(
         changedFiles,
         repositories,
         createWorktreeReader,
-        createRemoteReader
-,
+        createRemoteReader,
         createWorkingTreeReader
     );
 
@@ -232,6 +231,11 @@ export async function activate(
         // from editing to reviewing what has been edited.
         vscode.commands.registerCommand('gitHawk.showUncommittedChanges', () =>
             provider.compareWorkingTree()
+        ),
+        // How many times the Changes view has been surfaced, so a test can
+        // tell "revealed again" from "filled again".
+        vscode.commands.registerCommand('gitHawk.changesRevealed', () =>
+            provider.revealsForTesting()
         ),
         // Reports the working tree as the extension sees it.
         vscode.commands.registerCommand('gitHawk.workingTree', () =>

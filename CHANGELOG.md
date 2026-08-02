@@ -65,6 +65,11 @@ All notable changes to GitHawk are documented here, following
   `HEAD`: the graph reads every ref, so the topmost row is frequently not the
   commit the changes sit on.
 
+  Selecting the row brings the Changes view to the front every time, unlike
+  selecting a commit, which surfaces it once and then leaves it alone. There is
+  only one working-tree row and nothing to browse through, so clicking it is
+  only ever a request to see the files.
+
   Untracked files are counted in the row but are not in the changeset — `git
   diff HEAD` has no blob to compare a file git has never seen against. The row's
   tooltip says so.

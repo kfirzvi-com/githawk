@@ -172,6 +172,10 @@
         "icon": "$(git-commit)"
       },
       {
+        "command": "gitHawk.changesRevealed",
+        "title": "GitHawk: Report Sidebar Reveals"
+      },
+      {
         "command": "gitHawk.workingTree",
         "title": "GitHawk: Report Uncommitted Changes"
       }
