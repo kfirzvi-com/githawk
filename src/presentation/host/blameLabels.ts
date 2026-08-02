@@ -90,24 +90,3 @@ function pad(text: string, width: number): string {
         ? text.slice(0, width)
         : text + '\u00a0'.repeat(width - text.length);
 }
-
-/**
- * How old this block is relative to the rest of the file, from 0 (the oldest
- * line here) to 1 (the newest).
- *
- * Relative rather than absolute, which is what makes the heat map readable: in
- * a file untouched for three years everything would be maximally hot on an
- * absolute scale, and the whole point is to show which parts of *this* file are
- * older than the rest of it.
- */
-export function relativeAge(
-    at: Date,
-    oldest: Date,
-    newest: Date
-): number {
-    const span = newest.getTime() - oldest.getTime();
-    if (span <= 0) {
-        return 1;
-    }
-    return Math.min(1, Math.max(0, (at.getTime() - oldest.getTime()) / span));
-}

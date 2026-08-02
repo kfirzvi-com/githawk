@@ -2,12 +2,12 @@ import * as vscode from 'vscode';
 import type { Blame, BlameBlock } from '../../domain/models/Blame';
 import type { IBlameReader } from '../../domain/repositories/IBlameReader';
 import { blameStyle, type BlameStyle } from './config';
+import { columnLabel, gutterLabel, inlineLabel } from './blameLabels';
 import {
-    columnLabel,
-    gutterLabel,
-    inlineLabel,
-    relativeAge,
-} from './blameLabels';
+    UNCOMMITTED_COLOUR,
+    commitRanks,
+    rampColour,
+} from './blameColours';
 import { log } from './log';
 
 /**
@@ -95,30 +95,30 @@ export class BlameDecorator implements vscode.Disposable {
     }
 
     /**
-     * IntelliJ's annotate column: every line labelled, one fixed width, and an
-     * age heat map behind it so a run of lines from one commit reads as a
+     * IntelliJ's annotate column: every line labelled, one fixed width, and a
+     * colour per commit behind it so a run of lines from one commit reads as a
      * block without needing a separator.
      *
      * Every line rather than every block start, deliberately. It is the same
      * information — a run of identical labels sharing one background *is* the
      * block — but it survives scrolling into the middle of a run, which a label
      * only on the first line does not.
+     *
+     * The colours are ordered oldest to newest, so the column is also a reading
+     * of how the file was built: cool at the bottom of its history, warm at the
+     * top. See blameColours.
      */
     private decorateColumn(editor: vscode.TextEditor, blame: Blame): void {
-        const dates = blame.blocks
-            .filter((block) => !block.commit.isUncommitted)
-            .map((block) => block.commit.authoredAt.getTime());
-        const oldest = new Date(Math.min(...dates, Date.now()));
-        const newest = new Date(Math.max(...dates, 0));
+        const ranks = commitRanks(blame.blocks);
 
         const options: vscode.DecorationOptions[] = [];
         for (const block of blame.blocks) {
             const text = columnLabel(block, COLUMN_WIDTH);
-            const background = heat(
-                block.commit.isUncommitted
-                    ? 1
-                    : relativeAge(block.commit.authoredAt, oldest, newest)
-            );
+            const rank = ranks.get(block.commit.hash);
+            const background =
+                block.commit.isUncommitted || rank === undefined
+                    ? UNCOMMITTED_COLOUR
+                    : rampColour(rank, ranks.size);
             const message = hover(block);
 
             for (let line = block.startLine; line <= block.endLine; line++) {
@@ -286,19 +286,6 @@ export class BlameDecorator implements vscode.Disposable {
 
 /** Wide enough for `8/11/20` and eight characters of a name. */
 const COLUMN_WIDTH = 16;
-
-/**
- * The age heat map: warm and more opaque for the oldest lines in the file,
- * fading to nothing for the newest.
- *
- * One hue at varying alpha rather than a colour scale, so it tints whatever the
- * editor's background is instead of fighting it — the same reason the panel's
- * row states come from VS Code's list tokens.
- */
-function heat(newness: number): string {
-    const alpha = 0.26 * (1 - newness);
-    return alpha < 0.02 ? 'transparent' : `rgba(226, 116, 40, ${alpha.toFixed(3)})`;
-}
 
 /**
  * A hover carries what the label had to leave out, and is where the link back
