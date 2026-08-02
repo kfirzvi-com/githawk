@@ -46,14 +46,12 @@
         },
         "gitHawk.blame.style": {
           "type": "string",
-          "enum": ["off", "column", "gutter", "inline", "endOfLine"],
+          "enum": ["off", "column", "endOfLine"],
           "default": "off",
           "enumDescriptions": [
             "No blame annotations.",
-            "A fixed-width column of date and author on every line, with an age heat map behind it — IntelliJ's annotate.",
-            "Beside the line numbers. Text there has to be drawn as an image, so it does not follow your editor font.",
-            "At the start of the line, which shifts the code to the right.",
-            "At the end of the line, out of the way of the code."
+            "A fixed-width column of date and author on every line, coloured by commit — IntelliJ's annotate. Sits between the line numbers and the code.",
+            "One label per block, at the end of its first line, leaving the code where it is."
           ],
           "markdownDescription": "Show who last changed each block of lines, in the editor.\n\nOne label per run of lines from the same commit, rather than one per line. Hover it for the full message, the author, the date, and a link that selects that commit in the graph."
         },
@@ -189,6 +187,10 @@
       {
         "command": "gitHawk.remotes",
         "title": "GitHawk: List Remotes"
+      },
+      {
+        "command": "gitHawk.blame",
+        "title": "GitHawk: Report Blame For A File"
       },
       {
         "command": "gitHawk.revealCommit",

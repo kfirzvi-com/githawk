@@ -130,3 +130,80 @@ describe('GitCliBlameReader', () => {
         expect(commit.summary).toBe(`(${commit.hash})`);
     });
 });
+
+describe('GitCliBlameReader, on an unsaved buffer', () => {
+    let repo: TemporaryRepository | undefined;
+
+    const write = (name: string, ...lines: string[]) =>
+        writeFileSync(join(repo!.path, name), lines.join('\n') + '\n');
+
+    afterEach(() => {
+        repo?.dispose();
+        repo = undefined;
+    });
+
+    /**
+     * The reason `--contents` exists here. Blaming the file on disk while the
+     * editor holds unsaved changes shifts every line below the edit onto the
+     * wrong commit — silently, and in the direction that looks plausible.
+     */
+    it('keeps lines below an unsaved insertion on their real commit', async () => {
+        repo = TemporaryRepository.create();
+        write('poem.txt', 'one', 'two');
+        repo.git(['add', 'poem.txt']);
+        repo.git(['commit', '-m', 'first']);
+
+        write('poem.txt', 'one', 'CHANGED');
+        repo.git(['commit', '-am', 'second']);
+
+        // What the editor holds: a line inserted at the top, not yet saved.
+        const buffer = ['INSERTED', 'one', 'CHANGED', ''].join('\n');
+        const blame = await new GitCliBlameReader(repo.path).read(
+            'poem.txt',
+            buffer
+        );
+
+        expect(
+            blame.blocks.map((b) => [
+                b.startLine,
+                b.commit.isUncommitted ? 'uncommitted' : b.commit.summary,
+            ])
+        ).toEqual([
+            [1, 'uncommitted'],
+            [2, 'first'],
+            [3, 'second'],
+        ]);
+    });
+
+    it('reports a clean buffer exactly as the file on disk', async () => {
+        repo = TemporaryRepository.create();
+        write('poem.txt', 'one', 'two');
+        repo.git(['add', 'poem.txt']);
+        repo.git(['commit', '-m', 'first']);
+
+        const reader = new GitCliBlameReader(repo.path);
+        const fromDisk = await reader.read('poem.txt');
+        const fromBuffer = await reader.read('poem.txt', 'one\ntwo\n');
+
+        expect(fromBuffer.blocks.map((b) => b.commit.summary)).toEqual(
+            fromDisk.blocks.map((b) => b.commit.summary)
+        );
+    });
+
+    it('survives a buffer large enough for git to stop reading early', async () => {
+        // git closes stdin once it has what it needs, and the write that is
+        // still in flight then fails with EPIPE. That is normal, not an error.
+        repo = TemporaryRepository.create();
+        write('poem.txt', 'one');
+        repo.git(['add', 'poem.txt']);
+        repo.git(['commit', '-m', 'first']);
+
+        const big = Array.from({ length: 40_000 }, (_, i) => `line ${i}`).join('\n');
+        const blame = await new GitCliBlameReader(repo.path).read(
+            'poem.txt',
+            `${big}\n`
+        );
+
+        expect(blame.blocks.length).toBeGreaterThan(0);
+    });
+});

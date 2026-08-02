@@ -13,7 +13,13 @@ export class GitError extends Error {
 }
 
 export interface GitRunner {
-    run(args: string[], cwd: string): Promise<string>;
+    /**
+     * `stdin`, when given, is written to the process and the stream closed.
+     * `git blame --contents -` needs it: an editor's unsaved buffer is not on
+     * disk, and blaming the file on disk misattributes every line below an
+     * unsaved edit.
+     */
+    run(args: string[], cwd: string, stdin?: string): Promise<string>;
 }
 
 /**
@@ -34,9 +40,9 @@ export class ExecFileGitRunner implements GitRunner {
         private readonly timeoutMs = 30_000
     ) {}
 
-    run(args: string[], cwd: string): Promise<string> {
+    run(args: string[], cwd: string, stdin?: string): Promise<string> {
         return new Promise((resolve, reject) => {
-            execFile(
+            const child = execFile(
                 this.gitPath,
                 args,
                 {
@@ -70,6 +76,18 @@ export class ExecFileGitRunner implements GitRunner {
                     resolve(stdout);
                 }
             );
+
+            if (stdin !== undefined) {
+                /*
+                 * Errors are swallowed rather than rejected: git closes stdin
+                 * as soon as it has what it needs — on a large buffer that
+                 * happens before the write finishes — and the resulting EPIPE
+                 * is the normal case, not a failure. The callback above still
+                 * reports anything that actually went wrong.
+                 */
+                child.stdin?.on('error', () => {});
+                child.stdin?.end(stdin);
+            }
         });
     }
 }

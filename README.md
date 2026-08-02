@@ -92,6 +92,29 @@ changeset. `git diff HEAD` has nothing to compare a file git has never seen
 against. `GitHawk: Show Uncommitted Changes` opens the same comparison without
 the panel.
 
+### See who wrote a line, and jump to why
+
+![Blame in the editor](media/screenshots/blame.png)
+
+Set [`gitHawk.blame.style`](#settings) to `column` and every line carries the
+date and author of the commit it came from, in a fixed-width column between the
+line numbers and the code — IntelliJ's annotate, in VS Code.
+
+Each commit gets its own colour, and the colours run in order: cool for the
+oldest lines in the file, warm for the newest. So a run of lines from one commit
+reads as a block without needing a separator, and scrolling shows the order the
+file was built in rather than just that several people built it.
+
+Hover any line for the full message, the author, the date, how many lines that
+commit owns here — and **"show in the graph"**, which opens the panel, selects
+the commit, and fills the Changes tree. That is the part no standalone blame
+extension can do: the graph is already here.
+
+`endOfLine` is the quieter option — one label per block, at the end of its first
+line, leaving your code where it is. Both blame the editor's buffer rather than
+the file on disk, so annotations stay honest while you are part-way through an
+edit.
+
 ### Give the graph the room
 
 The panel is short and splits its width three ways. Either side pane folds away
@@ -238,6 +261,7 @@ tool in the right directory. It reads nothing and sends nothing.
 | Setting | Default | What it does |
 | --- | --- | --- |
 | `gitHawk.commitLimit` | `500` | How many commits to read. Higher shows more and loads slower. |
+| `gitHawk.blame.style` | `off` | Blame in the editor: `column` for IntelliJ's annotate, `endOfLine` for one label per block. |
 | `gitHawk.autoRefresh` | `true` | Reload the graph when the repository changes outside GitHawk. Watches git's metadata, never your working tree. |
 | `gitHawk.repositoryScanDepth` | `2` | Directory levels below each opened folder to search for repositories. `0` searches the folders only; `2` covers a folder of projects, or a folder of buckets each holding projects. |
 | `gitHawk.aiTools` | Claude Code, Codex, Gemini CLI, opencode | Commands offered by "Start an AI CLI here". |
