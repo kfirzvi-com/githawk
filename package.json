@@ -158,6 +158,15 @@
         "title": "GitHawk: Describe The Worktree Manager"
       },
       {
+        "command": "gitHawk.manageStashes",
+        "title": "GitHawk: Manage Stashes",
+        "icon": "$(archive)"
+      },
+      {
+        "command": "gitHawk.stashes",
+        "title": "GitHawk: List Stashes"
+      },
+      {
         "command": "gitHawk.manageRemotes",
         "title": "GitHawk: Manage Remotes",
         "icon": "$(cloud)"
@@ -234,6 +243,10 @@
       "commandPalette": [
         {
           "command": "gitHawk.openChangedFile",
+          "when": "false"
+        },
+        {
+          "command": "gitHawk.stashes",
           "when": "false"
         },
         {

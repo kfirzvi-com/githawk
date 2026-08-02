@@ -96,6 +96,35 @@ export function argsFor(action: GitAction): string[] {
             // surprising upstream configuration.
             return ['pull', action.remote, action.branch];
 
+        case 'stashPush':
+            /*
+             * `push` rather than the bare `git stash`, which is the same thing
+             * but reads as a noun and has no way to carry a message.
+             *
+             * `--message` last before any pathspec, and no pathspec here: this
+             * stashes the whole working tree, which is what the caller asked
+             * for. A partial stash would need `--` and a list, and the refusal
+             * to guess at one is deliberate.
+             */
+            return [
+                'stash',
+                'push',
+                ...(action.includeUntracked ? ['--include-untracked'] : []),
+                ...(action.keepIndex ? ['--keep-index'] : []),
+                ...(action.message ? ['--message', action.message] : []),
+            ];
+
+        case 'stashApply':
+            // The entry stays on the stack; the caller drops it separately if
+            // that is what was meant. See stashPop.
+            return ['stash', 'apply', action.ref];
+
+        case 'stashPop':
+            return ['stash', 'pop', action.ref];
+
+        case 'stashDrop':
+            return ['stash', 'drop', action.ref];
+
         case 'addRemote':
             return ['remote', 'add', action.name, action.url];
 

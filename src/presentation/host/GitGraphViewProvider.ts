@@ -20,9 +20,12 @@ import { RepositoryRegistry } from './RepositoryRegistry';
 import { ActionRunner } from './ActionRunner';
 import { WorktreeMenu } from './WorktreeMenu';
 import { RemoteMenu } from './RemoteMenu';
+import { StashMenu } from './StashMenu';
 import { ListWorktreesUseCase } from '../../application/usecases/ListWorktreesUseCase';
 import type { IWorktreeReader } from '../../domain/repositories/IWorktreeReader';
 import type { IRemoteReader } from '../../domain/repositories/IRemoteReader';
+import type { IStashReader } from '../../domain/repositories/IStashReader';
+import { isClean } from '../../domain/models/WorkingTreeStatus';
 import type { IWorkingTreeReader } from '../../domain/repositories/IWorkingTreeReader';
 import {
     cleanWorkingTree,
@@ -43,6 +46,7 @@ export type GitRepositoryFactory = () => IGitRepository;
 export type GitWriterFactory = () => IGitWriter;
 export type WorktreeReaderFactory = () => IWorktreeReader;
 export type RemoteReaderFactory = () => IRemoteReader;
+export type StashReaderFactory = () => IStashReader;
 export type WorkingTreeReaderFactory = () => IWorkingTreeReader;
 
 /**
@@ -82,6 +86,7 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
         private readonly repositories: RepositoryRegistry,
         private readonly createWorktreeReader: WorktreeReaderFactory,
         private readonly createRemoteReader: RemoteReaderFactory,
+        private readonly createStashReader: StashReaderFactory,
         private readonly createWorkingTreeReader: WorkingTreeReaderFactory
     ) {}
 
@@ -552,6 +557,30 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
             log.warn(`could not list remotes: ${describeError(error)}`);
             return [];
         }
+    }
+
+    /** Exposed so a command can open the manager without going via the webview. */
+    createStashMenu(): StashMenu {
+        return new StashMenu({
+            listStashes: () => this.createStashReader().list(),
+            hasLocalChanges: async () =>
+                !isClean(await this.createWorkingTreeReader().read()),
+            runner: new ActionRunner(this.createWriter(), () => this.refresh()),
+            /*
+             * A stash entry is a commit whose first parent is the commit it was
+             * made on, so what it contains is that comparison — no new
+             * machinery, and it lands in the Changes tree like everything else.
+             */
+            showChanges: (stash) =>
+                this.runComparison(
+                    {
+                        kind: 'twoRefs',
+                        left: `${stash.hash}^`,
+                        right: stash.hash,
+                    },
+                    'focus'
+                ),
+        });
     }
 
     /** Exposed so a command can open the manager without going via the webview. */

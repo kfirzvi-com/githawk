@@ -44,6 +44,26 @@ export type GitAction =
      * directly and leaves the working tree alone.
      */
     | { type: 'pullBranch'; remote: string; branch: string }
+    /**
+     * Puts the working tree aside. `includeUntracked` also takes files git has
+     * never seen, which is off by default because it is the one variant that
+     * can sweep up a scratch file someone did not mean to lose sight of.
+     */
+    | {
+          type: 'stashPush';
+          message?: string;
+          includeUntracked: boolean;
+          keepIndex: boolean;
+      }
+    /**
+     * `hash` alongside `ref` on purpose. `stash@{1}` is a position, not an
+     * identity: dropping an entry renumbers every entry below it, so a ref
+     * captured a moment ago can name a different entry by the time it is used.
+     * The caller checks the two still agree before acting.
+     */
+    | { type: 'stashApply'; ref: string; hash: string }
+    | { type: 'stashPop'; ref: string; hash: string }
+    | { type: 'stashDrop'; ref: string; hash: string }
     | { type: 'addRemote'; name: string; url: string }
     | { type: 'renameRemote'; from: string; to: string }
     /** Drops the remote and every remote-tracking branch under it. */
@@ -113,6 +133,18 @@ export function isDestructive(action: GitAction): boolean {
             // dropped those branches, and not when the remote is simply
             // unreachable and answering with nothing.
             return true;
+        case 'stashDrop':
+            // The entry leaves the stack. It survives as a dangling commit
+            // until git collects it, which is a recovery route rather than an
+            // undo — nothing in the UI will offer it back.
+            return true;
+        case 'stashPop':
+            /*
+             * Applies and then drops. If the apply conflicts git keeps the
+             * entry, but if it succeeds the entry is gone, and the work is now
+             * only in a working tree that was not empty to begin with.
+             */
+            return true;
         default:
             return false;
     }
@@ -150,6 +182,10 @@ export function destructiveReason(action: GitAction): string | undefined {
             return `removes ${action.name} and every remote-tracking branch under it`;
         case 'pruneRemote':
             return `deletes the tracking branches ${action.name} no longer has`;
+        case 'stashDrop':
+            return `discards ${action.ref}, recoverable only as a dangling commit`;
+        case 'stashPop':
+            return `applies ${action.ref} and then removes it from the stash`;
         default:
             return undefined;
     }
@@ -171,6 +207,19 @@ export function usesNetwork(action: GitAction): boolean {
         action.type === 'pruneRemote' ||
         action.type === 'updateBranchFromUpstream' ||
         action.type === 'deleteRemoteBranch'
+    );
+}
+
+/**
+ * Actions that write to the working tree, so a dirty tree can make them fail
+ * or conflict. Not destructive — git refuses rather than overwrites — but
+ * worth naming.
+ */
+export function touchesWorkingTree(action: GitAction): boolean {
+    return (
+        action.type === 'stashPush' ||
+        action.type === 'stashApply' ||
+        action.type === 'stashPop'
     );
 }
 
