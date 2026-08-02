@@ -1,19 +1,40 @@
 import { IGitRepository } from '../../domain/repositories/IGitRepository';
-import { GitGraphDto } from '../dto/GitGraphDto';
-import { BranchMapper, CommitMapper } from '../dto/mappers';
+import { IStashReader } from '../../domain/repositories/IStashReader';
+import { GitGraphDto, StashDto } from '../dto/GitGraphDto';
+import { BranchMapper, CommitMapper, StashMapper } from '../dto/mappers';
 
 /**
  * Loads the repository and hands back the wire shape. Deliberately thin: the
  * host is a data pump, and all layout happens in the webview.
  */
 export class LoadGitGraphUseCase {
-    constructor(private readonly repository: IGitRepository) {}
+    constructor(
+        private readonly repository: IGitRepository,
+        /**
+         * Optional: the dev harness has no stash, and a repository whose stash
+         * cannot be read should still draw its history.
+         */
+        private readonly stashes?: IStashReader
+    ) {}
 
     async execute(): Promise<GitGraphDto> {
-        const repository = await this.repository.getRepository();
+        const [repository, stashes] = await Promise.all([
+            this.repository.getRepository(),
+            this.readStashes(),
+        ]);
 
         return {
-            commits: repository.commits.map(CommitMapper.toDto),
+            /*
+             * Stash entries are commits, so they are commits here. `git log
+             * --all` does not walk refs/stash and could not reach the older
+             * entries anyway — they live in the reflog — so they are added
+             * rather than found.
+             */
+            commits: [
+                ...repository.commits.map(CommitMapper.toDto),
+                ...stashes.map(StashMapper.toCommitDto),
+            ],
+            stashes,
             branches: repository.branches.map(BranchMapper.toDto),
             hasMoreHistory: repository.hasMoreHistory,
             // The checked-out branch is the one the reader is oriented around,
@@ -21,5 +42,17 @@ export class LoadGitGraphUseCase {
             // the layout fall back to conventional default names.
             primaryBranchName: repository.currentBranch?.name,
         };
+    }
+
+    /** Never allowed to cost the graph: a stash is an extra, not the history. */
+    private async readStashes(): Promise<StashDto[]> {
+        if (!this.stashes) {
+            return [];
+        }
+        try {
+            return (await this.stashes.list()).map(StashMapper.toDto);
+        } catch {
+            return [];
+        }
     }
 }

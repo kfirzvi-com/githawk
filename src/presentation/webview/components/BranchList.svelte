@@ -1,10 +1,18 @@
 <script lang="ts">
     import type { Branch } from '../../../domain/models/Branch';
     import type { Worktree } from '../../../domain/models/Worktree';
+    import type { Stash } from '../../../domain/models/Stash';
     import {
         mainWorktreePath,
         shortWorktreeName,
     } from '../viewmodels/worktreeLabels';
+    import SectionHeader from './SectionHeader.svelte';
+    import {
+        readSections,
+        withSection,
+        type Section,
+    } from '../viewmodels/sections';
+    import { readWebviewState, writeWebviewState } from '../vscodeApi';
 
     interface Props {
         branches: Branch[];
@@ -14,6 +22,10 @@
         onOpenMenu?: (branch: Branch) => void;
         /** No path opens the manager; a path opens that worktree's actions. */
         onOpenWorktreeMenu?: (path?: string) => void;
+        /** Empty until the host reports them, and in the dev harness. */
+        stashes?: Stash[];
+        /** No ref opens the manager; a ref opens that entry's actions. */
+        onOpenStashMenu?: (ref?: string) => void;
     }
 
     let {
@@ -21,9 +33,20 @@
         worktrees = [],
         onOpenMenu,
         onOpenWorktreeMenu,
+        stashes = [],
+        onOpenStashMenu,
     }: Props = $props();
 
     let filter = $state('');
+
+    /** Persisted, so a section folded away stays folded across a reload. */
+    const SECTIONS_STATE_KEY = 'branchListSections';
+    let sections = $state(readSections(readWebviewState(SECTIONS_STATE_KEY)));
+
+    const toggleSection = (section: Section) => {
+        sections = withSection(sections, section, !sections[section]);
+        writeWebviewState(SECTIONS_STATE_KEY, sections);
+    };
 
     /*
      * Only shown once there is more than one, because a repository with a single
@@ -79,16 +102,16 @@
 
     <div class="flex-1 overflow-y-auto">
         <div class="px-2 py-3">
-            <div class="mb-2 flex items-center gap-2 px-2 py-1">
-                <div class="h-2 w-2 rounded-full bg-ok"></div>
-                <span
-                    class="text-xs font-medium tracking-wider text-fg-muted uppercase"
-                >
-                    Local
-                </span>
-            </div>
+            <SectionHeader
+                section="local"
+                label="Local"
+                count={localBranches.length}
+                dot="bg-ok"
+                open={sections.local}
+                onToggle={toggleSection}
+            />
 
-            <div class="space-y-1">
+            <div class="space-y-1" hidden={!sections.local}>
                 {#each localBranches as branch (branch.name)}
                     <button
                         type="button"
@@ -168,16 +191,16 @@
 
         {#if remoteBranches.length > 0}
             <div class="border-t border-line px-2 py-3">
-                <div class="mb-2 flex items-center gap-2 px-2 py-1">
-                    <div class="h-2 w-2 rounded-full bg-orange-400"></div>
-                    <span
-                        class="text-xs font-medium tracking-wider text-fg-muted uppercase"
-                    >
-                        Remote
-                    </span>
-                </div>
+                <SectionHeader
+                    section="remote"
+                    label="Remote"
+                    count={remoteBranches.length}
+                    dot="bg-warn"
+                    open={sections.remote}
+                    onToggle={toggleSection}
+                />
 
-                <div class="space-y-1">
+                <div class="space-y-1" hidden={!sections.remote}>
                     {#each remoteBranches as branch (branch.name)}
                         <button
                             type="button"
@@ -199,14 +222,17 @@
                 class="border-t border-line px-2 py-3"
                 data-testid="worktree-list"
             >
-                <div class="mb-2 flex items-center gap-2 px-2 py-1">
-                    <div class="h-2 w-2 rounded-full bg-special"></div>
-                    <span
-                        class="text-xs font-medium tracking-wider text-fg-muted uppercase"
-                    >
-                        Worktrees
-                    </span>
-                    <div class="flex-1"></div>
+                <div class="flex items-center gap-1">
+                    <div class="min-w-0 flex-1">
+                        <SectionHeader
+                            section="worktrees"
+                            label="Worktrees"
+                            count={worktrees.length}
+                            dot="bg-special"
+                            open={sections.worktrees}
+                            onToggle={toggleSection}
+                        />
+                    </div>
                     <button
                         type="button"
                         data-testid="manage-worktrees"
@@ -218,7 +244,7 @@
                     </button>
                 </div>
 
-                <div class="space-y-1">
+                <div class="space-y-1" hidden={!sections.worktrees}>
                     {#each worktrees as worktree (worktree.path)}
                         <button
                             type="button"
@@ -268,12 +294,71 @@
                     {/each}
                 </div>
 
-                {#if staleWorktrees > 0}
+                {#if staleWorktrees > 0 && sections.worktrees}
                     <p class="px-3 pt-2 text-[11px] text-warn/80">
                         {staleWorktrees} record(s) point at directories that are
                         gone — prune them from Manage.
                     </p>
                 {/if}
+            </div>
+        {/if}
+
+        {#if stashes.length > 0}
+            <div
+                class="border-t border-line px-2 py-3"
+                data-testid="stash-list"
+            >
+                <div class="flex items-center gap-1">
+                    <div class="min-w-0 flex-1">
+                        <SectionHeader
+                            section="stashes"
+                            label="Stashes"
+                            count={stashes.length}
+                            dot="bg-warn"
+                            open={sections.stashes}
+                            onToggle={toggleSection}
+                        />
+                    </div>
+                    <button
+                        type="button"
+                        data-testid="manage-stashes"
+                        class="rounded px-1.5 py-0.5 text-[10px] text-fg-dim hover:bg-control hover:text-fg-soft"
+                        onclick={() => onOpenStashMenu?.()}
+                        title="Stash the working tree, or act on an entry"
+                    >
+                        Manage
+                    </button>
+                </div>
+
+                <div class="space-y-1" hidden={!sections.stashes}>
+                    {#each stashes as stash (stash.hash)}
+                        <button
+                            type="button"
+                            class="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-fg-muted transition-colors duration-150 hover:bg-control"
+                            onclick={() => onOpenStashMenu?.(stash.ref)}
+                            title={`${stash.ref} — on ${stash.branch}, ${stash.createdAt.toLocaleString()}`}
+                        >
+                            <!-- Half-height bar, matching the badge the graph
+                                 draws on the same entry. -->
+                            <span
+                                aria-hidden="true"
+                                class="h-1 w-2 flex-shrink-0 rounded-[1px] bg-warn"
+                            ></span>
+                            <span
+                                class="min-w-0 flex-1 truncate text-sm {stash.isAutoNamed
+                                    ? 'italic'
+                                    : ''}"
+                            >
+                                {stash.message}
+                            </span>
+                            <span
+                                class="flex-shrink-0 text-[10px] text-fg-faint"
+                            >
+                                {stash.branch}
+                            </span>
+                        </button>
+                    {/each}
+                </div>
             </div>
         {/if}
 

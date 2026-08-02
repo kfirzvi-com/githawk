@@ -25,4 +25,14 @@ export interface Stash {
      */
     readonly isAutoNamed: boolean;
     readonly createdAt: Date;
+    readonly author: string;
+    /**
+     * The commit the work was sitting on — the entry's *first* parent.
+     *
+     * A stash commit has two or three: the base, a snapshot of the index, and
+     * with --include-untracked a snapshot of the untracked files. The other two
+     * are git's own bookkeeping and mean nothing to a reader, so the graph
+     * draws the entry hanging off its base alone.
+     */
+    readonly baseHash: string;
 }

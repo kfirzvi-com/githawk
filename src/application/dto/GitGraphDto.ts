@@ -39,8 +39,26 @@ export interface BranchDto {
     worktreePath?: string;
 }
 
+export interface StashDto {
+    ref: string;
+    hash: string;
+    branch: string;
+    message: string;
+    isAutoNamed: boolean;
+    /** ISO 8601, like every other date crossing this boundary. */
+    createdAt: string;
+    author: string;
+    baseHash: string;
+}
+
 export interface GitGraphDto {
     commits: CommitDto[];
+    /**
+     * The stash, listed for the sidebar. The entries also appear in `commits`
+     * as rows of their own — one is the list, the other is the graph, and they
+     * are the same entries.
+     */
+    stashes: StashDto[];
     branches: BranchDto[];
     /** True when history was truncated by the commit limit. */
     hasMoreHistory: boolean;

@@ -122,6 +122,6 @@ export function stashListArgs(): string[] {
     return [
         'stash',
         'list',
-        `--format=%gd${UNIT_SEPARATOR}%H${UNIT_SEPARATOR}%gs${UNIT_SEPARATOR}%aI${RECORD_SEPARATOR}`,
+        `--format=%gd${UNIT_SEPARATOR}%H${UNIT_SEPARATOR}%gs${UNIT_SEPARATOR}%aI${UNIT_SEPARATOR}%an${UNIT_SEPARATOR}%P${RECORD_SEPARATOR}`,
     ];
 }

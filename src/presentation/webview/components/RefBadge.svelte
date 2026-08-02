@@ -68,6 +68,15 @@
                     shape: 'rotate-45',
                     label: 'tag',
                 };
+            case 'stash':
+                return {
+                    badge: 'border-warn/40 bg-warn/15 text-warn-soft',
+                    marker: 'bg-warn',
+                    // A half-height bar: work set down rather than a point in
+                    // history, and unmistakable next to the dot and the square.
+                    shape: 'rounded-[1px] scale-y-50',
+                    label: 'stash entry',
+                };
             case 'head':
                 return {
                     badge: 'border-special/50 bg-special/20 text-special',

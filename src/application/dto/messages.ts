@@ -59,4 +59,6 @@ export type WebviewToHostMessage =
     /** Opens the native picker for switching repository. */
     | { type: 'repository:menu' }
     /** Opens the worktree manager, or one worktree's actions when given a path. */
-    | { type: 'worktree:menu'; path?: string };
+    | { type: 'worktree:menu'; path?: string }
+    /** Opens the stash manager, or one entry's actions when given its ref. */
+    | { type: 'stash:menu'; ref?: string };

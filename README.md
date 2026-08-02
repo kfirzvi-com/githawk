@@ -151,6 +151,11 @@ Anything destructive asks first, and says what will be lost.
 
 ### Put work aside
 
+Stash entries appear in the graph as rows of their own, hanging off the commit
+the work was left on, and in the sidebar beside the branches and worktrees. Every
+sidebar section — local, remote, worktrees, stashes — folds away, and remembers
+whether you folded it.
+
 **`GitHawk: Manage Stashes`** lists the stash with what each entry says it is,
 the branch it was made on, and when. An entry git named itself — `WIP on main:
 1234abc …` — is marked `(unnamed)`, because that wording describes the commit

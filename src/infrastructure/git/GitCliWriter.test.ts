@@ -1,9 +1,10 @@
-import { existsSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, test } from 'vitest';
 import { GitActionFailedError, GitCliWriter } from './GitCliWriter';
 import { GitCliRepository } from './GitCliRepository';
 import { GitCliWorktreeReader } from './GitCliWorktreeReader';
+import { GitCliStashReader } from './GitCliStashReader';
 import { TemporaryRepository } from './testing/temporaryRepository';
 import { PerformGitActionUseCase } from '../../application/usecases/PerformGitActionUseCase';
 
@@ -694,5 +695,177 @@ describe('worktrees', () => {
             }
             repo.git(['worktree', 'prune']);
         }
+    });
+});
+
+describe('the stash, against real repositories', () => {
+    /** A repository with one commit and an uncommitted change on top. */
+    const dirtyRepo = () => {
+        const repo = newRepo();
+        commitFile(repo, 'f.txt', 'committed\n', 'first');
+        writeFileSync(join(repo.path, 'f.txt'), 'work in progress\n');
+        return repo;
+    };
+
+    const contents = (repo: TemporaryRepository) =>
+        readFileSync(join(repo.path, 'f.txt'), 'utf8');
+
+    const entries = (repo: TemporaryRepository) =>
+        new GitCliStashReader(repo.path).list();
+
+    test('stashing puts the work aside and leaves a clean tree', async () => {
+        const repo = dirtyRepo();
+
+        await new GitCliWriter(repo.path).perform({
+            type: 'stashPush',
+            message: 'half a refactor',
+            includeUntracked: false,
+            keepIndex: false,
+        });
+
+        expect(contents(repo)).toBe('committed\n');
+        expect(repo.git(['status', '--porcelain'])).toBe('');
+        expect((await entries(repo)).map((e) => e.message)).toEqual([
+            'half a refactor',
+        ]);
+    });
+
+    test('applying restores the work and keeps the entry', async () => {
+        const repo = dirtyRepo();
+        const writer = new GitCliWriter(repo.path);
+        await writer.perform({
+            type: 'stashPush',
+            includeUntracked: false,
+            keepIndex: false,
+        });
+        const [entry] = await entries(repo);
+
+        await writer.perform({
+            type: 'stashApply',
+            ref: entry.ref,
+            hash: entry.hash,
+        });
+
+        expect(contents(repo)).toBe('work in progress\n');
+        // Still there — which is the whole difference from popping.
+        expect(await entries(repo)).toHaveLength(1);
+    });
+
+    test('popping restores the work and removes the entry', async () => {
+        const repo = dirtyRepo();
+        const writer = new GitCliWriter(repo.path);
+        await writer.perform({
+            type: 'stashPush',
+            includeUntracked: false,
+            keepIndex: false,
+        });
+        const [entry] = await entries(repo);
+
+        await writer.perform({
+            type: 'stashPop',
+            ref: entry.ref,
+            hash: entry.hash,
+        });
+
+        expect(contents(repo)).toBe('work in progress\n');
+        expect(await entries(repo)).toEqual([]);
+    });
+
+    test('dropping removes the entry without touching the tree', async () => {
+        const repo = dirtyRepo();
+        const writer = new GitCliWriter(repo.path);
+        await writer.perform({
+            type: 'stashPush',
+            includeUntracked: false,
+            keepIndex: false,
+        });
+        const [entry] = await entries(repo);
+
+        await writer.perform({
+            type: 'stashDrop',
+            ref: entry.ref,
+            hash: entry.hash,
+        });
+
+        expect(contents(repo)).toBe('committed\n');
+        expect(await entries(repo)).toEqual([]);
+    });
+
+    /**
+     * The safety property behind offering apply at all. A pop that conflicts
+     * keeps the entry, so the work is still recoverable; if git dropped it on a
+     * failed apply, a conflict would destroy it.
+     */
+    test('a pop that conflicts keeps the entry', async () => {
+        const repo = dirtyRepo();
+        const writer = new GitCliWriter(repo.path);
+        await writer.perform({
+            type: 'stashPush',
+            includeUntracked: false,
+            keepIndex: false,
+        });
+        const [entry] = await entries(repo);
+
+        // Someone else changes the same line before the entry comes back.
+        writeFileSync(join(repo.path, 'f.txt'), 'a different change\n');
+        repo.git(['commit', '-am', 'conflicting work']);
+
+        // The writer surfaces git's refusal by throwing; the menu turns that
+        // into a message rather than swallowing it.
+        await expect(
+            writer.perform({
+                type: 'stashPop',
+                ref: entry.ref,
+                hash: entry.hash,
+            })
+        ).rejects.toThrow(GitActionFailedError);
+
+        expect(await entries(repo)).toHaveLength(1);
+    });
+
+    test('untracked files come along only when asked', async () => {
+        const repo = newRepo();
+        commitFile(repo, 'f.txt', 'committed\n', 'first');
+        writeFileSync(join(repo.path, 'f.txt'), 'changed\n');
+        writeFileSync(join(repo.path, 'scratch.txt'), 'never added\n');
+
+        const writer = new GitCliWriter(repo.path);
+        await writer.perform({
+            type: 'stashPush',
+            includeUntracked: false,
+            keepIndex: false,
+        });
+        expect(existsSync(join(repo.path, 'scratch.txt'))).toBe(true);
+
+        writeFileSync(join(repo.path, 'f.txt'), 'changed again\n');
+        await writer.perform({
+            type: 'stashPush',
+            includeUntracked: true,
+            keepIndex: false,
+        });
+        expect(existsSync(join(repo.path, 'scratch.txt'))).toBe(false);
+    });
+
+    test('dropping is refused until it is confirmed', async () => {
+        const repo = dirtyRepo();
+        const writer = new GitCliWriter(repo.path);
+        await writer.perform({
+            type: 'stashPush',
+            includeUntracked: false,
+            keepIndex: false,
+        });
+        const [entry] = await entries(repo);
+
+        const useCase = new PerformGitActionUseCase(writer);
+        await expect(
+            useCase.execute({
+                type: 'stashDrop',
+                ref: entry.ref,
+                hash: entry.hash,
+            })
+        ).rejects.toThrow(/without explicit confirmation/);
+
+        // Still there.
+        expect(await entries(repo)).toHaveLength(1);
     });
 });
