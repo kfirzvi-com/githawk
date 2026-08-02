@@ -6,16 +6,8 @@ import type { BlameBlock } from '../../domain/models/Blame';
  * describing the same commit differently.
  */
 
-/** Compact enough to sit in a gutter: `Kfir · 3mo`. */
-export function gutterLabel(block: BlameBlock, now: Date): string {
-    if (block.commit.isUncommitted) {
-        return 'uncommitted';
-    }
-    return `${firstName(block.commit.author)} · ${shortAge(block.commit.authoredAt, now)}`;
-}
-
 /** For the end of a line, where there is room for the subject too. */
-export function inlineLabel(block: BlameBlock, now: Date): string {
+export function endOfLineLabel(block: BlameBlock, now: Date): string {
     if (block.commit.isUncommitted) {
         return 'Uncommitted changes';
     }

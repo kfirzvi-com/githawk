@@ -14,9 +14,13 @@ export class GitCliBlameReader implements IBlameReader {
         this.runner = runner ?? new ExecFileGitRunner();
     }
 
-    async read(path: string): Promise<Blame> {
+    async read(path: string, contents?: string): Promise<Blame> {
         return GitBlameParser.parse(
-            await this.runner.run(blameArgs(path), this.cwd)
+            await this.runner.run(
+                blameArgs(path, { fromStdin: contents !== undefined }),
+                this.cwd,
+                contents
+            )
         );
     }
 }

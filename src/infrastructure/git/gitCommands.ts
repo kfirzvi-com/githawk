@@ -151,6 +151,22 @@ export function stashListArgs(): string[] {
  *
  * `--` before the path so a file called `-f` is a file rather than a flag.
  */
-export function blameArgs(path: string): string[] {
-    return ['blame', '--porcelain', '--', path];
+export function blameArgs(
+    path: string,
+    options: { fromStdin?: boolean } = {}
+): string[] {
+    return [
+        'blame',
+        '--porcelain',
+        /*
+         * `--contents -` blames the content on stdin instead of the file on
+         * disk, which is what makes an editor with unsaved changes report
+         * honestly: lines the buffer has and no commit does come back as
+         * uncommitted, and everything below them keeps its real author rather
+         * than being shifted by the edit.
+         */
+        ...(options.fromStdin ? ['--contents', '-'] : []),
+        '--',
+        path,
+    ];
 }

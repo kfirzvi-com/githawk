@@ -9,12 +9,22 @@
  *   node scripts/shotVscode.mjs [output-dir] [workspace] [scenes]
  *
  * `scenes` is `all` (the default, and specific to the sample repository's
- * branches) or `repositories`, which captures only what any workspace has.
+ * branches), `repositories`, which captures only what any workspace has, or
+ * `blame`, which wants a workspace with real history rather than the sample —
+ * the annotate column has nothing to say about a file with two commits.
  *
  * Doubles as the way to produce documentation screenshots, so the README shows the
  * real thing rather than a mock.
  */
-import { mkdirSync, rmSync } from 'node:fs';
+import {
+    existsSync,
+    mkdirSync,
+    readdirSync,
+    rmSync,
+    writeFileSync,
+} from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { _electron as electron } from '@playwright/test';
 
@@ -22,13 +32,67 @@ const outDir = process.argv[2] ?? 'artifacts/vscode';
 const repo = process.argv[3] ?? '/tmp/githawk-sample';
 const scenes = process.argv[4] ?? 'all';
 const extensionPath = fileURLToPath(new URL('..', import.meta.url));
-const executablePath = `${extensionPath}/.vscode-test/vscode-darwin-arm64-1.130.0/Visual Studio Code.app/Contents/MacOS/Electron`;
+const executablePath = findVsCode();
+
+/**
+ * Whatever `@vscode/test-electron` last downloaded, wherever it put it.
+ *
+ * Both halves of this were hardcoded and both went stale: the version, which
+ * moves every month, and the executable name — the app bundle contains `Code`,
+ * not `Electron`, so the script had been failing to launch at all.
+ */
+function findVsCode() {
+    const caches = [
+        process.env.GITHAWK_VSCODE_CACHE,
+        join(extensionPath, '.vscode-test'),
+        join(homedir(), '.cache', 'githawk', 'vscode-test'),
+    ].filter((path) => path !== undefined && existsSync(path));
+
+    for (const cache of caches) {
+        const installs = readdirSync(cache)
+            .filter((name) => name.startsWith('vscode-'))
+            .sort()
+            .reverse();
+
+        for (const install of installs) {
+            const binary = join(
+                cache,
+                install,
+                'Visual Studio Code.app/Contents/MacOS/Code'
+            );
+            if (existsSync(binary)) {
+                return binary;
+            }
+        }
+    }
+
+    throw new Error(
+        'No downloaded VS Code found. Run `npm run test:integration` once, or set GITHAWK_VSCODE_CACHE.'
+    );
+}
 
 // A throwaway profile, so a previous run's layout or open editors cannot change
 // what the screenshots show.
 const userDataDir = '/tmp/githawk-shots-profile';
 rmSync(userDataDir, { recursive: true, force: true });
 mkdirSync(outDir, { recursive: true });
+
+/*
+ * The blame scene needs a setting on before the window opens, so it is seeded
+ * into the throwaway profile rather than toggled afterwards — a decoration
+ * drawn during the screenshot is a decoration that might not be there yet.
+ */
+if (scenes === 'blame') {
+    mkdirSync(join(userDataDir, 'User'), { recursive: true });
+    writeFileSync(
+        join(userDataDir, 'User', 'settings.json'),
+        JSON.stringify(
+            { 'gitHawk.blame.style': 'column', 'editor.minimap.enabled': false },
+            null,
+            2
+        )
+    );
+}
 
 const shots = [];
 const app = await electron.launch({
@@ -144,30 +208,48 @@ try {
      * The repository selector, and the picker behind it. Present in any
      * workspace, so this runs before the sample-specific scenes.
      */
-    const repositoryPicker = inner.getByTestId('repository-picker');
-    await repositoryPicker.waitFor();
-    await capture('09-repository-selector');
-    await openQuickPick(repositoryPicker);
-    await capture('10-repository-picker');
+    if (scenes !== 'blame') {
+        const repositoryPicker = inner.getByTestId('repository-picker');
+        await repositoryPicker.waitFor();
+        await capture('09-repository-selector');
+        await openQuickPick(repositoryPicker);
+        await capture('10-repository-picker');
 
-    /*
-     * The gear that jumps to the depth setting. It sits in the title bar, where
-     * it is always visible, and on the "Search again" row itself — VS Code only
-     * paints a row's buttons while that row is hovered or active, so the hover
-     * is what makes the second one appear.
-     */
-    await page
+        /*
+         * The gear that jumps to the depth setting. It sits in the title bar, where
+         * it is always visible, and on the "Search again" row itself — VS Code only
+         * paints a row's buttons while that row is hovered or active, so the hover
+         * is what makes the second one appear.
+         */
+        await page
         .locator('.quick-input-list .monaco-list-row', {
             hasText: 'Search again',
         })
         .hover();
-    await page.waitForTimeout(800);
-    await capture('11-repository-picker-depth-setting');
+        await page.waitForTimeout(800);
+        await capture('11-repository-picker-depth-setting');
 
-    await page.keyboard.press('Escape');
-    await page.waitForTimeout(600);
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(600);
 
-    // Everything below depends on the sample repository's own branches.
+        // Everything below depends on the sample repository's own branches.
+    }
+
+    if (scenes === 'blame') {
+        /*
+         * The annotate column, switched on in the profile before launch. Wants
+         * a workspace with real history: the sample repository's files have two
+         * commits each and the column has nothing to say about them.
+         */
+        await page.keyboard.press('Meta+P');
+        await page.waitForSelector('.quick-input-widget:visible');
+        await page.keyboard.type('src/extension.ts');
+        await page.waitForTimeout(1200);
+        await page.keyboard.press('Enter');
+        await page.waitForTimeout(3000);
+        await capture('blame');
+    }
+
     if (scenes === 'all') {
         // Selecting a commit fills the Changes tree and the details panel.
         await click(rows.nth(4));

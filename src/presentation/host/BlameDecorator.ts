@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import type { Blame, BlameBlock } from '../../domain/models/Blame';
 import type { IBlameReader } from '../../domain/repositories/IBlameReader';
 import { blameStyle, type BlameStyle } from './config';
-import { columnLabel, gutterLabel, inlineLabel } from './blameLabels';
+import { columnLabel, endOfLineLabel } from './blameLabels';
 import {
     UNCOMMITTED_COLOUR,
     commitRanks,
@@ -13,28 +13,20 @@ import { log } from './log';
 /**
  * Draws blame into the editor.
  *
- * Three styles, because VS Code cannot do the obvious thing. Beside the line
- * numbers is a *gutter*, and a gutter takes an image — `gutterIconPath` is a
- * URI, not a string — so text there has to be drawn as an SVG per line and
- * handed over as a data URI. That works and is what this offers, but it renders
- * type as pictures, which does not scale with the editor's font or respect the
- * user's ligatures. The alternatives put real text either before the line, which
- * shifts the code right, or after it, which is where GitLens puts it.
+ * Two placements, and the choice between them is taste rather than
+ * correctness. `column` is IntelliJ's annotate: a fixed-width column of date
+ * and author on every line, coloured by commit, sitting between the line
+ * numbers and the code — which is where a `before` attachment lands, and where
+ * IntelliJ's column is. `endOfLine` leaves the code where it is and annotates
+ * the space to its right, one label per block.
  *
- * Which of the three is right is a matter of taste rather than of correctness,
- * so all three ship and `gitHawk.blame.style` chooses.
+ * Beside the line numbers, strictly speaking, is not available: that is the
+ * gutter, and a gutter takes an image, which VS Code scales to icon size. A
+ * spike drew labels there as SVG and they came out as smudges.
  */
 export class BlameDecorator implements vscode.Disposable {
     /** One type per text style, disposed together: a stale type keeps drawing. */
     private readonly types = new Map<string, vscode.TextEditorDecorationType>();
-    /**
-     * The gutter's cost, made explicit. `gutterIconPath` exists only on the
-     * options a decoration *type* is created with, not on the per-range options
-     * — so a gutter label that differs per line needs a type per line. They are
-     * held here and disposed on the next pass, because a type that is dropped
-     * without being disposed keeps drawing forever.
-     */
-    private gutterTypes: vscode.TextEditorDecorationType[] = [];
     /** Cancels the blame in flight when the file changes underneath it. */
     private generation = 0;
 
@@ -63,7 +55,9 @@ export class BlameDecorator implements vscode.Disposable {
         let blame: Blame;
         try {
             blame = await this.createReader(root).read(
-                editor.document.uri.fsPath
+                editor.document.uri.fsPath,
+                // Only when there is something on disk to disagree with.
+                editor.document.isDirty ? editor.document.getText() : undefined
             );
         } catch (error) {
             // A file git has never seen is the common case here, not a fault.
@@ -81,15 +75,10 @@ export class BlameDecorator implements vscode.Disposable {
             this.decorateColumn(editor, blame);
             return;
         }
-        if (style === 'gutter') {
-            this.decorateGutter(editor, blame, now);
-            return;
-        }
-
         editor.setDecorations(
             this.typeFor(style),
             blame.blocks.map((block) =>
-                this.optionsFor(block, style, now, editor.document)
+                this.optionsFor(block, now, editor.document)
             )
         );
     }
@@ -135,44 +124,9 @@ export class BlameDecorator implements vscode.Disposable {
         editor.setDecorations(this.typeFor('column'), options);
     }
 
-    /**
-     * One decoration type per block, since each carries a different image.
-     * Measured rather than assumed: see the note on `gutterTypes`.
-     */
-    private decorateGutter(
-        editor: vscode.TextEditor,
-        blame: Blame,
-        now: Date
-    ): void {
-        this.disposeGutterTypes();
-
-        for (const block of blame.blocks) {
-            const type = vscode.window.createTextEditorDecorationType({
-                gutterIconPath: gutterIcon(gutterLabel(block, now)),
-                gutterIconSize: 'contain',
-            });
-            this.gutterTypes.push(type);
-
-            const line = block.startLine - 1;
-            editor.setDecorations(type, [
-                {
-                    range: new vscode.Range(line, 0, line, 0),
-                    hoverMessage: hover(block),
-                },
-            ]);
-        }
-    }
-
-    private disposeGutterTypes(): void {
-        for (const type of this.gutterTypes) {
-            type.dispose();
-        }
-        this.gutterTypes = [];
-    }
-
+    /** endOfLine only; `column` builds its own, per line rather than per block. */
     private optionsFor(
         block: BlameBlock,
-        style: Exclude<BlameStyle, 'off' | 'gutter'>,
         now: Date,
         document: vscode.TextDocument
     ): vscode.DecorationOptions {
@@ -183,15 +137,7 @@ export class BlameDecorator implements vscode.Disposable {
          * starts here".
          */
         const line = block.startLine - 1;
-        const text = inlineLabel(block, now);
-
-        if (style === 'inline') {
-            return {
-                range: new vscode.Range(line, 0, line, 0),
-                hoverMessage: hover(block),
-                renderOptions: { before: { contentText: `${text}  ` } },
-            };
-        }
+        const text = endOfLineLabel(block, now);
 
         /*
          * At the *end* of the line, which means the range has to be there too:
@@ -209,7 +155,7 @@ export class BlameDecorator implements vscode.Disposable {
     }
 
     private typeFor(
-        style: Exclude<BlameStyle, 'off' | 'gutter'>
+        style: Exclude<BlameStyle, 'off'>
     ): vscode.TextEditorDecorationType {
         if (style === 'column') {
             return this.columnType();
@@ -227,17 +173,9 @@ export class BlameDecorator implements vscode.Disposable {
             'editorCodeLens.foreground'
         ) as unknown as string;
 
-        const created = vscode.window.createTextEditorDecorationType(
-            style === 'inline'
-                ? {
-                      before: {
-                          color: colour,
-                          fontStyle: 'italic',
-                          margin: '0 1em 0 0',
-                      },
-                  }
-                : { after: { color: colour, fontStyle: 'italic' } }
-        );
+        const created = vscode.window.createTextEditorDecorationType({
+            after: { color: colour, fontStyle: 'italic' },
+        });
 
         this.types.set(style, created);
         return created;
@@ -272,7 +210,40 @@ export class BlameDecorator implements vscode.Disposable {
         for (const type of this.types.values()) {
             editor.setDecorations(type, []);
         }
-        this.disposeGutterTypes();
+    }
+
+    /**
+     * See gitHawk.blame. What the decorator would draw, from the same reader
+     * and the same grouping — a hook that rebuilt either would assert a
+     * rendering no reader ever sees.
+     */
+    async blameForTesting(
+        path: string
+    ): Promise<
+        | {
+              startLine: number;
+              endLine: number;
+              author: string;
+              summary: string;
+              hash: string;
+              isUncommitted: boolean;
+          }[]
+        | undefined
+    > {
+        const root = this.repositoryRoot();
+        if (!root) {
+            return undefined;
+        }
+
+        const blame = await this.createReader(root).read(path);
+        return blame.blocks.map((block) => ({
+            startLine: block.startLine,
+            endLine: block.endLine,
+            author: block.commit.author,
+            summary: block.commit.summary,
+            hash: block.commit.hash,
+            isUncommitted: block.commit.isUncommitted,
+        }));
     }
 
     dispose(): void {
@@ -280,7 +251,6 @@ export class BlameDecorator implements vscode.Disposable {
             type.dispose();
         }
         this.types.clear();
-        this.disposeGutterTypes();
     }
 }
 
@@ -315,24 +285,4 @@ function hover(block: BlameBlock): vscode.MarkdownString | undefined {
     // part of the string is either literal or URI-encoded.
     markdown.isTrusted = true;
     return markdown;
-}
-
-/**
- * Text drawn as an SVG, because that is the only way to put words in the
- * gutter. Sized in `em` so it tracks the editor's font size, and coloured with
- * `currentColor` so VS Code's own gutter colour applies.
- */
-function gutterIcon(text: string): vscode.Uri {
-    const escaped = text
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
-
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="130" height="18">
-<text x="0" y="13" font-family="var(--vscode-editor-font-family, monospace)" font-size="11" fill="#888" opacity="0.9">${escaped}</text>
-</svg>`;
-
-    return vscode.Uri.parse(
-        `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`
-    );
 }

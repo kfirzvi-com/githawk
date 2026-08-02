@@ -3,6 +3,41 @@
 All notable changes to GitHawk are documented here, following
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- **Blame in the editor.** `gitHawk.blame.style` set to `column` gives every
+  line the date and author of the commit it came from, in a fixed-width column
+  between the line numbers and the code — IntelliJ's annotate. Each commit has
+  its own colour and the colours run in order, cool for the oldest lines in the
+  file to warm for the newest, so a run of lines reads as a block and scrolling
+  shows the order the file was built in.
+
+  Ranked by commit rather than scaled by elapsed time, deliberately: a week of
+  steady work is one shade on a time-proportional scale, and telling one commit
+  from the next is what the colour is for.
+
+  Hovering gives the full message, author, date, the number of lines that commit
+  owns there, and a link that selects the commit in the graph and fills the
+  Changes tree. Decoration text cannot take a click, so the hover is the way
+  through.
+
+  `endOfLine` is the quieter placement — one label per block, at the end of its
+  first line, leaving the code where it is. Beside the line numbers is not
+  offered: that is the gutter, it takes an image rather than text, and VS Code
+  scales it to icon size.
+
+  Annotations are read from the editor's buffer rather than the file on disk, so
+  they stay correct part-way through an unsaved edit instead of shifting every
+  line below it onto the wrong commit. Redraws are debounced.
+
+### Changed
+
+- The extension now activates on startup rather than waiting for its panel to be
+  opened. Blame lives in the editor, and an extension that is not running cannot
+  annotate one.
+
 ## [0.3.0] — 2026-08-02
 
 Still marked **Preview** on the Marketplace: the known limitations at the bottom

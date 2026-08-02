@@ -21,20 +21,17 @@ export const BLAME_STYLE_SETTING = 'blame.style';
  * text beside the line numbers — see BlameDecorator — and which compromise is
  * least bad is a matter of taste.
  */
-export type BlameStyle =
-    | 'off'
-    | 'column'
-    | 'gutter'
-    | 'inline'
-    | 'endOfLine';
+/**
+ * Two, not the four the spike carried.
+ *
+ * The gutter is gone because it cannot hold text: `gutterIconPath` takes an
+ * image, and VS Code scales it to icon size, so a label there renders as a
+ * smudge. A `before` attachment placed without a fixed width is gone too —
+ * `column` occupies the same position and holds its edge.
+ */
+export type BlameStyle = 'off' | 'column' | 'endOfLine';
 
-const BLAME_STYLES: BlameStyle[] = [
-    'off',
-    'column',
-    'gutter',
-    'inline',
-    'endOfLine',
-];
+const BLAME_STYLES: BlameStyle[] = ['off', 'column', 'endOfLine'];
 
 export function blameStyle(): BlameStyle {
     const configured = vscode.workspace

@@ -11,6 +11,7 @@ import { GitCliStashReader } from './infrastructure/git/GitCliStashReader';
 import { GitCliWorkingTreeReader } from './infrastructure/git/GitCliWorkingTreeReader';
 import { GitCliBlameReader } from './infrastructure/git/GitCliBlameReader';
 import { BlameDecorator } from './presentation/host/BlameDecorator';
+import { Debouncer } from './presentation/host/debounce';
 import { GitCliWriter } from './infrastructure/git/GitCliWriter';
 import { ChangeDecorationProvider } from './presentation/host/ChangeDecorationProvider';
 import {
@@ -42,6 +43,14 @@ import {
 } from './presentation/host/RevisionContentProvider';
 
 export { CONFIG_SECTION } from './presentation/host/config';
+
+/**
+ * Long enough that a burst of typing is one redraw, short enough that pausing
+ * to read gets the annotations back. Capped so a long stretch of steady typing
+ * still refreshes rather than waiting for silence that never comes.
+ */
+const BLAME_REDRAW_MS = 600;
+const BLAME_REDRAW_MAX_MS = 4_000;
 
 /**
  * Set once at activation. The adapter factories are module-level so they can be
@@ -105,6 +114,13 @@ export async function activate(
         () => repositories.active?.root
     );
     context.subscriptions.push(blame);
+
+    const redrawBlame = new Debouncer(
+        () => void blame.decorate(vscode.window.activeTextEditor),
+        BLAME_REDRAW_MS,
+        BLAME_REDRAW_MAX_MS
+    );
+    context.subscriptions.push({ dispose: () => redrawBlame.cancel() });
 
     const provider = new GitGraphViewProvider(
         context.extensionUri,
@@ -268,6 +284,10 @@ export async function activate(
         vscode.commands.registerCommand('gitHawk.revealCommit', (hash: string) =>
             provider.revealCommit(hash)
         ),
+        // Reports the blame as the decorator reads it.
+        vscode.commands.registerCommand('gitHawk.blame', (path: string) =>
+            blame.blameForTesting(path)
+        ),
         vscode.commands.registerCommand('gitHawk.showLog', () => log.show()),
         // Returns a branch menu's structure without showing it, so the
         // integration tests can assert the grouping.
@@ -309,10 +329,20 @@ export async function activate(
             blame.decorate(editor)
         ),
         vscode.workspace.onDidSaveTextDocument((document) => {
-            if (
-                document === vscode.window.activeTextEditor?.document
-            ) {
+            if (document === vscode.window.activeTextEditor?.document) {
                 void blame.decorate(vscode.window.activeTextEditor);
+            }
+        }),
+        /*
+         * Typing moves every line below the cursor, so the annotations are
+         * wrong the moment a key is pressed — and re-running git on each
+         * keystroke is not an option either. Debounced, and blamed against the
+         * buffer rather than the file, so what comes back describes what is on
+         * screen rather than what was last saved.
+         */
+        vscode.workspace.onDidChangeTextDocument((event) => {
+            if (event.document === vscode.window.activeTextEditor?.document) {
+                redrawBlame.schedule();
             }
         }),
         // A new folder changes which repositories exist, so it needs a rescan
