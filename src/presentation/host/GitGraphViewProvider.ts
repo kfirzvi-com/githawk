@@ -227,6 +227,9 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
             case 'remote:operation':
                 void this.createMenu().runRemoteOperation(message.operation);
                 break;
+            case 'remotes:menu':
+                void this.createRemoteMenu().showManager();
+                break;
             case 'compare:commits':
                 void this.compareCommits(message.hashes, 'focus');
                 break;

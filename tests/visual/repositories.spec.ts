@@ -74,3 +74,24 @@ test('looks right — repository picker', async ({ page }) => {
         fullPage: true,
     });
 });
+
+test('the toolbar asks the host to open the remote manager', async ({
+    page,
+}) => {
+    // The manager itself is a VS Code QuickPick; the webview only asks.
+    const posted: string[] = [];
+    page.on('console', (message) => {
+        if (message.text().includes('webview → host')) {
+            posted.push(message.text());
+        }
+    });
+
+    await page.goto('/?topology=linear');
+    await page.getByRole('button', { name: 'Remotes' }).click();
+
+    await expect
+        .poll(() => posted.some((line) => line.includes('remotes:menu')))
+        .toBe(true);
+    // Not run as a git operation: fetch, pull and push act, this one opens.
+    expect(posted.some((line) => line.includes('remote:operation'))).toBe(false);
+});

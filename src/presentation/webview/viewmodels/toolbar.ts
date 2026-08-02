@@ -1,6 +1,11 @@
 import type { RepositoryLocation } from '../../../domain/models/RepositoryLocation';
 
-export type ToolbarAction = 'refresh' | 'fetch' | 'pull' | 'push';
+export type ToolbarAction =
+    | 'refresh'
+    | 'fetch'
+    | 'pull'
+    | 'push'
+    | 'remotes';
 
 export interface ToolbarActionSpec {
     id: ToolbarAction;
@@ -9,12 +14,31 @@ export interface ToolbarActionSpec {
     primary: boolean;
 }
 
+/**
+ * Fetch, pull, and push act immediately; Remotes opens a manager. It sits with
+ * them anyway — everything on this end of the toolbar is about the other end of
+ * the wire, and "where do I add a remote" should not be a command-palette
+ * question when its three neighbours are buttons.
+ *
+ * The icon is an arrow rather than a cloud on purpose: ☁ and its neighbours load
+ * asynchronously, fall back to boxes on some platforms, and moved the screenshot
+ * baselines by thousands of pixels between runs. ⇄ is horizontal, so it does not
+ * read as another ⇣.
+ */
 export const toolbarActions: ToolbarActionSpec[] = [
     { id: 'refresh', label: 'Refresh', icon: '↻', primary: true },
     { id: 'fetch', label: 'Fetch', icon: '⇣', primary: false },
     { id: 'pull', label: 'Pull', icon: '⇣', primary: false },
     { id: 'push', label: 'Push', icon: '⇡', primary: false },
+    { id: 'remotes', label: 'Remotes', icon: '⇄', primary: false },
 ];
+
+/** Actions that run a git command rather than opening something. */
+export function isRemoteOperation(
+    action: ToolbarAction
+): action is 'fetch' | 'pull' | 'push' {
+    return action === 'fetch' || action === 'pull' || action === 'push';
+}
 
 export interface RepositoryIndicator {
     name: string;

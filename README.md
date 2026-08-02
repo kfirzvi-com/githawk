@@ -111,7 +111,9 @@ Anything destructive asks first, and says what will be lost.
 
 ### Manage remotes
 
-**`GitHawk: Manage Remotes`** lists every remote with its URL, and a remote with a
+The **Remotes** button on the toolbar — beside Fetch, Pull, and Push, since they
+all concern the other end of the wire — or **`GitHawk: Manage Remotes`**. Either
+lists every remote with its URL, and a remote with a
 separate push URL — the fork workflow, reading from upstream and writing to your own
 copy — shows both, because being shown one of two is how you push somewhere you did
 not mean to.

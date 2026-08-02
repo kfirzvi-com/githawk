@@ -24,7 +24,10 @@
         type SelectionState,
     } from './viewmodels/selection';
     import Toolbar from './components/Toolbar.svelte';
-    import type { ToolbarAction } from './viewmodels/toolbar';
+    import {
+        isRemoteOperation,
+        type ToolbarAction,
+    } from './viewmodels/toolbar';
     import { anchorAt, scrollTopFor } from './viewmodels/scrollAnchor';
     import { defaultMetrics } from './viewmodels/graphGeometry';
     import { onHostMessage, postToHost } from './vscodeApi';
@@ -202,8 +205,13 @@
             postToHost({ type: 'graph:refresh' });
             return;
         }
-
-        postToHost({ type: 'remote:operation', operation: action });
+        if (action === 'remotes') {
+            postToHost({ type: 'remotes:menu' });
+            return;
+        }
+        if (isRemoteOperation(action)) {
+            postToHost({ type: 'remote:operation', operation: action });
+        }
     };
 
     const handleSelectCommit = (commit: Commit, modifiers: SelectModifiers) => {

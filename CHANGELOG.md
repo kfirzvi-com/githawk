@@ -31,6 +31,9 @@ All notable changes to GitHawk are documented here, following
   more than one. Pulling a branch that is not checked out still writes the ref
   directly rather than touching the working tree; pulling the current branch is a
   pull, because git refuses a refspec fetch into it. No `--force` anywhere.
+- **A Remotes button on the toolbar**, beside Fetch, Pull, and Push. Managing
+  remotes was reachable only from the command palette, which is a poor place for
+  it when its three neighbours are buttons.
 - **`GitHawk: Manage Remotes`** — add, rename, re-point, or remove a remote, fetch
   one with pruning, or prune deleted branches without fetching. Fetch and push
   URLs are listed separately when they differ, as a fork checkout's do. Removing
