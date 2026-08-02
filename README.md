@@ -149,6 +149,25 @@ shows ↓ behind, ↑ ahead, or `gone` at a glance, and
 
 Anything destructive asks first, and says what will be lost.
 
+### Put work aside
+
+**`GitHawk: Manage Stashes`** lists the stash with what each entry says it is,
+the branch it was made on, and when. An entry git named itself — `WIP on main:
+1234abc …` — is marked `(unnamed)`, because that wording describes the commit
+the work was sitting on rather than the work.
+
+Apply an entry from the list in one click, or open it for the rest: **show what
+is in it** in the Changes tree, apply, pop, or drop. Stashing asks for a message
+and whether to include untracked files, which is never the default — it is the
+one variant that sweeps up a scratch file you had not thought about.
+
+Popping and dropping ask first. Both remove the entry, and a dropped entry
+survives only as a dangling commit.
+
+A stash entry is a commit, so showing what is in it is the same comparison
+machinery as everything else — it lands in the Changes tree and opens in the
+diff editor.
+
 ### Manage remotes
 
 The **Remotes** button on the toolbar — beside Fetch, Pull, and Push, since they
@@ -227,6 +246,7 @@ tool in the right directory. It reads nothing and sends nothing.
 | `GitHawk: Switch Repository` | |
 | `GitHawk: Manage Worktrees` | |
 | `GitHawk: Manage Remotes` | Add, rename, re-point, remove, fetch, prune |
+| `GitHawk: Manage Stashes` | List, show, apply, pop, drop; stash the working tree |
 | `GitHawk: Show Uncommitted Changes` | Everything uncommitted, against `HEAD` |
 | `GitHawk: Start An AI CLI Here` | |
 | `GitHawk: Update All Branches From Upstream` | Fast-forwards every branch that can be |

@@ -7,6 +7,7 @@ import {
 import { GitCliComparer } from './infrastructure/git/GitCliComparer';
 import { GitCliWorktreeReader } from './infrastructure/git/GitCliWorktreeReader';
 import { GitCliRemoteReader } from './infrastructure/git/GitCliRemoteReader';
+import { GitCliStashReader } from './infrastructure/git/GitCliStashReader';
 import { GitCliWorkingTreeReader } from './infrastructure/git/GitCliWorkingTreeReader';
 import { GitCliWriter } from './infrastructure/git/GitCliWriter';
 import { ChangeDecorationProvider } from './presentation/host/ChangeDecorationProvider';
@@ -105,6 +106,7 @@ export async function activate(
         repositories,
         createWorktreeReader,
         createRemoteReader,
+        createStashReader,
         createWorkingTreeReader
     );
 
@@ -155,6 +157,13 @@ export async function activate(
         ),
         vscode.commands.registerCommand('gitHawk.manageRemotes', () =>
             provider.createRemoteMenu().showManager()
+        ),
+        vscode.commands.registerCommand('gitHawk.manageStashes', () =>
+            provider.createStashMenu().showManager()
+        ),
+        // Reports the stash as the extension sees it.
+        vscode.commands.registerCommand('gitHawk.stashes', () =>
+            provider.createStashMenu().managerItemsForTesting()
         ),
         // Reports the remotes as the extension sees them.
         vscode.commands.registerCommand('gitHawk.remotes', () =>
@@ -332,6 +341,10 @@ function createWorktreeReader(): GitCliWorktreeReader {
 
 function createRemoteReader(): GitCliRemoteReader {
     return new GitCliRemoteReader(activeRepositoryRoot());
+}
+
+function createStashReader(): GitCliStashReader {
+    return new GitCliStashReader(activeRepositoryRoot());
 }
 
 function createWorkingTreeReader(): GitCliWorkingTreeReader {

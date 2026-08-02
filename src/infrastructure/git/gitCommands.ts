@@ -109,3 +109,19 @@ export function remoteListArgs(): string[] {
 export function statusArgs(): string[] {
     return ['status', '--porcelain', '-z', '--untracked-files=normal'];
 }
+
+/**
+ * The stash, most recent first.
+ *
+ * `%gd` is the `stash@{n}` selector, `%H` the commit the entry is, `%gs` git's
+ * reflog subject — which is where the branch and the message live — and `%aI`
+ * when it was made. Separated by the same control characters the log uses, for
+ * the same reason: a stash message can contain anything a person can type.
+ */
+export function stashListArgs(): string[] {
+    return [
+        'stash',
+        'list',
+        `--format=%gd${UNIT_SEPARATOR}%H${UNIT_SEPARATOR}%gs${UNIT_SEPARATOR}%aI${RECORD_SEPARATOR}`,
+    ];
+}

@@ -156,6 +156,14 @@ export function describe(action: GitAction): string {
                 : `Push ${action.branch} to ${action.remote}`;
         case 'pullBranch':
             return `Pull ${action.branch} from ${action.remote}`;
+        case 'stashPush':
+            return 'Stash the working tree';
+        case 'stashApply':
+            return `Apply ${action.ref}`;
+        case 'stashPop':
+            return `Pop ${action.ref}`;
+        case 'stashDrop':
+            return `Drop ${action.ref}`;
         case 'addRemote':
             return `Add remote ${action.name}`;
         case 'renameRemote':

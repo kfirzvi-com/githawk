@@ -498,3 +498,96 @@ describe('remote management commands', () => {
         ).toBe(false);
     });
 });
+
+describe('stash commands', () => {
+    test('stashes the whole working tree, with a message when given one', () => {
+        expect(
+            argsFor({
+                type: 'stashPush',
+                message: 'half a refactor',
+                includeUntracked: false,
+                keepIndex: false,
+            })
+        ).toEqual(['stash', 'push', '--message', 'half a refactor']);
+
+        // No message is a real choice: git writes one describing the commit.
+        expect(
+            argsFor({
+                type: 'stashPush',
+                includeUntracked: false,
+                keepIndex: false,
+            })
+        ).toEqual(['stash', 'push']);
+    });
+
+    test('takes untracked files only when asked', () => {
+        // The one variant that can sweep up a scratch file, so it is never the
+        // default and never implied.
+        expect(
+            argsFor({
+                type: 'stashPush',
+                includeUntracked: true,
+                keepIndex: false,
+            })
+        ).toEqual(['stash', 'push', '--include-untracked']);
+    });
+
+    test('never uses --all, which would take ignored files too', () => {
+        // --all sweeps up build output and anything else .gitignore names.
+        for (const includeUntracked of [true, false]) {
+            const args = argsFor({
+                type: 'stashPush',
+                includeUntracked,
+                keepIndex: false,
+            });
+            expect(args).not.toContain('--all');
+            expect(args).not.toContain('-a');
+        }
+    });
+
+    test('applies, pops and drops by ref', () => {
+        const ref = 'stash@{2}';
+        const hash = 'a'.repeat(40);
+
+        expect(argsFor({ type: 'stashApply', ref, hash })).toEqual([
+            'stash',
+            'apply',
+            ref,
+        ]);
+        expect(argsFor({ type: 'stashPop', ref, hash })).toEqual([
+            'stash',
+            'pop',
+            ref,
+        ]);
+        expect(argsFor({ type: 'stashDrop', ref, hash })).toEqual([
+            'stash',
+            'drop',
+            ref,
+        ]);
+    });
+
+    test('popping and dropping are destructive; applying is not', () => {
+        const ref = 'stash@{0}';
+        const hash = 'a'.repeat(40);
+
+        // Apply leaves the entry in place, so nothing is lost by trying it.
+        expect(isDestructive({ type: 'stashApply', ref, hash })).toBe(false);
+        for (const action of [
+            { type: 'stashPop', ref, hash },
+            { type: 'stashDrop', ref, hash },
+        ] satisfies GitAction[]) {
+            expect(isDestructive(action)).toBe(true);
+            expect(destructiveReason(action)).toBeTruthy();
+        }
+    });
+
+    test('stashing is not destructive — the work goes somewhere', () => {
+        expect(
+            isDestructive({
+                type: 'stashPush',
+                includeUntracked: true,
+                keepIndex: false,
+            })
+        ).toBe(false);
+    });
+});
