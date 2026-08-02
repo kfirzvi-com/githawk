@@ -1,4 +1,9 @@
-export type RefKind = 'localBranch' | 'remoteBranch' | 'tag' | 'head';
+export type RefKind =
+    | 'localBranch'
+    | 'remoteBranch'
+    | 'tag'
+    | 'head'
+    | 'stash';
 
 /**
  * A decoration pointing at a commit.
@@ -27,6 +32,15 @@ export function tagRef(name: string): Ref {
     return { kind: 'tag', name, isHead: false };
 }
 
+/**
+ * `stash@{0}`. Not a ref in git's sense — the older entries are reachable only
+ * through the reflog — but it labels a commit in the graph, which is what this
+ * type is for.
+ */
+export function stashRef(name: string): Ref {
+    return { kind: 'stash', name, isHead: false };
+}
+
 export function detachedHeadRef(): Ref {
     return { kind: 'head', name: 'HEAD', isHead: true };
 }
@@ -39,12 +53,17 @@ export function isBranchRef(ref: Ref): boolean {
  * Ordering for display: the checked-out branch first, then local branches, then
  * tags, then remotes. Remote branches come last because they are usually
  * duplicates of a local branch already shown.
+ *
+ * A stash label sits alone on its own row, so where it sorts never actually
+ * matters — but the table is exhaustive so that adding a kind cannot silently
+ * sort as `undefined`.
  */
 const KIND_ORDER: Record<RefKind, number> = {
     head: 0,
     localBranch: 1,
-    tag: 2,
-    remoteBranch: 3,
+    stash: 2,
+    tag: 3,
+    remoteBranch: 4,
 };
 
 export function compareRefsForDisplay(a: Ref, b: Ref): number {

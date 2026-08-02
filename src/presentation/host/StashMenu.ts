@@ -91,6 +91,25 @@ export class StashMenu {
         await this.showForStash(chosen.item.stash);
     }
 
+    /**
+     * One entry, named by the ref the sidebar drew. Re-read rather than
+     * trusted: a ref is a position, and the stack may have changed since.
+     */
+    async showForRef(ref: string): Promise<void> {
+        const stash = (await this.deps.listStashes()).find(
+            (candidate) => candidate.ref === ref
+        );
+
+        if (!stash) {
+            vscode.window.showWarningMessage(
+                `${ref} is no longer on the stash.`
+            );
+            return;
+        }
+
+        await this.showForStash(stash);
+    }
+
     /** Everything git can do to one entry. */
     private async showForStash(stash: Stash): Promise<void> {
         const chosen = await vscode.window.showQuickPick(

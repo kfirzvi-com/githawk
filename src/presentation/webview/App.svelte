@@ -7,8 +7,10 @@
     import {
         BranchMapper,
         CommitMapper,
+        StashMapper,
         WorktreeMapper,
     } from '../../application/dto/mappers';
+    import type { Stash } from '../../domain/models/Stash';
     import BranchList from './components/BranchList.svelte';
     import CommitDetails from './components/CommitDetails.svelte';
     import GitGraph from './components/GitGraph.svelte';
@@ -73,6 +75,8 @@
     let activeRepositoryRoot = $state<string | undefined>(undefined);
     /** Working trees of the active repository. One is the common case. */
     let worktrees = $state<Worktree[]>([]);
+    /** Listed in the sidebar; the same entries are rows in the graph. */
+    let stashes = $state<Stash[]>([]);
     /** The graph's scroll container, so a reload can keep the reader's place. */
     let graphScroller = $state<HTMLDivElement | null>(null);
     let panes = $state(readPaneVisibility(readWebviewState(PANES_STATE_KEY)));
@@ -161,6 +165,7 @@
 
                     commits = message.graph.commits.map(CommitMapper.fromDto);
                     branches = message.graph.branches.map(BranchMapper.fromDto);
+                    stashes = message.graph.stashes.map(StashMapper.fromDto);
                     hasMoreHistory = message.graph.hasMoreHistory;
                     primaryBranchName = message.graph.primaryBranchName;
                     errorMessage = null;
@@ -463,6 +468,9 @@
                             })}
                         onOpenWorktreeMenu={(path) =>
                             postToHost({ type: 'worktree:menu', path })}
+                        {stashes}
+                        onOpenStashMenu={(ref) =>
+                            postToHost({ type: 'stash:menu', ref })}
                     />
                 </div>
             {/if}

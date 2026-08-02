@@ -147,7 +147,10 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
 
     private async sendGraph(): Promise<void> {
         try {
-            const useCase = new LoadGitGraphUseCase(this.createRepository());
+            const useCase = new LoadGitGraphUseCase(
+                this.createRepository(),
+                this.createStashReader()
+            );
             const graph = await useCase.execute();
 
             this.post({ type: 'graph:loaded', graph });
@@ -237,6 +240,9 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
                 break;
             case 'repository:menu':
                 void this.repositories.pick();
+                break;
+            case 'stash:menu':
+                void this.showStashMenu(message.ref);
                 break;
             case 'worktree:menu':
                 void (message.path
@@ -557,6 +563,20 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
             log.warn(`could not list remotes: ${describeError(error)}`);
             return [];
         }
+    }
+
+    /**
+     * A ref from the sidebar names a position, and the stack may have moved
+     * since it was drawn — so the entry is looked up again by ref and the
+     * manager opened if it is gone, rather than acting on whatever is there now.
+     */
+    private async showStashMenu(ref?: string): Promise<void> {
+        const menu = this.createStashMenu();
+        if (ref === undefined) {
+            await menu.showManager();
+            return;
+        }
+        await menu.showForRef(ref);
     }
 
     /** Exposed so a command can open the manager without going via the webview. */

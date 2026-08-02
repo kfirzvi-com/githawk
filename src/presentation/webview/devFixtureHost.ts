@@ -8,6 +8,7 @@ import type {
 import { HARNESS_TO_HOST_EVENT } from './vscodeApi';
 import { cleanWorkingTree } from '../../domain/models/WorkingTreeStatus';
 import { LoadGitGraphUseCase } from '../../application/usecases/LoadGitGraphUseCase';
+import { StashMapper } from '../../application/dto/mappers';
 import { InMemoryGitRepository } from '../../infrastructure/fixtures/InMemoryGitRepository';
 import {
     defaultTopology,
@@ -33,6 +34,7 @@ export async function startFixtureHost(): Promise<void> {
     const worktreeCount = Number(parameters.get('worktrees') ?? '0');
     announceWorktrees(worktreeCount);
     announceWorkingTree(parameters.get('dirty'));
+    const stashCount = Number(parameters.get('stashes') ?? '0');
 
     const requestedId = parameters.get('topology');
 
@@ -62,7 +64,11 @@ export async function startFixtureHost(): Promise<void> {
         const graph = await useCase.execute();
         post({
             type: 'graph:loaded',
-            graph: markBranchesInWorktrees(graph, worktreeCount),
+            graph: withStashes(
+                markBranchesInWorktrees(graph, worktreeCount),
+                graph,
+                stashCount
+            ),
         });
         console.info(
             `[harness] loaded "${topology.id}" — ${graph.commits.length} commits, ${graph.branches.length} branches`
@@ -99,6 +105,44 @@ async function loadRealDump(): Promise<void> {
 
 function post(message: HostToWebviewMessage): void {
     window.postMessage(message, '*');
+}
+
+/**
+ * The stash, parameterised as `?stashes=2`.
+ *
+ * Entries hang off real commits from the fixture, because that is what makes
+ * them worth drawing: a stash whose base is not in the graph is an island, and
+ * the point of putting them in the graph is showing where the work was left.
+ */
+function withStashes(
+    graph: GitGraphDto,
+    source: GitGraphDto,
+    count: number
+): GitGraphDto {
+    if (!Number.isFinite(count) || count < 1) {
+        return graph;
+    }
+
+    const bases = source.commits.slice(0, Math.min(count, 3));
+    const stashes = bases.map((base, index) => ({
+        ref: `stash@{${index}}`,
+        hash: `57a5${index}`.padEnd(40, '0'),
+        branch: index === 0 ? 'main' : 'feature3',
+        message:
+            index === 0
+                ? 'half a refactor'
+                : `WIP on feature3: ${base.hash.slice(0, 7)} ${base.message.split('\n')[0]}`,
+        isAutoNamed: index !== 0,
+        createdAt: new Date(Date.parse(base.timestamp) + 86_400_000).toISOString(),
+        author: 'Sample Author',
+        baseHash: base.hash,
+    }));
+
+    return {
+        ...graph,
+        stashes,
+        commits: [...graph.commits, ...stashes.map(StashMapper.toCommitDto)],
+    };
 }
 
 /**

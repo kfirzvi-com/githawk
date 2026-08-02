@@ -29,7 +29,8 @@ export class GitStashParser {
 }
 
 function toStash(record: string, index: number): Stash | undefined {
-    const [ref, hash, subject, date] = record.split(UNIT_SEPARATOR);
+    const [ref, hash, subject, date, author, parents] =
+        record.split(UNIT_SEPARATOR);
     if (!ref || !hash) {
         return undefined;
     }
@@ -45,6 +46,9 @@ function toStash(record: string, index: number): Stash | undefined {
         message,
         isAutoNamed,
         createdAt: date ? new Date(date) : new Date(0),
+        author: author ?? '',
+        // First only. See Stash.baseHash for why the other two are dropped.
+        baseHash: (parents ?? '').trim().split(/\s+/)[0] ?? '',
     };
 }
 
