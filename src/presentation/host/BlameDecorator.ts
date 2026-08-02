@@ -1,6 +1,10 @@
 import * as vscode from 'vscode';
 import type { Blame, BlameBlock } from '../../domain/models/Blame';
-import type { IBlameReader } from '../../domain/repositories/IBlameReader';
+import type {
+    BlameRequest,
+    IBlameReader,
+} from '../../domain/repositories/IBlameReader';
+import { REVISION_SCHEME, decodeRevisionUri } from './RevisionContentProvider';
 import { blameStyle, type BlameStyle } from './config';
 import { columnLabel, endOfLineLabel } from './blameLabels';
 import {
@@ -27,23 +31,48 @@ import { log } from './log';
 export class BlameDecorator implements vscode.Disposable {
     /** One type per text style, disposed together: a stale type keeps drawing. */
     private readonly types = new Map<string, vscode.TextEditorDecorationType>();
-    /** Cancels the blame in flight when the file changes underneath it. */
-    private generation = 0;
+    /**
+     * Cancels the blame in flight when a document changes underneath it. Kept
+     * per document, not globally: a diff has two editors open at once and a
+     * single counter would have each of them cancelling the other.
+     */
+    private readonly generations = new Map<string, number>();
 
     constructor(
         private readonly createReader: (root: string) => IBlameReader,
         private readonly repositoryRoot: () => string | undefined
     ) {}
 
+    /**
+     * Every editor on screen, not only the focused one — a diff is two editors,
+     * and annotating whichever half happens to have focus is worse than
+     * annotating neither.
+     */
+    async decorateVisible(): Promise<void> {
+        await Promise.all(
+            vscode.window.visibleTextEditors.map((editor) =>
+                this.decorate(editor)
+            )
+        );
+    }
+
     async decorate(editor: vscode.TextEditor | undefined): Promise<void> {
-        const generation = ++this.generation;
         if (!editor) {
             return;
         }
 
+        const key = editor.document.uri.toString();
+        const generation = (this.generations.get(key) ?? 0) + 1;
+        this.generations.set(key, generation);
+
         const style = blameStyle();
         this.clear(editor);
-        if (style === 'off' || editor.document.uri.scheme !== 'file') {
+        if (style === 'off') {
+            return;
+        }
+
+        const request = requestFor(editor.document);
+        if (!request) {
             return;
         }
 
@@ -54,11 +83,7 @@ export class BlameDecorator implements vscode.Disposable {
 
         let blame: Blame;
         try {
-            blame = await this.createReader(root).read(
-                editor.document.uri.fsPath,
-                // Only when there is something on disk to disagree with.
-                editor.document.isDirty ? editor.document.getText() : undefined
-            );
+            blame = await this.createReader(root).read(request);
         } catch (error) {
             // A file git has never seen is the common case here, not a fault.
             log.debug(`no blame for ${editor.document.uri.fsPath}: ${String(error)}`);
@@ -66,7 +91,10 @@ export class BlameDecorator implements vscode.Disposable {
         }
 
         // The document may have been closed, edited, or replaced while git ran.
-        if (generation !== this.generation || editor.document.isClosed) {
+        if (
+            this.generations.get(key) !== generation ||
+            editor.document.isClosed
+        ) {
             return;
         }
 
@@ -235,7 +263,7 @@ export class BlameDecorator implements vscode.Disposable {
             return undefined;
         }
 
-        const blame = await this.createReader(root).read(path);
+        const blame = await this.createReader(root).read({ path });
         return blame.blocks.map((block) => ({
             startLine: block.startLine,
             endLine: block.endLine,
@@ -252,6 +280,36 @@ export class BlameDecorator implements vscode.Disposable {
         }
         this.types.clear();
     }
+}
+
+/**
+ * What to blame, for whichever kind of document is on screen — or nothing, for
+ * a document git cannot say anything about.
+ *
+ * The historical side of a diff is a `githawk-rev` document rather than a file,
+ * and it is worth annotating: "who wrote this line, as of that commit" is the
+ * question a diff raises. Without this the two sides of a comparison disagreed
+ * — the working-tree side annotated, the revision side blank — which reads as a
+ * bug rather than as a limit.
+ */
+function requestFor(document: vscode.TextDocument): BlameRequest | undefined {
+    if (document.uri.scheme === REVISION_SCHEME) {
+        const { rev, path } = decodeRevisionUri(document.uri);
+        // A working-tree side is served as a file; anything else names a commit.
+        return rev === '' || rev === 'WORKTREE'
+            ? undefined
+            : { path, rev };
+    }
+
+    if (document.uri.scheme !== 'file') {
+        return undefined;
+    }
+
+    return {
+        path: document.uri.fsPath,
+        // Only when there is something on disk to disagree with.
+        contents: document.isDirty ? document.getText() : undefined,
+    };
 }
 
 /** Wide enough for `8/11/20` and eight characters of a name. */

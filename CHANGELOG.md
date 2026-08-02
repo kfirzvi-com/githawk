@@ -28,6 +28,15 @@ All notable changes to GitHawk are documented here, following
   offered: that is the gutter, it takes an image rather than text, and VS Code
   scales it to icon size.
 
+  Turn it on with **`GitHawk: Toggle Blame Annotations`** — the command palette,
+  a person icon in the editor's title bar, or the editor's right-click menu. Off
+  is the default, since blame is something you flick on to answer one question;
+  the toggle remembers which placement was on.
+
+  Annotations appear in the diff editor as well, on both sides, each blamed as
+  of its own revision. That is the question a diff raises, and annotating one
+  side and not the other reads as a bug rather than as a limit.
+
   Annotations are read from the editor's buffer rather than the file on disk, so
   they stay correct part-way through an unsaved edit instead of shifting every
   line below it onto the wrong commit. Redraws are debounced.

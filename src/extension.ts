@@ -31,6 +31,8 @@ import {
     BLAME_STYLE_SETTING,
     CONFIG_SECTION,
     SCAN_DEPTH_SETTING,
+    toggleBlame,
+    type BlameStyle,
 } from './presentation/host/config';
 import { initialiseLog, log } from './presentation/host/log';
 import {
@@ -49,6 +51,8 @@ export { CONFIG_SECTION } from './presentation/host/config';
  * to read gets the annotations back. Capped so a long stretch of steady typing
  * still refreshes rather than waiting for silence that never comes.
  */
+const LAST_BLAME_STYLE_KEY = 'gitHawk.lastBlameStyle';
+
 const BLAME_REDRAW_MS = 600;
 const BLAME_REDRAW_MAX_MS = 4_000;
 
@@ -116,7 +120,7 @@ export async function activate(
     context.subscriptions.push(blame);
 
     const redrawBlame = new Debouncer(
-        () => void blame.decorate(vscode.window.activeTextEditor),
+        () => void blame.decorateVisible(),
         BLAME_REDRAW_MS,
         BLAME_REDRAW_MAX_MS
     );
@@ -284,6 +288,31 @@ export async function activate(
         vscode.commands.registerCommand('gitHawk.revealCommit', (hash: string) =>
             provider.revealCommit(hash)
         ),
+        /*
+         * The way blame is turned on and off. A setting alone is not a way in:
+         * it cannot be found without already knowing its name, and this is a
+         * thing people flick on to answer one question and off again.
+         *
+         * Off is the default, so the first toggle picks the column; after that
+         * it returns to whichever placement was last on.
+         */
+        vscode.commands.registerCommand('gitHawk.toggleBlame', async () => {
+            const style = await toggleBlame(
+                context.workspaceState.get<BlameStyle>(
+                    LAST_BLAME_STYLE_KEY,
+                    'column'
+                ),
+                (previous) =>
+                    void context.workspaceState.update(
+                        LAST_BLAME_STYLE_KEY,
+                        previous
+                    )
+            );
+            vscode.window.setStatusBarMessage(
+                style === 'off' ? 'Blame off' : `Blame on — ${style}`,
+                3000
+            );
+        }),
         // Reports the blame as the decorator reads it.
         vscode.commands.registerCommand('gitHawk.blame', (path: string) =>
             blame.blameForTesting(path)
@@ -325,12 +354,12 @@ export async function activate(
         // Blame belongs to a file, so it is redrawn when the file being looked
         // at changes, when its content changes, and when the repository moves
         // underneath it.
-        vscode.window.onDidChangeActiveTextEditor((editor) =>
-            blame.decorate(editor)
+        vscode.window.onDidChangeVisibleTextEditors(() =>
+            blame.decorateVisible()
         ),
         vscode.workspace.onDidSaveTextDocument((document) => {
             if (document === vscode.window.activeTextEditor?.document) {
-                void blame.decorate(vscode.window.activeTextEditor);
+                void blame.decorateVisible();
             }
         }),
         /*
@@ -362,7 +391,7 @@ export async function activate(
                     `${CONFIG_SECTION}.${BLAME_STYLE_SETTING}`
                 )
             ) {
-                void blame.decorate(vscode.window.activeTextEditor);
+                void blame.decorateVisible();
             } else if (
                 event.affectsConfiguration(
                     `${CONFIG_SECTION}.${AUTO_REFRESH_SETTING}`
@@ -380,7 +409,7 @@ export async function activate(
     // tells it which repository to read.
     await repositories.refresh();
     // A file is usually already open when the extension activates.
-    void blame.decorate(vscode.window.activeTextEditor);
+    void blame.decorateVisible();
 }
 
 /**

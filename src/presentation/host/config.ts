@@ -33,6 +33,39 @@ export type BlameStyle = 'off' | 'column' | 'endOfLine';
 
 const BLAME_STYLES: BlameStyle[] = ['off', 'column', 'endOfLine'];
 
+/**
+ * Flips blame on and off, and remembers which placement was on.
+ *
+ * Written back to whichever scope the setting is already defined in — a
+ * workspace that has chosen a style should not be silently overridden by a
+ * global toggle, and a user with no workspace setting should not have one
+ * created for them.
+ */
+export async function toggleBlame(
+    remembered: BlameStyle,
+    remember: (style: BlameStyle) => void
+): Promise<BlameStyle> {
+    const current = blameStyle();
+    const next: BlameStyle =
+        current === 'off' ? (remembered === 'off' ? 'column' : remembered) : 'off';
+
+    if (current !== 'off') {
+        remember(current);
+    }
+
+    const configuration = vscode.workspace.getConfiguration(CONFIG_SECTION);
+    const defined = configuration.inspect<string>(BLAME_STYLE_SETTING);
+    const target =
+        defined?.workspaceFolderValue !== undefined
+            ? vscode.ConfigurationTarget.WorkspaceFolder
+            : defined?.workspaceValue !== undefined
+              ? vscode.ConfigurationTarget.Workspace
+              : vscode.ConfigurationTarget.Global;
+
+    await configuration.update(BLAME_STYLE_SETTING, next, target);
+    return next;
+}
+
 export function blameStyle(): BlameStyle {
     const configured = vscode.workspace
         .getConfiguration(CONFIG_SECTION)

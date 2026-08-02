@@ -115,6 +115,12 @@ line, leaving your code where it is. Both blame the editor's buffer rather than
 the file on disk, so annotations stay honest while you are part-way through an
 edit.
 
+Turn it on with **`GitHawk: Toggle Blame Annotations`**, the person icon in the
+editor's title bar, or right-click in the editor. Off is the default, and the
+toggle remembers which placement you had. Annotations appear in the diff editor
+too — both sides, each blamed as of its own revision, which is the question a
+diff raises.
+
 ### Give the graph the room
 
 The panel is short and splits its width three ways. Either side pane folds away

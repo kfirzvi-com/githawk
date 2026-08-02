@@ -153,11 +153,17 @@ export function stashListArgs(): string[] {
  */
 export function blameArgs(
     path: string,
-    options: { fromStdin?: boolean } = {}
+    options: { fromStdin?: boolean; rev?: string } = {}
 ): string[] {
     return [
         'blame',
         '--porcelain',
+        /*
+         * Blaming a revision rather than the working tree, which is what the
+         * historical side of a diff is showing. Mutually exclusive with
+         * --contents by nature: a revision's content is not on stdin.
+         */
+        ...(options.rev !== undefined ? [options.rev] : []),
         /*
          * `--contents -` blames the content on stdin instead of the file on
          * disk, which is what makes an editor with unsaved changes report

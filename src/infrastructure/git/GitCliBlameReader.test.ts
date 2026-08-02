@@ -21,7 +21,7 @@ describe('GitCliBlameReader', () => {
         repo.git(['add', 'poem.txt']);
         repo.git(['commit', '-m', 'add the poem']);
 
-        const blame = await new GitCliBlameReader(repo.path).read('poem.txt');
+        const blame = await new GitCliBlameReader(repo.path).read({ path: 'poem.txt' });
 
         expect(blame.blocks).toHaveLength(1);
         expect(blame.blocks[0]).toMatchObject({ startLine: 1, endLine: 3 });
@@ -42,7 +42,7 @@ describe('GitCliBlameReader', () => {
         write('poem.txt', 'one', 'CHANGED', 'three');
         repo.git(['commit', '-am', 'second']);
 
-        const blame = await new GitCliBlameReader(repo.path).read('poem.txt');
+        const blame = await new GitCliBlameReader(repo.path).read({ path: 'poem.txt' });
 
         expect(
             blame.blocks.map((b) => [b.startLine, b.endLine, b.commit.summary])
@@ -66,7 +66,7 @@ describe('GitCliBlameReader', () => {
         write('poem.txt', 'EDITED', 'two', 'EDITED');
         repo.git(['commit', '-am', 'second']);
 
-        const blame = await new GitCliBlameReader(repo.path).read('poem.txt');
+        const blame = await new GitCliBlameReader(repo.path).read({ path: 'poem.txt' });
 
         expect(blame.blocks).toHaveLength(3);
         expect(blame.blocks[0].commit.hash).toBe(blame.blocks[2].commit.hash);
@@ -81,7 +81,7 @@ describe('GitCliBlameReader', () => {
 
         write('poem.txt', 'one', 'two', 'not committed yet');
 
-        const blame = await new GitCliBlameReader(repo.path).read('poem.txt');
+        const blame = await new GitCliBlameReader(repo.path).read({ path: 'poem.txt' });
         const last = blame.blocks[blame.blocks.length - 1];
 
         expect(last.commit.isUncommitted).toBe(true);
@@ -105,7 +105,7 @@ describe('GitCliBlameReader', () => {
             'dated',
         ]);
 
-        const blame = await new GitCliBlameReader(repo.path).read('poem.txt');
+        const blame = await new GitCliBlameReader(repo.path).read({ path: 'poem.txt' });
 
         expect(blame.blocks[0].commit.authoredAt.getUTCFullYear()).toBe(2020);
         expect(blame.blocks[0].commit.authoredAt.getUTCMonth()).toBe(2);
@@ -117,7 +117,7 @@ describe('GitCliBlameReader', () => {
         repo.git(['add', 'poem.txt']);
         repo.git(['commit', '--allow-empty-message', '-m', '']);
 
-        const blame = await new GitCliBlameReader(repo.path).read('poem.txt');
+        const blame = await new GitCliBlameReader(repo.path).read({ path: 'poem.txt' });
         const commit = blame.blocks[0].commit;
 
         expect(blame.blocks).toHaveLength(1);
@@ -158,10 +158,7 @@ describe('GitCliBlameReader, on an unsaved buffer', () => {
 
         // What the editor holds: a line inserted at the top, not yet saved.
         const buffer = ['INSERTED', 'one', 'CHANGED', ''].join('\n');
-        const blame = await new GitCliBlameReader(repo.path).read(
-            'poem.txt',
-            buffer
-        );
+        const blame = await new GitCliBlameReader(repo.path).read({ path: 'poem.txt', contents: buffer });
 
         expect(
             blame.blocks.map((b) => [
@@ -182,8 +179,8 @@ describe('GitCliBlameReader, on an unsaved buffer', () => {
         repo.git(['commit', '-m', 'first']);
 
         const reader = new GitCliBlameReader(repo.path);
-        const fromDisk = await reader.read('poem.txt');
-        const fromBuffer = await reader.read('poem.txt', 'one\ntwo\n');
+        const fromDisk = await reader.read({ path: 'poem.txt' });
+        const fromBuffer = await reader.read({ path: 'poem.txt', contents: 'one\ntwo\n' });
 
         expect(fromBuffer.blocks.map((b) => b.commit.summary)).toEqual(
             fromDisk.blocks.map((b) => b.commit.summary)
@@ -199,11 +196,67 @@ describe('GitCliBlameReader, on an unsaved buffer', () => {
         repo.git(['commit', '-m', 'first']);
 
         const big = Array.from({ length: 40_000 }, (_, i) => `line ${i}`).join('\n');
-        const blame = await new GitCliBlameReader(repo.path).read(
-            'poem.txt',
-            `${big}\n`
-        );
+        const blame = await new GitCliBlameReader(repo.path).read({ path: 'poem.txt', contents: `${big}\n` });
 
         expect(blame.blocks.length).toBeGreaterThan(0);
+    });
+});
+
+describe('GitCliBlameReader, at a revision', () => {
+    let repo: TemporaryRepository | undefined;
+
+    const write = (name: string, ...lines: string[]) =>
+        writeFileSync(join(repo!.path, name), lines.join('\n') + '\n');
+
+    afterEach(() => {
+        repo?.dispose();
+        repo = undefined;
+    });
+
+    /**
+     * What the historical side of a diff needs. Blaming the working tree there
+     * would answer a question about the present while showing the past.
+     */
+    it('answers as of that revision, not as of now', async () => {
+        repo = TemporaryRepository.create();
+        write('poem.txt', 'one', 'two');
+        repo.git(['add', 'poem.txt']);
+        repo.git(['commit', '-m', 'first']);
+        const first = repo.head();
+
+        write('poem.txt', 'one', 'REWRITTEN');
+        repo.git(['commit', '-am', 'second']);
+
+        const reader = new GitCliBlameReader(repo.path);
+        const atFirst = await reader.read({ path: 'poem.txt', rev: first });
+        const now = await reader.read({ path: 'poem.txt' });
+
+        // At the first commit the whole file was its work.
+        expect(atFirst.blocks.map((b) => b.commit.summary)).toEqual(['first']);
+        expect(now.blocks.map((b) => b.commit.summary)).toEqual([
+            'first',
+            'second',
+        ]);
+    });
+
+    it('has nothing to say about a file that did not exist yet', async () => {
+        repo = TemporaryRepository.create();
+        write('poem.txt', 'one');
+        repo.git(['add', 'poem.txt']);
+        repo.git(['commit', '-m', 'first']);
+        const first = repo.head();
+
+        write('later.txt', 'added afterwards');
+        repo.git(['add', 'later.txt']);
+        repo.git(['commit', '-m', 'second']);
+
+        // git exits non-zero; the decorator treats that as "no annotations",
+        // which is the right answer for a side of a diff showing an addition.
+        await expect(
+            new GitCliBlameReader(repo.path).read({
+                path: 'later.txt',
+                rev: first,
+            })
+        ).rejects.toThrow();
     });
 });
