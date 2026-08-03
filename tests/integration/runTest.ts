@@ -15,6 +15,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runTests } from '@vscode/test-electron';
 import {
+    integrationProfileDir,
     integrationWorkspaceDir,
     vscodeCacheDir,
 } from '../../scripts/harness';
@@ -72,6 +73,8 @@ async function main(): Promise<void> {
             ),
             launchArgs: [
                 session.workspace,
+                // Short, for the reason integrationProfileDir explains.
+                `--user-data-dir=${integrationProfileDir(extensionDevelopmentPath)}`,
                 // Other extensions are irrelevant here and slow startup down.
                 '--disable-extensions',
                 '--disable-gpu',

@@ -32,7 +32,6 @@ import {
     CONFIG_SECTION,
     SCAN_DEPTH_SETTING,
     toggleBlame,
-    type BlameStyle,
 } from './presentation/host/config';
 import { initialiseLog, log } from './presentation/host/log';
 import {
@@ -51,8 +50,6 @@ export { CONFIG_SECTION } from './presentation/host/config';
  * to read gets the annotations back. Capped so a long stretch of steady typing
  * still refreshes rather than waiting for silence that never comes.
  */
-const LAST_BLAME_STYLE_KEY = 'gitHawk.lastBlameStyle';
-
 const BLAME_REDRAW_MS = 600;
 const BLAME_REDRAW_MAX_MS = 4_000;
 
@@ -115,7 +112,19 @@ export async function activate(
 
     const blame = new BlameDecorator(
         (root) => new GitCliBlameReader(root),
-        () => repositories.active?.root
+        /*
+         * The repository the *file* is in, falling back to the selected one.
+         *
+         * A workspace can hold several repositories and the file on screen is
+         * often not in the one the graph is pointed at — asking git from the
+         * wrong working directory just fails, so the annotations never
+         * appeared. The fallback covers a document with no path of its own,
+         * which is what the historical side of a diff is.
+         */
+        (filePath) =>
+            (filePath !== undefined
+                ? repositories.containing(filePath)?.root
+                : undefined) ?? repositories.active?.root
     );
     context.subscriptions.push(blame);
 
@@ -297,17 +306,7 @@ export async function activate(
          * it returns to whichever placement was last on.
          */
         vscode.commands.registerCommand('gitHawk.toggleBlame', async () => {
-            const style = await toggleBlame(
-                context.workspaceState.get<BlameStyle>(
-                    LAST_BLAME_STYLE_KEY,
-                    'column'
-                ),
-                (previous) =>
-                    void context.workspaceState.update(
-                        LAST_BLAME_STYLE_KEY,
-                        previous
-                    )
-            );
+            const style = await toggleBlame();
             vscode.window.setStatusBarMessage(
                 style === 'off' ? 'Blame off' : `Blame on — ${style}`,
                 3000

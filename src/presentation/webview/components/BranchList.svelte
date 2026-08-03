@@ -48,11 +48,13 @@
         writeWebviewState(SECTIONS_STATE_KEY, sections);
     };
 
-    /*
-     * Only shown once there is more than one, because a repository with a single
-     * worktree has nothing to say here — every repository has one.
+    /**
+     * Every repository has one working tree, so a single entry says nothing —
+     * but a section that is missing says less. It is shown either way, because
+     * a feature nobody can see is a feature nobody uses; the empty state is
+     * where it explains itself.
      */
-    const showWorktrees = $derived(worktrees.length > 1);
+    const otherWorktrees = $derived(Math.max(0, worktrees.length - 1));
     const staleWorktrees = $derived(worktrees.filter((w) => w.isPrunable).length);
     /** Everything else is labelled relative to the repository's own directory. */
     const mainPath = $derived(mainWorktreePath(worktrees));
@@ -89,15 +91,17 @@
                 {branches.length}
             </span>
         </div>
-        {#if branches.length > 8}
-            <input
-                type="search"
-                bind:value={filter}
-                placeholder="Filter branches…"
-                aria-label="Filter branches"
-                class="w-full rounded-md border border-line bg-graph px-2 py-1 text-xs text-fg-soft placeholder:text-fg-faint focus:border-info-strong focus:outline-none"
-            />
-        {/if}
+        <!-- Always, not past a threshold. It used to appear above eight
+             branches, which made it look like a feature that came and went:
+             the one repository where you go looking for it is the one you have
+             just cloned. -->
+        <input
+            type="search"
+            bind:value={filter}
+            placeholder="Filter branches…"
+            aria-label="Filter branches"
+            class="w-full rounded-md border border-line bg-graph px-2 py-1 text-xs text-fg-soft placeholder:text-fg-faint focus:border-info-strong focus:outline-none"
+        />
     </div>
 
     <div class="flex-1 overflow-y-auto">
@@ -217,97 +221,101 @@
             </div>
         {/if}
 
-        {#if showWorktrees}
-            <div
-                class="border-t border-line px-2 py-3"
-                data-testid="worktree-list"
-            >
-                <div class="flex items-center gap-1">
-                    <div class="min-w-0 flex-1">
-                        <SectionHeader
-                            section="worktrees"
-                            label="Worktrees"
-                            count={worktrees.length}
-                            dot="bg-special"
-                            open={sections.worktrees}
-                            onToggle={toggleSection}
-                        />
-                    </div>
+        <div
+            class="border-t border-line px-2 py-3"
+            data-testid="worktree-list"
+        >
+            <div class="flex items-center gap-1">
+                <div class="min-w-0 flex-1">
+                    <SectionHeader
+                        section="worktrees"
+                        label="Worktrees"
+                        count={worktrees.length}
+                        dot="bg-special"
+                        open={sections.worktrees}
+                        onToggle={toggleSection}
+                    />
+                </div>
+                <button
+                    type="button"
+                    data-testid="manage-worktrees"
+                    class="rounded px-1.5 py-0.5 text-[10px] text-fg-dim hover:bg-control hover:text-fg-soft"
+                    onclick={() => onOpenWorktreeMenu?.()}
+                    title="Create, open, or remove a worktree"
+                >
+                    Manage
+                </button>
+            </div>
+
+            <div class="space-y-1" hidden={!sections.worktrees}>
+                {#each worktrees as worktree (worktree.path)}
                     <button
                         type="button"
-                        data-testid="manage-worktrees"
-                        class="rounded px-1.5 py-0.5 text-[10px] text-fg-dim hover:bg-control hover:text-fg-soft"
-                        onclick={() => onOpenWorktreeMenu?.()}
-                        title="Create, open, or remove a worktree"
+                        class="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left transition-colors duration-150 {worktree.isCurrent
+                            ? 'border border-special/30 bg-special/15 text-special'
+                            : 'text-fg-muted hover:bg-control'}"
+                        onclick={() => onOpenWorktreeMenu?.(worktree.path)}
+                        title={worktree.path}
                     >
-                        Manage
-                    </button>
-                </div>
-
-                <div class="space-y-1" hidden={!sections.worktrees}>
-                    {#each worktrees as worktree (worktree.path)}
-                        <button
-                            type="button"
-                            class="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left transition-colors duration-150 {worktree.isCurrent
-                                ? 'border border-special/30 bg-special/15 text-special'
-                                : 'text-fg-muted hover:bg-control'}"
-                            onclick={() => onOpenWorktreeMenu?.(worktree.path)}
-                            title={worktree.path}
+                        <span
+                            class="text-sm {worktree.isCurrent
+                                ? 'text-special'
+                                : 'text-fg-faint'}"
                         >
+                            ⧉
+                        </span>
+                        <span
+                            class="min-w-0 flex-1 truncate text-sm font-medium"
+                        >
+                            {shortWorktreeName(worktree.path, mainPath)}
+                        </span>
+                        <span
+                            class="max-w-[7rem] flex-shrink-0 truncate text-[11px] text-fg-dim"
+                        >
+                            {worktree.checkedOut}
+                        </span>
+                        <!-- A missing directory is why git keeps refusing
+                             the branch, so it is the one state worth
+                             shouting about. -->
+                        {#if worktree.isPrunable}
                             <span
-                                class="text-sm {worktree.isCurrent
-                                    ? 'text-special'
-                                    : 'text-fg-faint'}"
+                                class="flex-shrink-0 text-[10px] text-warn"
+                                title={worktree.prunableReason ??
+                                    'git cannot find this directory'}
                             >
-                                ⧉
+                                missing
                             </span>
+                        {:else if worktree.isLocked}
                             <span
-                                class="min-w-0 flex-1 truncate text-sm font-medium"
+                                class="flex-shrink-0 text-[10px] text-fg-dim"
+                                title={worktree.lockReason ?? 'locked'}
                             >
-                                {shortWorktreeName(worktree.path, mainPath)}
+                                locked
                             </span>
-                            <span
-                                class="max-w-[7rem] flex-shrink-0 truncate text-[11px] text-fg-dim"
-                            >
-                                {worktree.checkedOut}
-                            </span>
-                            <!-- A missing directory is why git keeps refusing
-                                 the branch, so it is the one state worth
-                                 shouting about. -->
-                            {#if worktree.isPrunable}
-                                <span
-                                    class="flex-shrink-0 text-[10px] text-warn"
-                                    title={worktree.prunableReason ??
-                                        'git cannot find this directory'}
-                                >
-                                    missing
-                                </span>
-                            {:else if worktree.isLocked}
-                                <span
-                                    class="flex-shrink-0 text-[10px] text-fg-dim"
-                                    title={worktree.lockReason ?? 'locked'}
-                                >
-                                    locked
-                                </span>
-                            {/if}
-                        </button>
-                    {/each}
-                </div>
+                        {/if}
+                    </button>
+                {/each}
+            </div>
 
-                {#if staleWorktrees > 0 && sections.worktrees}
+            {#if sections.worktrees}
+                {#if staleWorktrees > 0}
                     <p class="px-3 pt-2 text-[11px] text-warn/80">
                         {staleWorktrees} record(s) point at directories that are
                         gone — prune them from Manage.
                     </p>
+                {:else if otherWorktrees === 0}
+                    <!-- One entry is the repository itself, which says nothing
+                         on its own — so the section says what the feature is
+                         for instead. -->
+                    <p class="px-3 pt-2 text-[11px] text-fg-faint">
+                        Only this working tree. A branch's menu can check one out
+                        into its own directory.
+                    </p>
                 {/if}
-            </div>
-        {/if}
+            {/if}
+        </div>
 
-        {#if stashes.length > 0}
-            <div
-                class="border-t border-line px-2 py-3"
-                data-testid="stash-list"
-            >
+        <div class="border-t border-line px-2 py-3" data-testid="stash-list">
                 <div class="flex items-center gap-1">
                     <div class="min-w-0 flex-1">
                         <SectionHeader
@@ -358,9 +366,17 @@
                             </span>
                         </button>
                     {/each}
+
+                    {#if stashes.length === 0}
+                        <!-- Nothing is stashed, which is worth saying rather
+                             than showing nothing: the section is how anyone
+                             finds out the stash is here at all. -->
+                        <p class="px-3 py-1 text-[11px] text-fg-faint">
+                            Nothing stashed. Manage puts the working tree aside.
+                        </p>
+                    {/if}
                 </div>
-            </div>
-        {/if}
+        </div>
 
         {#if hiddenCount > 0}
             <p

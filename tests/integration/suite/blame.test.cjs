@@ -127,7 +127,12 @@ suite('turning blame on and off', () => {
         assert.equal(style(), 'off');
     });
 
-    test('coming back on restores the placement that was on', async () => {
+    test('always turns on the column, whatever was set before', async () => {
+        /*
+         * A switch that lands somewhere different depending on history is not a
+         * switch. `endOfLine` stays reachable through the setting; the toggle
+         * overwriting it is the price of being predictable.
+         */
         await vscode.workspace
             .getConfiguration('gitHawk')
             .update('blame.style', 'endOfLine', vscode.ConfigurationTarget.Global);
@@ -136,6 +141,6 @@ suite('turning blame on and off', () => {
         assert.equal(style(), 'off');
 
         await vscode.commands.executeCommand('gitHawk.toggleBlame');
-        assert.equal(style(), 'endOfLine', 'the toggle forgot the placement');
+        assert.equal(style(), 'column');
     });
 });

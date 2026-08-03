@@ -61,6 +61,19 @@ export function integrationWorkspaceDir(root: string): string {
  * VS Code per checkout is ~1.9 GB. Defaults to the historical
  * `.vscode-test` inside the checkout so nothing changes for a single one.
  */
+/**
+ * Where the integration tier puts VS Code's user profile.
+ *
+ * Under the OS temp directory rather than inside the checkout, because macOS
+ * caps a unix socket path at 103 characters and VS Code builds one from this
+ * directory: a checkout a few characters too deep fails to launch at all, with
+ * `listen EINVAL` rather than anything that names the cause. A worktree called
+ * `githawk-blamefix` was enough to cross it.
+ */
+export function integrationProfileDir(root: string): string {
+    return join(tmpdir(), `ghwk-${checkoutId(root)}`);
+}
+
 export function vscodeCacheDir(root: string): string {
     const shared = process.env.GITHAWK_VSCODE_CACHE;
     if (shared === undefined || shared === '') {

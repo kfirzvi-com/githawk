@@ -9,14 +9,6 @@ const open = async (page: import('@playwright/test').Page, stashes = 2) => {
 const list = (page: import('@playwright/test').Page) =>
     page.getByTestId('stash-list');
 
-test('no stash section when the stash is empty', async ({ page }) => {
-    // Its absence is the message, as with the worktrees section.
-    await page.goto('/?topology=nested-branches');
-    await expect(page.getByTestId('git-graph')).toBeVisible();
-
-    await expect(list(page)).toHaveCount(0);
-});
-
 test('lists the stash beside the branches and worktrees', async ({ page }) => {
     await open(page);
 
@@ -119,4 +111,40 @@ test('looks right — stashes in the graph and the sidebar', async ({ page }) =>
     await expect(list(page)).toBeVisible();
 
     await expect(page).toHaveScreenshot('stashes.png', { fullPage: true });
+});
+
+test('the stash section is there even when nothing is stashed', async ({
+    page,
+}) => {
+    // A section nobody can see is a feature nobody knows about.
+    await page.goto('/?topology=nested-branches');
+    await expect(page.getByTestId('git-graph')).toBeVisible();
+
+    const list = page.getByTestId('stash-list');
+    await expect(list).toBeVisible();
+    await expect(list).toContainText('Nothing stashed');
+});
+
+test('the worktrees section is there with only one working tree', async ({
+    page,
+}) => {
+    await page.goto('/?topology=nested-branches&worktrees=1');
+    await expect(page.getByTestId('git-graph')).toBeVisible();
+
+    const list = page.getByTestId('worktree-list');
+    await expect(list).toBeVisible();
+    await expect(list).toContainText('Only this working tree');
+});
+
+test('the branch filter is there for a repository with few branches', async ({
+    page,
+}) => {
+    // It used to appear only above eight, which made it look like a feature
+    // that came and went.
+    await page.goto('/?topology=linear');
+    await expect(page.getByTestId('git-graph')).toBeVisible();
+
+    await expect(
+        page.getByRole('searchbox', { name: 'Filter branches' })
+    ).toBeVisible();
 });

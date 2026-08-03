@@ -117,7 +117,8 @@ edit.
 
 Turn it on with **`GitHawk: Toggle Blame Annotations`**, the person icon in the
 editor's title bar, or right-click in the editor. Off is the default, and the
-toggle remembers which placement you had. Annotations appear in the diff editor
+toggle switches between off and the column — set `gitHawk.blame.style` directly
+for `endOfLine`. Annotations appear in the diff editor
 too — both sides, each blamed as of its own revision, which is the question a
 diff raises.
 

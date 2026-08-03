@@ -187,6 +187,31 @@ export class RepositoryRegistry implements vscode.Disposable {
         return true;
     }
 
+    /**
+     * The repository a file belongs to, which is not necessarily the one the
+     * graph is pointed at.
+     *
+     * Blame asks this: a workspace can hold several repositories, and the file
+     * on screen is often not in the selected one — `git blame` run from the
+     * wrong working directory simply fails, so the annotations silently never
+     * appeared.
+     *
+     * Longest root wins, because a repository nested inside another — a
+     * submodule, or a worktree kept inside its parent — has both as prefixes
+     * and the inner one owns the file.
+     *
+     * Symlinks are resolved on both sides for the reason setActiveByRealPath
+     * explains: git reports resolved paths and the workspace does not, so on a
+     * Mac a repository under /tmp never matches by string.
+     */
+    containing(filePath: string): RepositoryLocation | undefined {
+        const wanted = this.realPath(filePath);
+
+        return this.repositories
+            .filter((repository) => isInside(this.realPath(repository.root), wanted))
+            .sort((a, b) => b.root.length - a.root.length)[0];
+    }
+
     private realPath(path: string): string {
         try {
             return this.resolveRealPath(path);
@@ -331,6 +356,14 @@ export class RepositoryRegistry implements vscode.Disposable {
     dispose(): void {
         this.changed.dispose();
     }
+}
+
+/**
+ * A path separator is required, so that `/work/app` is not read as containing
+ * `/work/app-legacy`.
+ */
+function isInside(root: string, filePath: string): boolean {
+    return filePath === root || filePath.startsWith(`${root}/`);
 }
 
 function activeEditorPath(): string | undefined {

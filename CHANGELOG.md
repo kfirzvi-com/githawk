@@ -47,6 +47,40 @@ All notable changes to GitHawk are documented here, following
   opened. Blame lives in the editor, and an extension that is not running cannot
   annotate one.
 
+## [Unreleased]
+
+### Fixed
+
+- **Blame now annotates the file you are looking at, not the repository the graph
+  is pointed at.** It asked the active repository for every file, so in a
+  workspace holding several, opening a file in any other one ran `git blame` from
+  the wrong working directory — it failed, and the annotations silently never
+  appeared. A diff worked, which made it look like a rendering problem rather
+  than a lookup one. The repository is now resolved from the file's path, longest
+  root first so a submodule or a nested worktree wins over its parent.
+
+- **The branch filter is always there.** It appeared only above eight branches,
+  which made it look like a feature that comes and goes — and the repository
+  where you go looking for it is the one you have just cloned.
+
+### Changed
+
+- **The Worktrees and Stashes sections are always shown**, empty or not, each
+  saying what it is for when there is nothing in it. A section that appears only
+  once you are already using the feature cannot be how anyone discovers it.
+
+- **The blame toggle is a two-state switch**: off, or the column. It used to
+  return to whichever placement was last on, which meant it landed somewhere
+  different depending on history. `endOfLine` is still available by setting
+  `gitHawk.blame.style` directly, and the toggle will overwrite that — the price
+  of being predictable.
+
+- The integration tier keeps VS Code's throwaway profile under the OS temp
+  directory rather than inside the checkout. macOS caps a unix socket path at 103
+  characters and VS Code builds one from that directory, so a checkout a few
+  characters too deep failed to launch at all, reporting `listen EINVAL` and
+  nothing that named the cause.
+
 ## [0.3.0] — 2026-08-02
 
 Still marked **Preview** on the Marketplace: the known limitations at the bottom

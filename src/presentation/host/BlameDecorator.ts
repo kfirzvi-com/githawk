@@ -40,7 +40,14 @@ export class BlameDecorator implements vscode.Disposable {
 
     constructor(
         private readonly createReader: (root: string) => IBlameReader,
-        private readonly repositoryRoot: () => string | undefined
+        /**
+         * Which repository to ask about a given file. Passed the absolute path
+         * for a file on disk, and nothing for a revision document, whose path
+         * is repository-relative and belongs to the active repository.
+         */
+        private readonly repositoryRoot: (
+            filePath?: string
+        ) => string | undefined
     ) {}
 
     /**
@@ -76,7 +83,11 @@ export class BlameDecorator implements vscode.Disposable {
             return;
         }
 
-        const root = this.repositoryRoot();
+        const root = this.repositoryRoot(
+            editor.document.uri.scheme === 'file'
+                ? editor.document.uri.fsPath
+                : undefined
+        );
         if (!root) {
             return;
         }
@@ -258,7 +269,7 @@ export class BlameDecorator implements vscode.Disposable {
           }[]
         | undefined
     > {
-        const root = this.repositoryRoot();
+        const root = this.repositoryRoot(path);
         if (!root) {
             return undefined;
         }
