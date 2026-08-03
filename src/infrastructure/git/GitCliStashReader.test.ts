@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { GitCliStashReader } from './GitCliStashReader';
 import { argsFor } from './gitActionCommands';
+import { GitCliRepository } from './GitCliRepository';
 import { TemporaryRepository } from './testing/temporaryRepository';
 
 describe('GitCliStashReader', () => {
@@ -182,5 +183,73 @@ describe('GitCliStashReader', () => {
             })
         );
         expect(repo!.git(['status', '--porcelain'])).toBe('');
+    });
+});
+
+describe('the stash and the graph', () => {
+    let repo: TemporaryRepository | undefined;
+
+    afterEach(() => {
+        repo?.dispose();
+        repo = undefined;
+    });
+
+    /**
+     * `git log --all` means every ref under `refs/`, and `refs/stash` is one.
+     * So the top stash entry arrived as an ordinary commit — and so did the
+     * snapshot of the index git hangs off it as a second parent, a commit
+     * nobody wrote, drawn as a merge that never happened.
+     *
+     * It also made the entry appear twice once the stash was added to the graph
+     * deliberately, and the webview keys its rows by hash: a duplicate key is a
+     * hard error in Svelte, which took the panel down to a spinner that never
+     * resolved.
+     */
+    it('keeps stash commits and their snapshots out of the log', async () => {
+        repo = TemporaryRepository.create();
+        writeFileSync(join(repo.path, 'f.txt'), 'committed\n');
+        repo.git(['add', 'f.txt']);
+        repo.git(['commit', '-m', 'first']);
+        writeFileSync(join(repo.path, 'f.txt'), 'work in progress\n');
+        repo.git(['stash', 'push', '--message', 'aside']);
+
+        const revParse = (rev: string) => repo!.git(['rev-parse', rev]).trim();
+        const stashCommit = revParse('refs/stash');
+        const indexSnapshot = revParse('refs/stash^2');
+
+        /*
+         * Through the real adapter rather than hand-built arguments. An earlier
+         * version of this test appended its own `--format=%H` to logArgs and git
+         * honoured the *first* format, not the last — so it was asserting
+         * against one unsplit blob, and passing for the wrong reason.
+         */
+        const loaded = await new GitCliRepository({
+            cwd: repo.path,
+        }).getRepository();
+        const hashes = loaded.commits.map((commit) => commit.hash);
+
+        expect(hashes).not.toContain(stashCommit);
+        expect(hashes).not.toContain(indexSnapshot);
+        // The real history is still there.
+        expect(hashes).toContain(revParse('HEAD'));
+    });
+
+    it('a stash entry hangs off the commit it was made on', async () => {
+        repo = TemporaryRepository.create();
+        writeFileSync(join(repo.path, 'f.txt'), 'committed\n');
+        repo.git(['add', 'f.txt']);
+        repo.git(['commit', '-m', 'first']);
+        const base = repo.git(['rev-parse', 'HEAD']).trim();
+
+        writeFileSync(join(repo.path, 'f.txt'), 'work in progress\n');
+        repo.git(['stash', 'push', '--message', 'aside']);
+
+        const [entry] = await new GitCliStashReader(repo.path).list();
+
+        // The first parent, not the index snapshot that follows it.
+        expect(entry.baseHash).toBe(base);
+        expect(entry.baseHash).not.toBe(
+            repo.git(['rev-parse', 'refs/stash^2']).trim()
+        );
     });
 });
