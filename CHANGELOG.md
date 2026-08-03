@@ -3,16 +3,20 @@
 All notable changes to GitHawk are documented here, following
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.4.0] — 2026-08-03
+
+Still marked **Preview** on the Marketplace: the known limitations at the bottom
+of the README are real, and a 1.0 should not have them. Everything below shipped
+to the pre-release channel first, as 0.3.66 through 0.3.74.
 
 ### Added
 
-- **Blame in the editor.** `gitHawk.blame.style` set to `column` gives every
-  line the date and author of the commit it came from, in a fixed-width column
-  between the line numbers and the code — IntelliJ's annotate. Each commit has
-  its own colour and the colours run in order, cool for the oldest lines in the
-  file to warm for the newest, so a run of lines reads as a block and scrolling
-  shows the order the file was built in.
+- **Blame in the editor.** `gitHawk.blame.style` set to `column` gives every line
+  the date and author of the commit it came from, in a fixed-width column between
+  the line numbers and the code — IntelliJ's annotate. Each commit has its own
+  colour and the colours run in order, cool for the oldest lines in the file to
+  warm for the newest, so a run of lines reads as a block and scrolling shows the
+  order the file was built in.
 
   Ranked by commit rather than scaled by elapsed time, deliberately: a week of
   steady work is one shade on a time-proportional scale, and telling one commit
@@ -23,68 +27,101 @@ All notable changes to GitHawk are documented here, following
   Changes tree. Decoration text cannot take a click, so the hover is the way
   through.
 
-  `endOfLine` is the quieter placement — one label per block, at the end of its
-  first line, leaving the code where it is. Beside the line numbers is not
-  offered: that is the gutter, it takes an image rather than text, and VS Code
-  scales it to icon size.
+  Off by default. Turn it on from the editor's right-click menu, a person icon in
+  its title bar, or **`GitHawk: Toggle Blame Annotations`** — which switches
+  between off and the column. `endOfLine` is the quieter placement, one label per
+  block at the end of its first line, reachable by setting the style directly.
 
-  Turn it on with **`GitHawk: Toggle Blame Annotations`** — the command palette,
-  a person icon in the editor's title bar, or the editor's right-click menu. Off
-  is the default, since blame is something you flick on to answer one question;
-  the toggle remembers which placement was on.
+  Beside the line numbers is not offered: that is the gutter, it takes an image
+  rather than text, and VS Code scales it to icon size.
 
-  Annotations appear in the diff editor as well, on both sides, each blamed as
-  of its own revision. That is the question a diff raises, and annotating one
-  side and not the other reads as a bug rather than as a limit.
+  Annotations appear in the diff editor too, on both sides, each blamed as of its
+  own revision. And they are read from the editor's buffer rather than the file on
+  disk, so they stay correct part-way through an unsaved edit instead of shifting
+  every line below it onto the wrong commit. Redraws are debounced.
 
-  Annotations are read from the editor's buffer rather than the file on disk, so
-  they stay correct part-way through an unsaved edit instead of shifting every
-  line below it onto the wrong commit. Redraws are debounced.
+- **`GitHawk: Manage Stashes`** — the stash, which GitHawk did not touch at all.
+  Every entry with its message, the branch it was made on and when, marking the
+  ones git named itself, since `WIP on main: 1234abc …` describes the commit the
+  work sat on rather than the work. Apply from the list in one click, or open an
+  entry to show what is in it, apply, pop, or drop.
+
+  Showing an entry needs no new machinery: a stash is a commit whose first parent
+  is the commit it was made on, so its contents are that comparison, landing in
+  the Changes tree like everything else.
+
+  Stashing asks for a message and whether to include untracked files. Untracked is
+  never the default and never implied — it is the one variant that sweeps up a
+  scratch file — and `--all`, which would take ignored files too, is not offered.
+  Popping and dropping are confirmed: both remove the entry, and a dropped one
+  survives only as a dangling commit.
+
+  Every action re-reads the stack and checks the entry is still there first.
+  `stash@{1}` is a position rather than an identity — dropping an entry renumbers
+  everything below it — so a ref captured seconds earlier can name a different
+  entry, and acting on it would succeed silently on the wrong one.
+
+- **Stash entries in the graph and in the sidebar.** Each entry is a row of its
+  own, hanging off the commit the work was left on, badged `stash@{0}`. Only the
+  entry's *first* parent is drawn: a stash commit has two or three, and the others
+  are git's snapshots of the index and of untracked files.
+
+- **A Stashes section in the sidebar**, alongside local, remote and worktrees —
+  and since that makes four, **every section folds away** and remembers it. A
+  folded section still shows its count.
 
 ### Changed
 
-- The extension now activates on startup rather than waiting for its panel to be
+- **All four sidebar sections are always shown**, empty or not, each saying what
+  it is for when there is nothing in it. A section that appears only once you are
+  already using the feature cannot be how anyone discovers it.
+
+- **Remote has a Manage button**, matching Worktrees and Stashes, and the
+  toolbar's Remotes button is gone. Two ways into one manager is one too many, and
+  the toolbar's other three buttons *do* something where that one *opened*
+  something.
+
+- **The branch filter is always shown.** It appeared only above eight branches,
+  which made it look like a feature that comes and goes — and the repository where
+  you go looking for a filter is the one you have just cloned.
+
+- The extension activates on startup rather than waiting for its panel to be
   opened. Blame lives in the editor, and an extension that is not running cannot
   annotate one.
 
-## [Unreleased]
+- Hovering a commit no longer paints over its own lanes and dots. The rows sit
+  above the SVG that draws them, so a background on the row covered the graph;
+  rows are painted from the gutter's edge rightwards now. Selection had the same
+  bug, hiding three rows of graph on a three-commit selection.
 
 ### Fixed
 
-- **Blame now annotates the file you are looking at, not the repository the graph
-  is pointed at.** It asked the active repository for every file, so in a
-  workspace holding several, opening a file in any other one ran `git blame` from
-  the wrong working directory — it failed, and the annotations silently never
-  appeared. A diff worked, which made it look like a rendering problem rather
-  than a lookup one. The repository is now resolved from the file's path, longest
-  root first so a submodule or a nested worktree wins over its parent.
+- **Stash commits are no longer drawn as ordinary history.** `git log --all` means
+  every ref under `refs/`, and `refs/stash` is one — so the top stash entry was in
+  the graph, and so was the snapshot of the index git hangs off it as a second
+  parent. That snapshot is a commit nobody wrote, drawn as a merge that never
+  happened, and it had been there since GitHawk first read `--all`.
 
-- **The branch filter is always there.** It appeared only above eight branches,
-  which made it look like a feature that comes and goes — and the repository
-  where you go looking for it is the one you have just cloned.
+- **Blame annotates the file you are looking at, not the repository the graph is
+  pointed at.** It asked the active repository for every file, so in a workspace
+  holding several, opening a file in any other one ran `git blame` from the wrong
+  working directory: it failed, and the annotations silently never appeared. A
+  diff worked, which made it look like a rendering problem rather than a lookup
+  one. The repository now comes from the file's path, longest root first so a
+  submodule or a nested worktree wins over its parent.
 
-### Changed
-
-- **All four sidebar sections are always shown** — local, remote, worktrees,
-  stashes — empty or not, each saying what it is for when there is nothing in it.
-  A section that appears only once you are already using the feature cannot be how
-  anyone discovers it.
-
-- **Remote has a Manage button**, matching Worktrees and Stashes, and the toolbar's
-  Remotes button is gone. Two ways into one manager is one too many, and the
-  sidebar is where the other two live — next to the remote branches it is about.
-
-- **The blame toggle is a two-state switch**: off, or the column. It used to
-  return to whichever placement was last on, which meant it landed somewhere
-  different depending on history. `endOfLine` is still available by setting
-  `gitHawk.blame.style` directly, and the toggle will overwrite that — the price
-  of being predictable.
+### Internal
 
 - The integration tier keeps VS Code's throwaway profile under the OS temp
   directory rather than inside the checkout. macOS caps a unix socket path at 103
   characters and VS Code builds one from that directory, so a checkout a few
   characters too deep failed to launch at all, reporting `listen EINVAL` and
   nothing that named the cause.
+
+- `scripts/shotVscode.mjs` finds whatever VS Code the test runner last
+  downloaded. It looked for `Electron` inside the app bundle, which contains
+  `Code`, at a version pinned eight months earlier — so it had been unable to
+  launch at all.
 
 ## [0.3.0] — 2026-08-02
 
