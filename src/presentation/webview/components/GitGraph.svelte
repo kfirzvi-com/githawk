@@ -77,15 +77,17 @@
 
     <div class="relative z-[1]">
         {#each graph.commits as commit, index (commit.hash)}
+            <!--
+                The row is a full-width click target, but it is painted only
+                from the gutter's edge rightwards. The rows sit above the SVG,
+                so a background on the button itself covers the lanes and dots
+                the SVG drew underneath — a hovered row would erase that part
+                of the graph. `group` is what lets the inner half react to a
+                hover on the whole row.
+            -->
             <button
                 type="button"
-                class="flex w-full items-center text-left hover:bg-hover {comparedHashes.has(
-                    commit.hash
-                )
-                    ? 'bg-warn/15 ring-1 ring-inset ring-warn/40'
-                    : selectedHash === commit.hash
-                      ? 'bg-selected'
-                      : ''}"
+                class="group flex w-full items-center text-left"
                 style="height:{metrics.rowH}px;"
                 onclick={(event) =>
                     onSelect?.(commit, {
@@ -101,8 +103,18 @@
                 }}
             >
                 <div style="width:{gutterWidth}px; min-width:60px;"></div>
-                <div class="min-w-0 flex-1 pl-2">
-                    {@render row(commit, index)}
+                <div
+                    class="flex min-w-0 flex-1 items-center self-stretch pl-2 group-hover:bg-hover {comparedHashes.has(
+                        commit.hash
+                    )
+                        ? 'bg-warn/15 ring-1 ring-inset ring-warn/40'
+                        : selectedHash === commit.hash
+                          ? 'bg-selected'
+                          : ''}"
+                >
+                    <div class="min-w-0 flex-1">
+                        {@render row(commit, index)}
+                    </div>
                 </div>
             </button>
         {/each}
