@@ -14,14 +14,20 @@ const open = (page: import('@playwright/test').Page, worktrees: number) =>
 const list = (page: import('@playwright/test').Page) =>
     page.getByTestId('worktree-list');
 
-test('shows nothing when the repository has only its own worktree', async ({
+test('explains itself when the repository has only its own worktree', async ({
     page,
 }) => {
-    // Every repository has one, so saying so would be noise.
+    /*
+     * The section used to be hidden here, on the grounds that every repository
+     * has one working tree so saying so is noise. That reasoning holds for the
+     * list and not for the feature: a section that appears only once you are
+     * already using worktrees cannot be how anyone finds them.
+     */
     await open(page, 1);
     await page.getByTestId('git-graph').locator('button').first().waitFor();
 
-    await expect(list(page)).toBeHidden();
+    await expect(list(page)).toBeVisible();
+    await expect(list(page)).toContainText('Only this working tree');
 });
 
 test('lists the worktrees once there is more than one', async ({ page }) => {

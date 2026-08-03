@@ -182,9 +182,10 @@ Anything destructive asks first, and says what will be lost.
 ### Put work aside
 
 Stash entries appear in the graph as rows of their own, hanging off the commit
-the work was left on, and in the sidebar beside the branches and worktrees. Every
-sidebar section — local, remote, worktrees, stashes — folds away, and remembers
-whether you folded it.
+the work was left on, and in the sidebar beside the branches and worktrees. All
+four sidebar sections — local, remote, worktrees, stashes — are always there,
+each folding away and remembering it, and each saying what it is for when there
+is nothing in it. Remote, Worktrees and Stashes carry a **Manage** button.
 
 **`GitHawk: Manage Stashes`** lists the stash with what each entry says it is,
 the branch it was made on, and when. An entry git named itself — `WIP on main:
@@ -205,9 +206,8 @@ diff editor.
 
 ### Manage remotes
 
-The **Remotes** button on the toolbar — beside Fetch, Pull, and Push, since they
-all concern the other end of the wire — or **`GitHawk: Manage Remotes`**. Either
-lists every remote with its URL, and a remote with a
+**Manage** on the sidebar's Remote section, or **`GitHawk: Manage Remotes`**.
+Either lists every remote with its URL, and a remote with a
 separate push URL — the fork workflow, reading from upstream and writing to your own
 copy — shows both, because being shown one of two is how you push somewhere you did
 not mean to.

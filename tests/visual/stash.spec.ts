@@ -148,3 +148,13 @@ test('the branch filter is there for a repository with few branches', async ({
         page.getByRole('searchbox', { name: 'Filter branches' })
     ).toBeVisible();
 });
+
+test('the remote section is there with no remote branches', async ({ page }) => {
+    await page.goto('/?topology=linear');
+    await expect(page.getByTestId('git-graph')).toBeVisible();
+
+    const list = page.getByTestId('remote-list');
+    await expect(list).toBeVisible();
+    await expect(list).toContainText('No remote branches');
+    await expect(page.getByTestId('manage-remotes')).toBeVisible();
+});

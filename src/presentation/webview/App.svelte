@@ -26,10 +26,7 @@
         type SelectionState,
     } from './viewmodels/selection';
     import Toolbar from './components/Toolbar.svelte';
-    import {
-        isRemoteOperation,
-        type ToolbarAction,
-    } from './viewmodels/toolbar';
+    import type { ToolbarAction } from './viewmodels/toolbar';
     import { anchorAt, scrollTopFor } from './viewmodels/scrollAnchor';
     import {
         defaultMetrics,
@@ -295,13 +292,7 @@
             postToHost({ type: 'graph:refresh' });
             return;
         }
-        if (action === 'remotes') {
-            postToHost({ type: 'remotes:menu' });
-            return;
-        }
-        if (isRemoteOperation(action)) {
-            postToHost({ type: 'remote:operation', operation: action });
-        }
+        postToHost({ type: 'remote:operation', operation: action });
     };
 
     const handleSelectCommit = (commit: Commit, modifiers: SelectModifiers) => {
@@ -507,6 +498,8 @@
                         {stashes}
                         onOpenStashMenu={(ref) =>
                             postToHost({ type: 'stash:menu', ref })}
+                        onOpenRemoteMenu={() =>
+                            postToHost({ type: 'remotes:menu' })}
                     />
                 </div>
             {/if}

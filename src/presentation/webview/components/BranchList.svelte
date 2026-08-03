@@ -26,6 +26,9 @@
         stashes?: Stash[];
         /** No ref opens the manager; a ref opens that entry's actions. */
         onOpenStashMenu?: (ref?: string) => void;
+        /** Opens the remote manager. Remotes have no per-branch actions here —
+         *  a remote-tracking branch's own menu already covers those. */
+        onOpenRemoteMenu?: () => void;
     }
 
     let {
@@ -35,6 +38,7 @@
         onOpenWorktreeMenu,
         stashes = [],
         onOpenStashMenu,
+        onOpenRemoteMenu,
     }: Props = $props();
 
     let filter = $state('');
@@ -193,33 +197,56 @@
             </div>
         </div>
 
-        {#if remoteBranches.length > 0}
-            <div class="border-t border-line px-2 py-3">
-                <SectionHeader
-                    section="remote"
-                    label="Remote"
-                    count={remoteBranches.length}
-                    dot="bg-warn"
-                    open={sections.remote}
-                    onToggle={toggleSection}
-                />
-
-                <div class="space-y-1" hidden={!sections.remote}>
-                    {#each remoteBranches as branch (branch.name)}
-                        <button
-                            type="button"
-                            class="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-fg-muted transition-colors duration-150 hover:bg-control"
-                            onclick={() => onOpenMenu?.(branch)}
-                        >
-                            <span class="text-sm text-orange-400">◊</span>
-                            <span class="flex-1 truncate text-sm">
-                                {branch.name}
-                            </span>
-                        </button>
-                    {/each}
+        <div class="border-t border-line px-2 py-3" data-testid="remote-list">
+            <div class="flex items-center gap-1">
+                <div class="min-w-0 flex-1">
+                    <SectionHeader
+                        section="remote"
+                        label="Remote"
+                        count={remoteBranches.length}
+                        dot="bg-warn"
+                        open={sections.remote}
+                        onToggle={toggleSection}
+                    />
                 </div>
+                <button
+                    type="button"
+                    data-testid="manage-remotes"
+                    class="rounded px-1.5 py-0.5 text-[10px] text-fg-dim hover:bg-control hover:text-fg-soft"
+                    onclick={() => onOpenRemoteMenu?.()}
+                    title="Add, rename, re-point, remove, fetch, or prune a remote"
+                >
+                    Manage
+                </button>
             </div>
-        {/if}
+
+            <div class="space-y-1" hidden={!sections.remote}>
+                {#each remoteBranches as branch (branch.name)}
+                    <button
+                        type="button"
+                        class="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-fg-muted transition-colors duration-150 hover:bg-control"
+                        onclick={() => onOpenMenu?.(branch)}
+                    >
+                        <span class="text-sm text-orange-400">◊</span>
+                        <span class="flex-1 truncate text-sm">
+                            {branch.name}
+                        </span>
+                    </button>
+                {/each}
+
+                {#if remoteBranches.length === 0}
+                    <!--
+                        No remote-tracking branches is two different situations —
+                        no remote configured, or a remote nobody has fetched — and
+                        the sidebar cannot tell them apart from the branch list
+                        alone. Manage answers both.
+                    -->
+                    <p class="px-3 py-1 text-[11px] text-fg-faint">
+                        No remote branches. Manage adds a remote, or fetches one.
+                    </p>
+                {/if}
+            </div>
+        </div>
 
         <div
             class="border-t border-line px-2 py-3"

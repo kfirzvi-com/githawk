@@ -75,10 +75,14 @@ test('looks right — repository picker', async ({ page }) => {
     });
 });
 
-test('the toolbar asks the host to open the remote manager', async ({
+test('the Remote section asks the host to open the remote manager', async ({
     page,
 }) => {
-    // The manager itself is a VS Code QuickPick; the webview only asks.
+    /*
+     * It used to be a fifth toolbar button. It lives in the sidebar now, beside
+     * the remote branches it is about — the manager itself is a VS Code
+     * QuickPick, so the webview only ever asks.
+     */
     const posted: string[] = [];
     page.on('console', (message) => {
         if (message.text().includes('webview → host')) {
@@ -87,11 +91,18 @@ test('the toolbar asks the host to open the remote manager', async ({
     });
 
     await page.goto('/?topology=linear');
-    await page.getByRole('button', { name: 'Remotes' }).click();
+    await page.getByTestId('manage-remotes').click();
 
     await expect
         .poll(() => posted.some((line) => line.includes('remotes:menu')))
         .toBe(true);
     // Not run as a git operation: fetch, pull and push act, this one opens.
     expect(posted.some((line) => line.includes('remote:operation'))).toBe(false);
+});
+
+test('the toolbar no longer carries a Remotes button', async ({ page }) => {
+    await page.goto('/?topology=linear');
+    await expect(page.getByTestId('git-graph')).toBeVisible();
+
+    await expect(page.getByRole('button', { name: 'Remotes' })).toHaveCount(0);
 });
