@@ -34,24 +34,22 @@ export type BlameStyle = 'off' | 'column' | 'endOfLine';
 const BLAME_STYLES: BlameStyle[] = ['off', 'column', 'endOfLine'];
 
 /**
- * Flips blame on and off, and remembers which placement was on.
+ * Flips blame between off and the column.
+ *
+ * Two states rather than three: the toggle is a switch, and a switch that
+ * lands somewhere different depending on what you last had is not one. The
+ * column is what it turns on, because it is the reading of history the feature
+ * is for — `endOfLine` stays available by setting `gitHawk.blame.style`
+ * directly, and this will overwrite that choice, which is the price of the
+ * toggle being predictable.
  *
  * Written back to whichever scope the setting is already defined in — a
  * workspace that has chosen a style should not be silently overridden by a
  * global toggle, and a user with no workspace setting should not have one
  * created for them.
  */
-export async function toggleBlame(
-    remembered: BlameStyle,
-    remember: (style: BlameStyle) => void
-): Promise<BlameStyle> {
-    const current = blameStyle();
-    const next: BlameStyle =
-        current === 'off' ? (remembered === 'off' ? 'column' : remembered) : 'off';
-
-    if (current !== 'off') {
-        remember(current);
-    }
+export async function toggleBlame(): Promise<BlameStyle> {
+    const next: BlameStyle = blameStyle() === 'off' ? 'column' : 'off';
 
     const configuration = vscode.workspace.getConfiguration(CONFIG_SECTION);
     const defined = configuration.inspect<string>(BLAME_STYLE_SETTING);

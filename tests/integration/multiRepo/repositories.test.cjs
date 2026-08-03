@@ -246,3 +246,49 @@ suite('GitHawk across several repositories', () => {
         );
     });
 });
+
+/**
+ * Blame has to answer for the file on screen, not for whichever repository the
+ * graph happens to be pointed at.
+ *
+ * This is the one tier that can catch it: with a single repository the two are
+ * always the same, and the difference only appears in a workspace holding
+ * several — which is the layout this session exists for.
+ */
+suite('blame across several repositories', () => {
+    const blame = (file) => vscode.commands.executeCommand('gitHawk.blame', file);
+
+    suiteSetup(async () => {
+        await vscode.extensions.getExtension(EXTENSION_ID).activate();
+        await eventually(
+            'the scan to find more than one repository',
+            async () => (await foundPaths()).length > 1
+        );
+    });
+
+    /** Each repository in the sample holds one file, named after itself. */
+    const aTrackedFileIn = (root) =>
+        path.join(root, git(['ls-files'], root).split('\n')[0].trim());
+
+    test('blames a file in the repository GitHawk is pointed at', async () => {
+        const { activeRoot } = await discovered();
+        const blocks = await blame(aTrackedFileIn(activeRoot));
+
+        assert.ok(Array.isArray(blocks) && blocks.length > 0);
+    });
+
+    test('blames a file in a repository that is not the active one', async () => {
+        const { repositories, activeRoot } = await discovered();
+        const other = repositories.find(
+            (repository) => repository.root !== activeRoot
+        );
+        assert.ok(other, 'the sample should hold more than one repository');
+
+        const blocks = await blame(aTrackedFileIn(other.root));
+
+        assert.ok(
+            Array.isArray(blocks) && blocks.length > 0,
+            `no blame for a file in ${other.root} while ${activeRoot} was active`
+        );
+    });
+});
