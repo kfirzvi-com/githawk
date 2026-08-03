@@ -35,6 +35,21 @@ export interface LogOptions {
 export function logArgs({ limit }: LogOptions): string[] {
     return [
         'log',
+        /*
+         * `--all` means every ref under `refs/`, and `refs/stash` is one — so
+         * without this the top stash entry arrives as an ordinary commit, and
+         * so does the snapshot of the index that git hangs off it as a second
+         * parent. That snapshot is a commit nobody wrote, drawn as a merge that
+         * never happened.
+         *
+         * Excluded here so the stash is added deliberately instead, from the
+         * stash list, which is also the only way to reach the older entries:
+         * only stash@{0} is a ref at all.
+         *
+         * `--exclude` applies to the `--all` that follows it, so the order
+         * matters.
+         */
+        '--exclude=refs/stash',
         // Every ref, not just HEAD — a graph showing one branch is not a graph.
         '--all',
         // Parents before children within the page git returns.

@@ -1,6 +1,6 @@
 import { IGitRepository } from '../../domain/repositories/IGitRepository';
 import { IStashReader } from '../../domain/repositories/IStashReader';
-import { GitGraphDto, StashDto } from '../dto/GitGraphDto';
+import { CommitDto, GitGraphDto, StashDto } from '../dto/GitGraphDto';
 import { BranchMapper, CommitMapper, StashMapper } from '../dto/mappers';
 
 /**
@@ -30,10 +30,10 @@ export class LoadGitGraphUseCase {
              * entries anyway — they live in the reflog — so they are added
              * rather than found.
              */
-            commits: [
+            commits: withoutDuplicates([
                 ...repository.commits.map(CommitMapper.toDto),
                 ...stashes.map(StashMapper.toCommitDto),
-            ],
+            ]),
             stashes,
             branches: repository.branches.map(BranchMapper.toDto),
             hasMoreHistory: repository.hasMoreHistory,
@@ -55,4 +55,24 @@ export class LoadGitGraphUseCase {
             return [];
         }
     }
+}
+
+/**
+ * Belt and braces around the merge above.
+ *
+ * The log excludes `refs/stash` so a stash entry cannot arrive twice, but the
+ * cost of being wrong about that is out of proportion to the check: the webview
+ * keys its rows by hash, and a duplicate key is a hard error in Svelte, which
+ * takes the whole panel down to a spinner that never resolves. It has done
+ * exactly that once.
+ */
+function withoutDuplicates(commits: CommitDto[]): CommitDto[] {
+    const seen = new Set<string>();
+    return commits.filter((commit) => {
+        if (seen.has(commit.hash)) {
+            return false;
+        }
+        seen.add(commit.hash);
+        return true;
+    });
 }
