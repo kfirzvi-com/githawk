@@ -65,9 +65,14 @@ All notable changes to GitHawk are documented here, following
 
 ### Changed
 
-- **The Worktrees and Stashes sections are always shown**, empty or not, each
-  saying what it is for when there is nothing in it. A section that appears only
-  once you are already using the feature cannot be how anyone discovers it.
+- **All four sidebar sections are always shown** — local, remote, worktrees,
+  stashes — empty or not, each saying what it is for when there is nothing in it.
+  A section that appears only once you are already using the feature cannot be how
+  anyone discovers it.
+
+- **Remote has a Manage button**, matching Worktrees and Stashes, and the toolbar's
+  Remotes button is gone. Two ways into one manager is one too many, and the
+  sidebar is where the other two live — next to the remote branches it is about.
 
 - **The blame toggle is a two-state switch**: off, or the column. It used to
   return to whichever placement was last on, which meant it landed somewhere
