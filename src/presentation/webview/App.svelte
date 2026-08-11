@@ -32,6 +32,10 @@
         defaultMetrics,
         graphWidth,
     } from './viewmodels/graphGeometry';
+    import {
+        commitTimestamp,
+        commitTimestampTooltip,
+    } from './viewmodels/commitTimestamp';
     import { tick } from 'svelte';
     import PaneHandle from './components/PaneHandle.svelte';
     import WorkingTreeRow from './components/WorkingTreeRow.svelte';
@@ -592,9 +596,12 @@
                                         {commit.author}
                                     </span>
                                     <span
-                                        class="w-20 flex-shrink-0 pr-3 text-right text-xs whitespace-nowrap tabular-nums text-fg-faint"
+                                        class="w-32 flex-shrink-0 pr-3 text-right text-xs whitespace-nowrap tabular-nums text-fg-faint"
+                                        title={commitTimestampTooltip(
+                                            commit.timestamp
+                                        )}
                                     >
-                                        {commit.timestamp.toLocaleDateString()}
+                                        {commitTimestamp(commit.timestamp)}
                                     </span>
                                 </div>
                             {/snippet}
