@@ -15,6 +15,16 @@ export default defineConfig({
     use: {
         baseURL,
         ...devices['Desktop Chrome'],
+        /*
+         * Pinned, because the graph renders each commit's date and time in the
+         * reader's locale and zone. Left to the machine, `npm run shots` in
+         * Tel Aviv writes baselines three hours off the ones a contributor in
+         * London writes, and every row differs — a diff of thousands of pixels
+         * that says nothing about the change under test. Fixture timestamps are
+         * UTC, so UTC is also the zone that keeps their dates off a boundary.
+         */
+        locale: 'en-US',
+        timezoneId: 'UTC',
     },
     /*
      * Reuse a dev server if one is already running, otherwise start one. Safe
