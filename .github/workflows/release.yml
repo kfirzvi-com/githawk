@@ -120,12 +120,16 @@ jobs:
           if [[ "$CHANNEL" == pre-release ]]; then flag=(--pre-release); fi
           npx vsce publish "${flag[@]}" --packagePath "githawk-$VERSION.vsix"
 
-      # Stable only — Open VSX has no pre-release channel. Skipped until the
-      # secret exists, because the Eclipse publisher agreement takes days to
-      # approve and that should not hold up a Marketplace release.
+      # The same file, on both channels: VS Code installs from the Marketplace,
+      # the forks — Cursor, Antigravity, VSCodium, Windsurf — install from Open
+      # VSX, and neither audience should be a version behind the other.
+      #
+      # No --pre-release here. ovsx ignores it for an already-packaged vsix and
+      # says so; the channel is read from the flag vsce stamped into the
+      # manifest, which is why both registries get one identical package rather
+      # than one build each.
       - name: Publish to Open VSX
-        if: needs.plan.outputs.channel == 'stable' && env.OVSX_PAT != ''
-        run: npx ovsx publish "githawk-$VERSION.vsix" --pat "$OVSX_PAT"
+        run: npx ovsx publish --packagePath "githawk-$VERSION.vsix" --pat "$OVSX_PAT"
 
       - name: GitHub Release
         if: needs.plan.outputs.channel == 'stable'
