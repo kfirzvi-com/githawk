@@ -24,8 +24,14 @@ dist/**/*.map
 
 *.vsix
 
-# Icon master — only the 256px media/icon.png ships
+# Brand masters. Only two assets are needed at runtime: the 256px
+# media/icon.png the Marketplace shows, and media/githawk-mark.svg in the
+# activity bar. The rest is for the README, the site, and future exports.
 media/icon-1024.png
+media/icon.svg
+media/logo.svg
+media/logo.png
+media/logomark.svg
 
 # Repo housekeeping
 .gitignore
