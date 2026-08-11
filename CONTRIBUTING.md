@@ -198,10 +198,19 @@ snapshots at once.
 ## Releasing
 
 Publishing is CI's job, not a laptop's — `.github/workflows/release.yml` is the
-only thing holding a Marketplace token, and it runs all three test tiers on the
+only thing holding a registry token, and it runs all three test tiers on the
 exact commit being published first. A version cannot be withdrawn once it is up,
 only superseded, so the gate has to be on the commit rather than on whatever
 happened to be in someone's working tree.
+
+Two registries, one package. `vsce package` builds a single `.vsix`, which is
+then uploaded to the **Visual Studio Marketplace** (`VSCE_PAT`, where VS Code
+installs from) and to **Open VSX** (`OVSX_PAT`, where the forks install from —
+Cursor, Antigravity, VSCodium, Windsurf). Both channels go to both registries,
+so no audience is ever a version behind the other, and what the two install is
+byte-for-byte the same file rather than one build each. Open VSX reads the
+channel from the flag `vsce` stamped into the manifest; passing `--pre-release`
+to `ovsx` for an already-packaged `.vsix` does nothing, and it will say so.
 
 Two channels on one number line:
 
