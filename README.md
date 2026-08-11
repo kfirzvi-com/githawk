@@ -1,4 +1,4 @@
-# GitHawk
+<h1><img src="media/logo.png" alt="GitHawk" width="360"></h1>
 
 **A git graph for VS Code that is just a git graph.** No AI, no telemetry, no
 account, no cloud. MIT licensed.

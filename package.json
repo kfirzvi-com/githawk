@@ -228,14 +228,14 @@
         {
           "id": "gitHawkSidebar",
           "title": "GitHawk",
-          "icon": "media/githawk-eye.svg"
+          "icon": "media/githawk-mark.svg"
         }
       ],
       "panel": [
         {
           "id": "gitHawkPanel",
           "title": "GitHawk",
-          "icon": "$(git-branch)"
+          "icon": "media/githawk-mark.svg"
         }
       ]
     },
@@ -254,7 +254,7 @@
           "name": "Git Graph",
           "contextualTitle": "GitHawk",
           "type": "webview",
-          "icon": "$(git-branch)"
+          "icon": "media/githawk-mark.svg"
         }
       ]
     },
