@@ -3,6 +3,62 @@
 All notable changes to GitHawk are documented here, following
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.0] — 2026-08-13
+
+Still marked **Preview** on the Marketplace: the known limitations at the bottom
+of the README are real, and a 1.0 should not have them.
+
+### Added
+
+- **Each commit's time, beside its date.** A date answers "roughly when", which
+  is enough until someone is reading a day's worth of commits and needs their
+  order within it. The graph's own order already says which came first; the time
+  says how far apart.
+
+  The column pays for it with a two-digit year — `9/4/23, 12:00 PM` in place of
+  `9/4/2023` — and grows from `w-20` to `w-32`, which costs the subject 48px. A
+  tooltip carries the full form, weekday and seconds included, for reading a row
+  without selecting the commit.
+
+  Both parts follow the host's locale rather than imposing an American one, so
+  en-GB reads `03/09/2023, 18:45`. A date column that disagrees with the rest of
+  the machine is a bug.
+
+### Changed
+
+- **The logo is the hawk a designer drew**, in the blue colourway — `#CCCCCC` to
+  `#4EA3E8`, on the near-black plate the same delivery uses — replacing the
+  hand-drawn eye.
+
+  The activity bar and the panel take the bird without the crosshair ring: at
+  24px the ring's arcs are too thin to survive, while the wing and the beak
+  read. The eye's own comment had predicted a hawk would smudge at that size,
+  which is true of the full mark and not of the mark cut down for it.
+
+- **Every build now reaches Open VSX**, not only the stable ones. Open VSX is
+  where the VS Code forks install from — Cursor, Antigravity, VSCodium,
+  Windsurf — and the publishing step was gated on the stable channel, so those
+  users would have sat on `X.Y.0` while Marketplace users got a build per push
+  to `main`.
+
+  One `.vsix` goes to both registries rather than one build each, so what a
+  Cursor user installs is byte-for-byte what a VS Code user does. The step also
+  no longer skips silently when its token is unset, which was right while the
+  publisher agreement was pending and wrong now that it is signed: an expired
+  token would have quietly stopped publishing to half the audience.
+
+### Internal
+
+- The Playwright config pins locale and timezone. Rendering a time in every row
+  makes the baselines depend on the machine that wrote them — `npm run shots` in
+  Tel Aviv and in London disagree on every row, thousands of pixels of diff
+  saying nothing about the change under test. Fixture timestamps are UTC, which
+  is also the zone that keeps their dates off a day boundary.
+
+- `ovsx` joins `devDependencies` alongside `vsce`, so `npx` resolves it locally
+  after `npm ci`. It was the one unpinned download in the job that holds the
+  registry tokens.
+
 ## [0.4.0] — 2026-08-03
 
 Still marked **Preview** on the Marketplace: the known limitations at the bottom
