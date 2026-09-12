@@ -3,6 +3,40 @@
 All notable changes to GitHawk are documented here, following
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- **Hold Shift to see the keyboard.** Every control that has a shortcut shows
+  its key on the control itself while Shift is held; keep holding and press the
+  key to run it. Basecamp's idea, and it works because the list of shortcuts is
+  the screen rather than a page in the documentation — always accurate, always
+  beside the thing it acts on.
+
+  A badge appears only where the key does something, and the same list decides
+  both, so the two can never disagree: fold the branch list away and its four
+  keys leave with its badges.
+
+  Refresh, fetch, pull and push are `R F U P`; the repository picker is `O`; the
+  two side panes are `B` and `D`; the branch filter is `K`; the three managers
+  are `M`, `W` and `S`; a multi-commit selection adds `C` and `X`.
+
+- **Expand the panel to the window**, with the `⇕` button in the toolbar or
+  `Shift`+`E`. The panel's height belongs to the workbench, so this asks VS Code
+  to run its own `toggleMaximizedPanel` — which is also why it is one toggle and
+  not two buttons: there is no way to ask which state the panel is in.
+
+  VS Code already has a chevron for this in the panel's title bar. Duplicating it
+  is deliberate: a graph is the one thing in that panel that always wants more
+  height, the title bar is chrome most readers never look at, and a shortcut has
+  to have a control to put its badge on.
+
+  The badges wait a quarter of a second before appearing, because Shift is
+  already a modifier here — Shift-click extends a selection in the graph — and
+  without the pause every range made the panel flash a dozen badges. A capital
+  typed into the branch filter stays a capital, and Ctrl, Cmd and Alt
+  combinations are left to VS Code.
+
 ## [0.5.0] — 2026-08-13
 
 Still marked **Preview** on the Marketplace: the known limitations at the bottom

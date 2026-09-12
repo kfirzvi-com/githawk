@@ -13,6 +13,8 @@
         type Section,
     } from '../viewmodels/sections';
     import { readWebviewState, writeWebviewState } from '../vscodeApi';
+    import ShortcutHint from './ShortcutHint.svelte';
+    import type { ShortcutAction } from '../viewmodels/shortcuts';
 
     interface Props {
         branches: Branch[];
@@ -29,6 +31,10 @@
         /** Opens the remote manager. Remotes have no per-branch actions here —
          *  a remote-tracking branch's own menu already covers those. */
         onOpenRemoteMenu?: () => void;
+        /** Shift is down: every control in here that has a key says which. */
+        hintsShown?: boolean;
+        /** Which of them are live right now. */
+        availableHints?: ReadonlySet<ShortcutAction>;
     }
 
     let {
@@ -39,9 +45,25 @@
         stashes = [],
         onOpenStashMenu,
         onOpenRemoteMenu,
+        hintsShown = false,
+        availableHints = new Set<ShortcutAction>(),
     }: Props = $props();
 
     let filter = $state('');
+    let filterInput = $state<HTMLInputElement | null>(null);
+
+    const hintShownFor = (action: ShortcutAction) =>
+        hintsShown && availableHints.has(action);
+
+    /**
+     * Called by App when Shift+K is pressed. Exported rather than driven by a
+     * prop because focus is an event, not a state: a boolean that means "focus
+     * it now" has no honest value to go back to once the reader clicks away.
+     */
+    export function focusFilter(): void {
+        filterInput?.select();
+        filterInput?.focus();
+    }
 
     /** Persisted, so a section folded away stays folded across a reload. */
     const SECTIONS_STATE_KEY = 'branchListSections';
@@ -99,13 +121,21 @@
              branches, which made it look like a feature that came and went:
              the one repository where you go looking for it is the one you have
              just cloned. -->
-        <input
-            type="search"
-            bind:value={filter}
-            placeholder="Filter branches…"
-            aria-label="Filter branches"
-            class="w-full rounded-md border border-line bg-graph px-2 py-1 text-xs text-fg-soft placeholder:text-fg-faint focus:border-info-strong focus:outline-none"
-        />
+        <div class="relative">
+            <input
+                type="search"
+                bind:this={filterInput}
+                bind:value={filter}
+                placeholder="Filter branches…"
+                aria-label="Filter branches"
+                class="w-full rounded-md border border-line bg-graph px-2 py-1 text-xs text-fg-soft placeholder:text-fg-faint focus:border-info-strong focus:outline-none"
+            />
+            <ShortcutHint
+                action="filterBranches"
+                shown={hintShownFor('filterBranches')}
+                placement="inside"
+            />
+        </div>
     </div>
 
     <div class="flex-1 overflow-y-auto">
@@ -209,15 +239,21 @@
                         onToggle={toggleSection}
                     />
                 </div>
-                <button
-                    type="button"
-                    data-testid="manage-remotes"
-                    class="rounded px-1.5 py-0.5 text-[10px] text-fg-dim hover:bg-control hover:text-fg-soft"
-                    onclick={() => onOpenRemoteMenu?.()}
-                    title="Add, rename, re-point, remove, fetch, or prune a remote"
-                >
-                    Manage
-                </button>
+                <div class="relative flex">
+                    <button
+                        type="button"
+                        data-testid="manage-remotes"
+                        class="rounded px-1.5 py-0.5 text-[10px] text-fg-dim hover:bg-control hover:text-fg-soft"
+                        onclick={() => onOpenRemoteMenu?.()}
+                        title="Add, rename, re-point, remove, fetch, or prune a remote"
+                    >
+                        Manage
+                    </button>
+                    <ShortcutHint
+                        action="manageRemotes"
+                        shown={hintShownFor('manageRemotes')}
+                    />
+                </div>
             </div>
 
             <div class="space-y-1" hidden={!sections.remote}>
@@ -263,15 +299,21 @@
                         onToggle={toggleSection}
                     />
                 </div>
-                <button
-                    type="button"
-                    data-testid="manage-worktrees"
-                    class="rounded px-1.5 py-0.5 text-[10px] text-fg-dim hover:bg-control hover:text-fg-soft"
-                    onclick={() => onOpenWorktreeMenu?.()}
-                    title="Create, open, or remove a worktree"
-                >
-                    Manage
-                </button>
+                <div class="relative flex">
+                    <button
+                        type="button"
+                        data-testid="manage-worktrees"
+                        class="rounded px-1.5 py-0.5 text-[10px] text-fg-dim hover:bg-control hover:text-fg-soft"
+                        onclick={() => onOpenWorktreeMenu?.()}
+                        title="Create, open, or remove a worktree"
+                    >
+                        Manage
+                    </button>
+                    <ShortcutHint
+                        action="manageWorktrees"
+                        shown={hintShownFor('manageWorktrees')}
+                    />
+                </div>
             </div>
 
             <div class="space-y-1" hidden={!sections.worktrees}>
@@ -354,15 +396,21 @@
                             onToggle={toggleSection}
                         />
                     </div>
-                    <button
-                        type="button"
-                        data-testid="manage-stashes"
-                        class="rounded px-1.5 py-0.5 text-[10px] text-fg-dim hover:bg-control hover:text-fg-soft"
-                        onclick={() => onOpenStashMenu?.()}
-                        title="Stash the working tree, or act on an entry"
-                    >
-                        Manage
-                    </button>
+                    <div class="relative flex">
+                        <button
+                            type="button"
+                            data-testid="manage-stashes"
+                            class="rounded px-1.5 py-0.5 text-[10px] text-fg-dim hover:bg-control hover:text-fg-soft"
+                            onclick={() => onOpenStashMenu?.()}
+                            title="Stash the working tree, or act on an entry"
+                        >
+                            Manage
+                        </button>
+                        <ShortcutHint
+                            action="manageStashes"
+                            shown={hintShownFor('manageStashes')}
+                        />
+                    </div>
                 </div>
 
                 <div class="space-y-1" hidden={!sections.stashes}>

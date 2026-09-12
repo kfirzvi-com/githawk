@@ -122,12 +122,43 @@ for `endOfLine`. Annotations appear in the diff editor
 too — both sides, each blamed as of its own revision, which is the question a
 diff raises.
 
+### Hold Shift to see the keyboard
+
+Hold <kbd>Shift</kbd> and every control that has a shortcut shows its key, right
+on the control. Keep holding, press the key, and it runs.
+
+Nothing to memorise and nothing to look up: the list of shortcuts *is* the
+screen, so it is always accurate and always beside the thing it acts on. A badge
+only appears where the key does something — fold the branch list away and its
+four keys go with it.
+
+| | |
+| --- | --- |
+| <kbd>⇧R</kbd> <kbd>⇧F</kbd> <kbd>⇧U</kbd> <kbd>⇧P</kbd> | Refresh, Fetch, Pull (update), Push |
+| <kbd>⇧O</kbd> | Switch repository |
+| <kbd>⇧B</kbd> <kbd>⇧D</kbd> | Fold the branch list, or commit details, away |
+| <kbd>⇧E</kbd> | Expand the panel to the window, or put it back |
+| <kbd>⇧K</kbd> | Filter branches |
+| <kbd>⇧M</kbd> <kbd>⇧W</kbd> <kbd>⇧S</kbd> | Manage remotes, worktrees, stashes |
+| <kbd>⇧C</kbd> <kbd>⇧X</kbd> | Clear a multi-commit selection; diff the two selected |
+
+Shift alone is only a modifier, so <kbd>Shift</kbd>-click still extends a
+selection in the graph, and a capital letter typed in the branch filter is still
+a capital letter. Nothing here shadows one of your VS Code bindings: Ctrl, Cmd
+and Alt combinations are left alone.
+
 ### Give the graph the room
 
 The panel is short and splits its width three ways. Either side pane folds away
 with the thin handle beside it — the handle stays where it is when the pane is
 gone, so the way back is where the way out was — and the graph takes the space.
 GitHawk remembers which panes you had.
+
+Height is the other half of the problem, and it belongs to the workbench rather
+than to us: the <kbd>⇕</kbd> button in the toolbar — or <kbd>⇧E</kbd> — grows the
+panel to the window and puts it back. VS Code has its own chevron for this in the
+panel's title bar; a graph is the one thing in there that always wants the height,
+so it gets a control where you are already looking.
 
 ### Review a whole branch, or any set of commits
 

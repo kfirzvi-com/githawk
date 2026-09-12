@@ -26,6 +26,7 @@
         type SelectionState,
     } from './viewmodels/selection';
     import Toolbar from './components/Toolbar.svelte';
+    import ShortcutHint from './components/ShortcutHint.svelte';
     import type { ToolbarAction } from './viewmodels/toolbar';
     import { anchorAt, scrollTopFor } from './viewmodels/scrollAnchor';
     import {
@@ -55,6 +56,12 @@
         readWebviewState,
         writeWebviewState,
     } from './vscodeApi';
+    import {
+        availableShortcuts,
+        isTextFieldTarget,
+        resolveShortcut,
+        type ShortcutAction,
+    } from './viewmodels/shortcuts';
 
     /** Persisted, so folding a pane away survives the panel being rebuilt. */
     const PANES_STATE_KEY = 'panes';
@@ -84,6 +91,10 @@
     /** Counts only; the files themselves go to the Changes tree as usual. */
     let workingTree = $state<WorkingTreeStatus>(cleanWorkingTree);
     let workingTreeSelected = $state(false);
+    /** Shift is being held, so every control with a key is showing it. */
+    let shortcutHintsShown = $state(false);
+    /** Bound so Shift+K can put the caret in a field it does not own. */
+    let branchList = $state<BranchList | null>(null);
 
     /** Layout is derived, never stored: one source of truth for the graph. */
     const graph = $derived(
@@ -123,6 +134,20 @@
     const selectedHashes = $derived(new Set(selection.hashes));
     const selectionIsContiguous = $derived(
         isContiguous(rowOrder, selection.hashes)
+    );
+    /**
+     * One list decides both which badges are drawn and which keys do anything,
+     * because a badge is a promise that the key works. Two lists would drift,
+     * and both ways of drifting are silent: a badge on a dead key, or a working
+     * key nobody can find.
+     */
+    const liveShortcuts = $derived(
+        availableShortcuts({
+            panelReady: !isLoading && errorMessage === null,
+            hasRepositories: repositories.length > 0,
+            branchesPaneVisible: panes.branches,
+            selectionCount: selection.hashes.length,
+        })
     );
     /**
      * A single commit still runs a comparison — that is what fills the Changes
@@ -235,6 +260,153 @@
     );
 
     /**
+     * Holding Shift reveals the badges; holding it and pressing a letter runs
+     * that control. Basecamp's design, and the reason it works is that the list
+     * of shortcuts is the screen itself — always accurate, and always beside
+     * the thing it acts on.
+     */
+    let revealTimer: ReturnType<typeof setTimeout> | undefined;
+
+    /*
+     * A quarter of a second before anything appears. Shift is already a
+     * modifier here — Shift+click extends a selection in the graph — and
+     * without the pause every range selection makes the whole panel flash a
+     * dozen badges. Nobody holding Shift to click waits this long; everybody
+     * holding it to read does.
+     */
+    const REVEAL_DELAY_MS = 250;
+
+    const revealHints = () => {
+        if (shortcutHintsShown || revealTimer !== undefined) {
+            return;
+        }
+        revealTimer = setTimeout(() => {
+            revealTimer = undefined;
+            shortcutHintsShown = true;
+        }, REVEAL_DELAY_MS);
+    };
+
+    const hideHints = () => {
+        clearTimeout(revealTimer);
+        revealTimer = undefined;
+        shortcutHintsShown = false;
+    };
+
+    /**
+     * Every shortcut goes through the handler the mouse already uses, rather
+     * than reaching for `postToHost` itself. A key that took its own route
+     * would be a second implementation of the same button, and the debounce,
+     * the loading flag and the mutual exclusion with the working-tree row all
+     * live on this side of it.
+     */
+    const runShortcut = (action: ShortcutAction) => {
+        // The badges stay up while Shift is held, so two of these can be run
+        // one after the other — fold both panes away, or fetch and then pull —
+        // without letting go in between.
+        switch (action) {
+            case 'refresh':
+            case 'fetch':
+            case 'pull':
+            case 'push':
+                handleToolbarAction(action);
+                break;
+            case 'switchRepository':
+                postToHost({ type: 'repository:menu' });
+                break;
+            case 'filterBranches':
+                branchList?.focusFilter();
+                // The caret is now in a field, where Shift means a capital and
+                // no other key is a shortcut. Leaving the badges up would be
+                // promising something that has just stopped being true.
+                hideHints();
+                break;
+            case 'manageRemotes':
+                postToHost({ type: 'remotes:menu' });
+                break;
+            case 'manageWorktrees':
+                postToHost({ type: 'worktree:menu' });
+                break;
+            case 'manageStashes':
+                postToHost({ type: 'stash:menu' });
+                break;
+            case 'toggleBranches':
+                togglePane('branches');
+                break;
+            case 'toggleDetails':
+                togglePane('details');
+                break;
+            case 'toggleMaximized':
+                toggleMaximized();
+                break;
+            case 'clearSelection':
+                clearSelection();
+                break;
+            case 'diffTwo':
+                compareTwoSelected();
+                break;
+        }
+    };
+
+    $effect(() => {
+        const onKeyDown = (event: KeyboardEvent) => {
+            const target = event.target as HTMLElement | null;
+
+            if (event.key === 'Shift') {
+                // Held down, the browser repeats this indefinitely; the guard
+                // inside revealHints keeps that to one timer.
+                if (!isTextFieldTarget(target)) {
+                    revealHints();
+                }
+                return;
+            }
+
+            const action = resolveShortcut(
+                {
+                    key: event.key,
+                    shiftKey: event.shiftKey,
+                    ctrlKey: event.ctrlKey,
+                    metaKey: event.metaKey,
+                    altKey: event.altKey,
+                    inTextField: isTextFieldTarget(target),
+                },
+                liveShortcuts
+            );
+            if (!action) {
+                return;
+            }
+
+            // Only once something matched: an unclaimed Shift+letter is still
+            // the reader's to type wherever they are.
+            event.preventDefault();
+            runShortcut(action);
+        };
+
+        const onKeyUp = (event: KeyboardEvent) => {
+            if (event.key === 'Shift') {
+                hideHints();
+            }
+        };
+
+        /*
+         * A QuickPick takes focus away from the webview, and the keyup that
+         * would have hidden the badges is delivered to VS Code instead. Without
+         * this the panel is left permanently wearing them.
+         */
+        const onBlur = () => hideHints();
+
+        window.addEventListener('keydown', onKeyDown);
+        window.addEventListener('keyup', onKeyUp);
+        window.addEventListener('blur', onBlur);
+
+        return () => {
+            window.removeEventListener('keydown', onKeyDown);
+            window.removeEventListener('keyup', onKeyUp);
+            window.removeEventListener('blur', onBlur);
+            clearTimeout(revealTimer);
+        };
+    });
+
+    /**
      * `rowOrder` is derived from the commits that were just assigned, so the
      * new positions only exist once Svelte has flushed them.
      */
@@ -284,6 +456,14 @@
             isRemote: ref.kind === 'remoteBranch',
             isCurrent: ref.isHead,
         });
+
+    /**
+     * The panel's height is the workbench's to change, so this is a request
+     * rather than a state of our own — there is nothing here to remember, and
+     * nothing to reflect back.
+     */
+    const toggleMaximized = () =>
+        postToHost({ type: 'panel:toggleMaximized' });
 
     const togglePane = (pane: Pane) => {
         panes = withPane(panes, pane, !panes[pane]);
@@ -444,6 +624,9 @@
                 onAction={handleToolbarAction}
                 onSelectRepository={() =>
                     postToHost({ type: 'repository:menu' })}
+                onToggleMaximized={toggleMaximized}
+                hintsShown={shortcutHintsShown}
+                availableHints={liveShortcuts}
             />
         </div>
 
@@ -465,22 +648,36 @@
                 {#if selection.hashes.length === 2}
                     <!-- The combined effect is shown automatically; this asks the
                          other question, how the two states differ. -->
+                    <div class="relative flex">
+                        <button
+                            type="button"
+                            class="rounded border border-warn/50 px-2 py-1 font-medium text-warn-soft hover:bg-warn/20"
+                            onclick={compareTwoSelected}
+                            title="How do these two commits differ?"
+                        >
+                            Diff the two instead
+                        </button>
+                        <ShortcutHint
+                            action="diffTwo"
+                            shown={shortcutHintsShown &&
+                                liveShortcuts.has('diffTwo')}
+                        />
+                    </div>
+                {/if}
+                <div class="relative flex">
                     <button
                         type="button"
-                        class="rounded border border-warn/50 px-2 py-1 font-medium text-warn-soft hover:bg-warn/20"
-                        onclick={compareTwoSelected}
-                        title="How do these two commits differ?"
+                        class="text-warn-soft/80 underline hover:text-warn-soft"
+                        onclick={clearSelection}
                     >
-                        Diff the two instead
+                        Clear
                     </button>
-                {/if}
-                <button
-                    type="button"
-                    class="text-warn-soft/80 underline hover:text-warn-soft"
-                    onclick={clearSelection}
-                >
-                    Clear
-                </button>
+                    <ShortcutHint
+                        action="clearSelection"
+                        shown={shortcutHintsShown &&
+                            liveShortcuts.has('clearSelection')}
+                    />
+                </div>
             </div>
         {/if}
 
@@ -488,6 +685,7 @@
             {#if panes.branches}
                 <div class="w-64 flex-shrink-0 bg-pane">
                     <BranchList
+                        bind:this={branchList}
                         {branches}
                         {worktrees}
                         onOpenMenu={(branch) =>
@@ -504,6 +702,8 @@
                             postToHost({ type: 'stash:menu', ref })}
                         onOpenRemoteMenu={() =>
                             postToHost({ type: 'remotes:menu' })}
+                        hintsShown={shortcutHintsShown}
+                        availableHints={liveShortcuts}
                     />
                 </div>
             {/if}
@@ -515,6 +715,8 @@
                 side="left"
                 visible={panes.branches}
                 onToggle={togglePane}
+                hintShown={shortcutHintsShown &&
+                    liveShortcuts.has('toggleBranches')}
             />
 
             <div class="flex flex-1 flex-col overflow-hidden">
@@ -632,6 +834,8 @@
                 side="right"
                 visible={panes.details}
                 onToggle={togglePane}
+                hintShown={shortcutHintsShown &&
+                    liveShortcuts.has('toggleDetails')}
             />
             {#if panes.details}
                 <div class="w-80 flex-shrink-0 bg-pane">
