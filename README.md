@@ -137,6 +137,7 @@ four keys go with it.
 | <kbd>⇧R</kbd> <kbd>⇧F</kbd> <kbd>⇧U</kbd> <kbd>⇧P</kbd> | Refresh, Fetch, Pull (update), Push |
 | <kbd>⇧O</kbd> | Switch repository |
 | <kbd>⇧B</kbd> <kbd>⇧D</kbd> | Fold the branch list, or commit details, away |
+| <kbd>⇧E</kbd> | Expand the panel to the window, or put it back |
 | <kbd>⇧K</kbd> | Filter branches |
 | <kbd>⇧M</kbd> <kbd>⇧W</kbd> <kbd>⇧S</kbd> | Manage remotes, worktrees, stashes |
 | <kbd>⇧C</kbd> <kbd>⇧X</kbd> | Clear a multi-commit selection; diff the two selected |
@@ -152,6 +153,12 @@ The panel is short and splits its width three ways. Either side pane folds away
 with the thin handle beside it — the handle stays where it is when the pane is
 gone, so the way back is where the way out was — and the graph takes the space.
 GitHawk remembers which panes you had.
+
+Height is the other half of the problem, and it belongs to the workbench rather
+than to us: the <kbd>⇕</kbd> button in the toolbar — or <kbd>⇧E</kbd> — grows the
+panel to the window and puts it back. VS Code has its own chevron for this in the
+panel's title bar; a graph is the one thing in there that always wants the height,
+so it gets a control where you are already looking.
 
 ### Review a whole branch, or any set of commits
 

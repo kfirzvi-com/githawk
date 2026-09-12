@@ -14,6 +14,8 @@
         activeRepositoryRoot?: string;
         onAction?: (action: ToolbarAction) => void;
         onSelectRepository?: () => void;
+        /** Asks the host to grow the panel to the window, or put it back. */
+        onToggleMaximized?: () => void;
         /** Shift is down: every control that has a key says which. */
         hintsShown?: boolean;
         /** Which of them are live right now. */
@@ -26,6 +28,7 @@
         activeRepositoryRoot = undefined,
         onAction,
         onSelectRepository,
+        onToggleMaximized,
         hintsShown = false,
         availableHints = new Set<ShortcutAction>(),
     }: Props = $props();
@@ -88,6 +91,32 @@
     <div class="flex-1"></div>
 
     <div class="flex items-center gap-2">
+        <!--
+            The panel's own maximise chevron lives in the title bar above,
+            which is chrome most readers never look at and cannot be badged
+            from in here. A graph is the one thing in this panel that always
+            wants more height, so it gets a control of its own.
+
+            A toggle rather than two buttons: VS Code knows whether the panel
+            is maximised and offers no way to ask it.
+        -->
+        <div class="relative flex">
+            <button
+                type="button"
+                data-testid="toggle-maximized"
+                class="flex items-center rounded-md border border-line-strong bg-control px-2 py-1.5 text-xs font-medium text-fg-soft hover:bg-control-hover"
+                onclick={() => onToggleMaximized?.()}
+                title="Expand the panel to the window, or put it back"
+                aria-label="Expand the panel to the window, or put it back"
+            >
+                <span class="text-sm leading-none">⇕</span>
+            </button>
+            <ShortcutHint
+                action="toggleMaximized"
+                shown={hintShownFor('toggleMaximized')}
+            />
+        </div>
+
         <!-- The one piece of the feature that is always visible: nobody holds
              a modifier down to see what happens, so something has to say that
              holding this one is worth it.

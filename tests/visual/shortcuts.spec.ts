@@ -107,6 +107,37 @@ test('offers Clear and Diff only while two commits are selected', async ({
     await expect(page.getByText('commits selected')).toBeHidden();
 });
 
+/**
+ * The panel's height belongs to the workbench, so the webview can only ask. The
+ * harness has no workbench, which makes the message the whole of what there is
+ * to check here — the real thing was driven by hand in an extension host.
+ */
+test('asks the host to expand the panel', async ({ page }) => {
+    const posted: string[] = [];
+    page.on('console', (message) => {
+        if (message.text().includes('webview → host')) {
+            posted.push(message.text());
+        }
+    });
+
+    await open(page);
+    await holdShift(page);
+    await expect(hint(page, 'toggleMaximized')).toBeVisible();
+    await page.keyboard.press('E');
+
+    await expect
+        .poll(() => posted.some((line) => line.includes('panel:toggleMaximized')))
+        .toBe(true);
+
+    // The button beside the badge asks for exactly the same thing.
+    await page.keyboard.up('Shift');
+    posted.length = 0;
+    await page.getByTestId('toggle-maximized').click();
+    await expect
+        .poll(() => posted.some((line) => line.includes('panel:toggleMaximized')))
+        .toBe(true);
+});
+
 /** Shift+K in the filter is a capital K, and a filter that cannot type
  *  capitals is worse than no shortcut at all. */
 test('puts the caret in the branch filter, and then stays out of the way', async ({

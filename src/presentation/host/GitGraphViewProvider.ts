@@ -241,6 +241,19 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
             case 'repository:menu':
                 void this.repositories.pick();
                 break;
+            case 'panel:toggleMaximized':
+                /*
+                 * The workbench's own command, rather than anything of ours:
+                 * the panel is chrome VS Code owns, it already knows whether it
+                 * is maximised, and its notion of "full height" accounts for
+                 * the editor group, the status bar and a second side bar. There
+                 * is no API to ask which state it is in, which is why the
+                 * control this comes from is a toggle rather than two.
+                 */
+                void vscode.commands.executeCommand(
+                    'workbench.action.toggleMaximizedPanel'
+                );
+                break;
             case 'stash:menu':
                 void this.showStashMenu(message.ref);
                 break;

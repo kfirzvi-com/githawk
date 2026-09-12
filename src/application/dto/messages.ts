@@ -60,6 +60,12 @@ export type WebviewToHostMessage =
     | { type: 'compare:clear' }
     /** Opens the native picker for switching repository. */
     | { type: 'repository:menu' }
+    /**
+     * Grows the panel to the full window, or puts it back. The panel's height
+     * belongs to the workbench, not to anything the webview can draw, so this
+     * is a request for VS Code to run its own command.
+     */
+    | { type: 'panel:toggleMaximized' }
     /** Opens the worktree manager, or one worktree's actions when given a path. */
     | { type: 'worktree:menu'; path?: string }
     /** Opens the stash manager, or one entry's actions when given its ref. */

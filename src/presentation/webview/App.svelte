@@ -335,6 +335,9 @@
             case 'toggleDetails':
                 togglePane('details');
                 break;
+            case 'toggleMaximized':
+                toggleMaximized();
+                break;
             case 'clearSelection':
                 clearSelection();
                 break;
@@ -453,6 +456,14 @@
             isRemote: ref.kind === 'remoteBranch',
             isCurrent: ref.isHead,
         });
+
+    /**
+     * The panel's height is the workbench's to change, so this is a request
+     * rather than a state of our own — there is nothing here to remember, and
+     * nothing to reflect back.
+     */
+    const toggleMaximized = () =>
+        postToHost({ type: 'panel:toggleMaximized' });
 
     const togglePane = (pane: Pane) => {
         panes = withPane(panes, pane, !panes[pane]);
@@ -613,6 +624,7 @@
                 onAction={handleToolbarAction}
                 onSelectRepository={() =>
                     postToHost({ type: 'repository:menu' })}
+                onToggleMaximized={toggleMaximized}
                 hintsShown={shortcutHintsShown}
                 availableHints={liveShortcuts}
             />

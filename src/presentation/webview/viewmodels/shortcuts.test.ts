@@ -67,6 +67,7 @@ describe('availableShortcuts', () => {
         expect(available).toContain('push');
         expect(available).toContain('toggleBranches');
         expect(available).toContain('toggleDetails');
+        expect(available).toContain('toggleMaximized');
     });
 
     it('offers the repository picker only once there are repositories', () => {

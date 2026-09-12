@@ -24,6 +24,7 @@ export type ShortcutAction =
     | 'manageStashes'
     | 'toggleBranches'
     | 'toggleDetails'
+    | 'toggleMaximized'
     | 'clearSelection'
     | 'diffTwo';
 
@@ -56,6 +57,7 @@ export const shortcuts: readonly ShortcutSpec[] = [
     { id: 'manageStashes', key: 's', label: 'Manage stashes' },
     { id: 'toggleBranches', key: 'b', label: 'Show or hide the branch list' },
     { id: 'toggleDetails', key: 'd', label: 'Show or hide commit details' },
+    { id: 'toggleMaximized', key: 'e', label: 'Expand the panel, or put it back' },
     { id: 'clearSelection', key: 'c', label: 'Clear the selection' },
     { id: 'diffTwo', key: 'x', label: 'Diff the two selected commits' },
 ];
@@ -104,6 +106,7 @@ export function availableShortcuts(
         'push',
         'toggleBranches',
         'toggleDetails',
+        'toggleMaximized',
     ]);
 
     if (context.hasRepositories) {
