@@ -1,6 +1,8 @@
 <script lang="ts">
     import type { Pane } from '../viewmodels/panes';
     import { paneToggleLabel } from '../viewmodels/panes';
+    import ShortcutHint from './ShortcutHint.svelte';
+    import type { ShortcutAction } from '../viewmodels/shortcuts';
 
     interface Props {
         pane: Pane;
@@ -8,9 +10,15 @@
         side: 'left' | 'right';
         visible: boolean;
         onToggle: (pane: Pane) => void;
+        /** Shift is down: say which key folds this pane. */
+        hintShown?: boolean;
     }
 
-    let { pane, side, visible, onToggle }: Props = $props();
+    let { pane, side, visible, onToggle, hintShown = false }: Props = $props();
+
+    const hintAction: ShortcutAction = $derived(
+        pane === 'branches' ? 'toggleBranches' : 'toggleDetails'
+    );
 
     const label = $derived(paneToggleLabel(pane, visible));
 
@@ -26,22 +34,27 @@
     const pointsLeft = $derived(side === 'left' ? visible : !visible);
 </script>
 
-<button
-    type="button"
-    class="group flex w-3 flex-shrink-0 cursor-pointer items-center justify-center border-line bg-pane hover:bg-control {side ===
-    'left'
-        ? 'border-r'
-        : 'border-l'}"
-    title={label}
-    aria-label={label}
-    aria-expanded={visible}
-    data-testid={`pane-handle-${pane}`}
-    onclick={() => onToggle(pane)}
->
-    <span
-        aria-hidden="true"
-        class="h-0 w-0 border-y-[3px] border-y-transparent {pointsLeft
-            ? 'border-r-[4px] border-r-gray-600 group-hover:border-r-gray-200'
-            : 'border-l-[4px] border-l-gray-600 group-hover:border-l-gray-200'}"
-    ></span>
-</button>
+<!-- The badge is centred over the handle rather than hung off its corner: at
+     twelve pixels wide there is no corner to hang anything off. -->
+<div class="relative flex flex-shrink-0">
+    <button
+        type="button"
+        class="group flex w-3 flex-1 cursor-pointer items-center justify-center border-line bg-pane hover:bg-control {side ===
+        'left'
+            ? 'border-r'
+            : 'border-l'}"
+        title={label}
+        aria-label={label}
+        aria-expanded={visible}
+        data-testid={`pane-handle-${pane}`}
+        onclick={() => onToggle(pane)}
+    >
+        <span
+            aria-hidden="true"
+            class="h-0 w-0 border-y-[3px] border-y-transparent {pointsLeft
+                ? 'border-r-[4px] border-r-gray-600 group-hover:border-r-gray-200'
+                : 'border-l-[4px] border-l-gray-600 group-hover:border-l-gray-200'}"
+        ></span>
+    </button>
+    <ShortcutHint action={hintAction} shown={hintShown} placement="centre" />
+</div>
