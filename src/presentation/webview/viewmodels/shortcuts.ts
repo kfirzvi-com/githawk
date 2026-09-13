@@ -25,6 +25,9 @@ export type ShortcutAction =
     | 'toggleBranches'
     | 'toggleDetails'
     | 'toggleMaximized'
+    | 'focusGraph'
+    | 'selectionMode'
+    | 'showSelectionChanges'
     | 'clearSelection'
     | 'diffTwo';
 
@@ -58,6 +61,9 @@ export const shortcuts: readonly ShortcutSpec[] = [
     { id: 'toggleBranches', key: 'b', label: 'Show or hide the branch list' },
     { id: 'toggleDetails', key: 'd', label: 'Show or hide commit details' },
     { id: 'toggleMaximized', key: 'e', label: 'Expand the panel, or put it back' },
+    { id: 'focusGraph', key: 'g', label: 'Put the cursor in the graph' },
+    { id: 'selectionMode', key: 'v', label: 'Pick commits with Space' },
+    { id: 'showSelectionChanges', key: 'a', label: 'Show what the selection changed' },
     { id: 'clearSelection', key: 'c', label: 'Clear the selection' },
     { id: 'diffTwo', key: 'x', label: 'Diff the two selected commits' },
 ];
@@ -90,6 +96,8 @@ export interface ShortcutContext {
     branchesPaneVisible: boolean;
     /** The selection bar appears above one, and grows a Diff button at two. */
     selectionCount: number;
+    /** Nothing to put a cursor on, or to pick from, in an empty repository. */
+    commitCount: number;
 }
 
 export function availableShortcuts(
@@ -109,6 +117,10 @@ export function availableShortcuts(
         'toggleMaximized',
     ]);
 
+    if (context.commitCount > 0) {
+        available.add('focusGraph');
+        available.add('selectionMode');
+    }
     if (context.hasRepositories) {
         available.add('switchRepository');
     }
@@ -117,6 +129,11 @@ export function availableShortcuts(
         available.add('manageRemotes');
         available.add('manageWorktrees');
         available.add('manageStashes');
+    }
+    if (context.selectionCount > 0) {
+        // One commit's changes are worth asking for again too: the Changes tree
+        // is only revealed the first time, so this is the way back to it.
+        available.add('showSelectionChanges');
     }
     if (context.selectionCount > 1) {
         available.add('clearSelection');

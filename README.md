@@ -141,11 +141,39 @@ four keys go with it.
 | <kbd>⇧K</kbd> | Filter branches |
 | <kbd>⇧M</kbd> <kbd>⇧W</kbd> <kbd>⇧S</kbd> | Manage remotes, worktrees, stashes |
 | <kbd>⇧C</kbd> <kbd>⇧X</kbd> | Clear a multi-commit selection; diff the two selected |
+| <kbd>⇧G</kbd> <kbd>⇧V</kbd> <kbd>⇧A</kbd> | Put the cursor in the graph; pick commits; show what the selection changed |
 
 Shift alone is only a modifier, so <kbd>Shift</kbd>-click still extends a
 selection in the graph, and a capital letter typed in the branch filter is still
 a capital letter. Nothing here shadows one of your VS Code bindings: Ctrl, Cmd
 and Alt combinations are left alone.
+
+### Drive the graph without the mouse
+
+<kbd>⇧G</kbd> puts a cursor on a commit — the one you already had selected, or
+the newest — and from there the graph behaves like any other list.
+
+| | |
+| --- | --- |
+| <kbd>↑</kbd> <kbd>↓</kbd> | Move the cursor. It selects nothing, so you can read your way down a branch without the panel doing any work |
+| <kbd>Home</kbd> <kbd>End</kbd> | Newest commit, oldest commit |
+| <kbd>PgUp</kbd> <kbd>PgDn</kbd> | A screenful at a time |
+| <kbd>Enter</kbd> | The left click: select this commit and show what it changed |
+| <kbd>⇧Enter</kbd> | The right click: this commit's menu. <kbd>Menu</kbd> and <kbd>⇧F10</kbd> do it too |
+
+**Picking several.** <kbd>⇧V</kbd> turns <kbd>Space</kbd> into a picker and says
+so in a banner. Move with the arrows, <kbd>Space</kbd> to tick a commit in or
+out, and nothing is sent anywhere while you choose — that is the point of the
+mode. <kbd>Enter</kbd> then shows the combined changes and leaves;
+<kbd>Esc</kbd> leaves and keeps your picks without asking for anything.
+
+<kbd>⇧A</kbd> asks for the selection's changes at any time, however the
+selection was made — the way back to the Changes view once you have scrolled off
+it.
+
+The cursor is deliberately not the selection. A cursor that selected as it moved
+would spawn a worktree per keystroke; this one costs nothing until you press
+something.
 
 ### Give the graph the room
 

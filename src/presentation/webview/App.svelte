@@ -60,8 +60,15 @@
         availableShortcuts,
         isTextFieldTarget,
         resolveShortcut,
+        shortcutKey,
         type ShortcutAction,
     } from './viewmodels/shortcuts';
+    import {
+        initialCursor,
+        isMove,
+        moveCursor,
+        type GraphKeyAction,
+    } from './viewmodels/graphKeys';
 
     /** Persisted, so folding a pane away survives the panel being rebuilt. */
     const PANES_STATE_KEY = 'panes';
@@ -93,8 +100,27 @@
     let workingTreeSelected = $state(false);
     /** Shift is being held, so every control with a key is showing it. */
     let shortcutHintsShown = $state(false);
+    /** The three that act on the graph as a whole, in the order they are used. */
+    const graphKeyLegend = $derived(
+        (
+            [
+                { action: 'focusGraph', label: 'put the cursor here' },
+                { action: 'selectionMode', label: 'pick commits' },
+                { action: 'showSelectionChanges', label: 'show the changes' },
+            ] as const
+        ).filter((entry) => liveShortcuts.has(entry.action))
+    );
     /** Bound so Shift+K can put the caret in a field it does not own. */
     let branchList = $state<BranchList | null>(null);
+    /**
+     * The row the keyboard is on. Deliberately not the selection: the cursor
+     * moves freely and costs nothing, and only Enter or Space commits to a
+     * comparison — arrowing through two hundred commits should not ask the host
+     * two hundred questions.
+     */
+    let cursorHash = $state<string | null>(null);
+    /** Space picks rather than clicks. Entered with Shift+V, left with Escape. */
+    let selecting = $state(false);
 
     /** Layout is derived, never stored: one source of truth for the graph. */
     const graph = $derived(
@@ -147,6 +173,7 @@
             hasRepositories: repositories.length > 0,
             branchesPaneVisible: panes.branches,
             selectionCount: selection.hashes.length,
+            commitCount: commits.length,
         })
     );
     /**
@@ -260,6 +287,144 @@
     );
 
     /**
+     * Puts the DOM focus on a commit row, which is what makes the arrow keys
+     * work: the rows are buttons with a roving tabindex, so the browser's own
+     * focus is the cursor rather than something drawn to look like one.
+     *
+     * `.focus()` scrolls the row into view by itself, and does the smallest
+     * scroll that gets there — which is the right amount for a cursor stepping
+     * a row at a time, and the reason this does not use `scrollCommitIntoView`.
+     */
+    const focusRow = async (hash: string) => {
+        await tick();
+        const row = graphScroller?.querySelector<HTMLElement>(
+            `[data-hash="${CSS.escape(hash)}"]`
+        );
+        row?.focus();
+    };
+
+    /** How far Page Up and Page Down go: a screenful, minus a row to overlap. */
+    const graphPageSize = () =>
+        Math.max(
+            1,
+            Math.floor((graphScroller?.clientHeight ?? 0) / defaultMetrics.rowH) - 1
+        );
+
+    /**
+     * Shift+G. Picks up where the mouse left off rather than jumping to the top,
+     * so the graph a reader was already looking at stays where it is.
+     */
+    const focusGraph = () => {
+        const hash = initialCursor(rowOrder, selectedCommit?.hash ?? null);
+        if (!hash) {
+            return;
+        }
+        cursorHash = hash;
+        void focusRow(hash);
+    };
+
+    /**
+     * Shift+V. Entering also focuses the graph: a mode whose only key is Space
+     * is useless until the keyboard is somewhere Space means something.
+     */
+    const enterSelectionMode = () => {
+        if (rowOrder.length === 0) {
+            return;
+        }
+        selecting = true;
+        if (cursorHash === null || !rowOrder.includes(cursorHash)) {
+            focusGraph();
+        } else {
+            void focusRow(cursorHash);
+        }
+    };
+
+    const leaveSelectionMode = () => {
+        selecting = false;
+    };
+
+    /**
+     * Shift+A, and what confirming a set of picks runs.
+     *
+     * Selecting normally asks for the comparison by itself, on a debounce. This
+     * is the same request without the wait, for the two cases where nothing is
+     * pending: picks made in selection mode, which deliberately send nothing
+     * while they are being made, and a tree the reader has scrolled away from.
+     */
+    const showSelectionChanges = () => {
+        clearTimeout(pendingRequest);
+        const hashes = [...selection.hashes];
+
+        if (hashes.length === 0) {
+            postToHost({ type: 'compare:clear' });
+            return;
+        }
+        if (hashes.length === 1) {
+            postToHost({ type: 'commit:select', hash: hashes[0] });
+            return;
+        }
+        postToHost({ type: 'compare:commits', hashes });
+    };
+
+    /**
+     * What the graph's own keys do — the arrows, Enter, Space — once a row has
+     * focus. Every one of them runs the handler the mouse already runs, so a
+     * keyboard and a click cannot drift apart.
+     */
+    const handleGraphKey = (action: GraphKeyAction, commit: Commit) => {
+        if (isMove(action)) {
+            const next = moveCursor(
+                rowOrder,
+                commit.hash,
+                action,
+                graphPageSize()
+            );
+            if (next) {
+                cursorHash = next;
+                void focusRow(next);
+            }
+            return;
+        }
+
+        switch (action) {
+            case 'activate':
+                // The left click, exactly: no modifiers, so it replaces.
+                handleSelectCommit(commit, { toggle: false, range: false });
+                break;
+            case 'contextMenu':
+                /*
+                 * The right click. The mouse replaces the selection before
+                 * opening the menu, and for one commit this does the same. It
+                 * stops short of that for a multi-selection: a set of picks
+                 * takes several presses to build, and throwing it away to read
+                 * one commit's menu is not what asking for the menu meant.
+                 */
+                if (selection.hashes.length <= 1) {
+                    handleSelectCommit(commit, { toggle: false, range: false });
+                }
+                postToHost({ type: 'commit:menu', hash: commit.hash });
+                break;
+            case 'toggleInSelection':
+                // Nothing is sent while picking. The whole point of the mode is
+                // to choose a set before asking anything about it.
+                workingTreeSelected = false;
+                selection = applySelection(selection, rowOrder, commit.hash, {
+                    toggle: true,
+                    range: false,
+                });
+                selectedCommit = commit;
+                break;
+            case 'confirmSelection':
+                leaveSelectionMode();
+                showSelectionChanges();
+                break;
+            case 'leaveSelectionMode':
+                leaveSelectionMode();
+                break;
+        }
+    };
+
+    /**
      * Holding Shift reveals the badges; holding it and pressing a letter runs
      * that control. Basecamp's design, and the reason it works is that the list
      * of shortcuts is the screen itself — always accurate, and always beside
@@ -337,6 +502,15 @@
                 break;
             case 'toggleMaximized':
                 toggleMaximized();
+                break;
+            case 'focusGraph':
+                focusGraph();
+                break;
+            case 'selectionMode':
+                enterSelectionMode();
+                break;
+            case 'showSelectionChanges':
+                showSelectionChanges();
                 break;
             case 'clearSelection':
                 clearSelection();
@@ -630,6 +804,30 @@
             />
         </div>
 
+        {#if selecting}
+            <!--
+                A mode with no banner is a mode you can be in without knowing,
+                which is the one thing wrong with modes. It says what the keys
+                do rather than merely that it is on, because "SELECTING" on its
+                own answers none of the questions it raises.
+            -->
+            <div
+                data-testid="selection-mode-banner"
+                class="flex flex-shrink-0 items-center gap-3 border-b border-info-strong/40 bg-selected px-4 py-2 text-xs"
+            >
+                <span class="font-medium text-info">Picking commits</span>
+                <span class="text-fg-dim">
+                    <kbd class="font-mono">Space</kbd> picks,
+                    <kbd class="font-mono">Enter</kbd> shows the changes,
+                    <kbd class="font-mono">Esc</kbd> leaves
+                </span>
+                <div class="flex-1"></div>
+                <span class="tabular-nums text-fg-dim">
+                    {selection.hashes.length} picked
+                </span>
+            </div>
+        {/if}
+
         {#if selection.hashes.length > 1}
             <!-- Only shown once a multi-selection exists, so the normal case
                  keeps its full height. -->
@@ -719,7 +917,42 @@
                     liveShortcuts.has('toggleBranches')}
             />
 
-            <div class="flex flex-1 flex-col overflow-hidden">
+            <div class="relative flex flex-1 flex-col overflow-hidden">
+                <!--
+                    The graph's three keys have no control to hang a badge off:
+                    they act on the whole list rather than on any one thing in
+                    it. So they get a strip of their own, in the list they act
+                    on, on the same Shift that reveals every other badge.
+
+                    With a word each, unlike the badges elsewhere. A bare letter
+                    is enough on a button that already says "Refresh"; floating
+                    over a graph it would say nothing at all.
+
+                    Bottom left, because the newest commits are at the top and
+                    that is where the eye already is.
+                -->
+                {#if shortcutHintsShown && graph}
+                    <div
+                        data-testid="graph-key-legend"
+                        aria-hidden="true"
+                        class="pointer-events-none absolute bottom-2 left-2 z-20 flex items-center gap-3 rounded-md border border-line-strong bg-pane/95 px-2.5 py-1.5 text-[10px] text-fg-dim shadow-lg"
+                    >
+                        {#each graphKeyLegend as entry (entry.action)}
+                            <span class="flex items-center gap-1.5">
+                                <span
+                                    class="rounded-[3px] bg-fg px-1 py-px font-mono font-bold text-app"
+                                >
+                                    {shortcutKey(entry.action)}
+                                </span>
+                                {entry.label}
+                            </span>
+                        {/each}
+                        <span class="flex items-center gap-1.5 border-l border-line pl-3">
+                            <span class="font-mono text-fg-faint">↑↓</span>
+                            move the cursor
+                        </span>
+                    </div>
+                {/if}
                 <div
                     bind:this={graphScroller}
                     class="flex-1 overflow-auto bg-graph"
@@ -747,6 +980,9 @@
                                     type: 'commit:menu',
                                     hash: commit.hash,
                                 })}
+                            {cursorHash}
+                            {selecting}
+                            onGraphKey={handleGraphKey}
                         >
                             {#snippet row(commit: Commit)}
                                 <!-- Fixed-width metadata columns with the
