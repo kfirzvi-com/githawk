@@ -445,6 +445,15 @@ function requestFor(document: vscode.TextDocument): BlameRequest | undefined {
     };
 }
 
+/**
+ * The chord for "show in the graph", printed beside the link.
+ *
+ * A shortcut nobody can find is a shortcut nobody has. The card is where a
+ * reader already is when the question "and how do I do that without the mouse?"
+ * comes up, and it costs six characters to answer it.
+ */
+const REVEAL_CHORD = process.platform === 'darwin' ? '⌘K G' : 'Ctrl+K G';
+
 /** Wide enough for `8/11/20` and eight characters of a name. */
 const COLUMN_WIDTH = 16;
 
@@ -488,7 +497,7 @@ function hover(
             '',
             `${author} <${authorEmail}> — ${authoredAt.toLocaleString()}`,
             '',
-            `${lines} line${lines === 1 ? '' : 's'} · [\`${shortHash}\` — show in the graph](command:gitHawk.revealCommit?${argument})`,
+            `${lines} line${lines === 1 ? '' : 's'} · [\`${shortHash}\` — show in the graph](command:gitHawk.revealCommit?${argument}) \`${REVEAL_CHORD}\``,
         ].join('\n')
     );
     // Required for a command: link to be clickable, and safe here because every

@@ -289,11 +289,31 @@
         }
       ]
     },
+    "submenus": [
+      {
+        "id": "gitHawk.editorContext",
+        "label": "GitHawk"
+      }
+    ],
     "menus": {
       "editor/context": [
         {
-          "command": "gitHawk.toggleBlame",
+          "submenu": "gitHawk.editorContext",
           "group": "navigation@9"
+        }
+      ],
+      "gitHawk.editorContext": [
+        {
+          "command": "gitHawk.blameLine",
+          "group": "1_line@1"
+        },
+        {
+          "command": "gitHawk.revealCommitForLine",
+          "group": "1_line@2"
+        },
+        {
+          "command": "gitHawk.toggleBlame",
+          "group": "2_file@1"
         }
       ],
       "editor/title": [
@@ -349,10 +369,6 @@
         },
         {
           "command": "gitHawk.worktrees",
-          "when": "false"
-        },
-        {
-          "command": "gitHawk.revealCommit",
           "when": "false"
         }
       ]

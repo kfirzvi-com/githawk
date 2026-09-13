@@ -36,6 +36,12 @@ All notable changes to GitHawk are documented here, following
   | `Cmd+K H` | Who wrote this line |
   | `Cmd+K G` | Show this line's commit in the graph |
 
+  All three are in the editor's right-click menu too, under a **GitHawk**
+  submenu, which is where they announce themselves: VS Code prints each item's
+  chord beside it, and a shortcut nobody can find is a shortcut nobody has. The
+  hover card names `Cmd+K G` next to its "show in the graph" link for the same
+  reason.
+
   `Cmd+K H` shows the card the mouse already gets, at the caret, and works
   whether or not the annotations are on — turning the column on to ask one
   question and off again afterwards is the work it saves.

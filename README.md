@@ -335,6 +335,11 @@ them was already bound by VS Code.
 | <kbd>⌘K</kbd> <kbd>H</kbd> | Who wrote this line — the same card the mouse gets, at the caret. Works whether or not the annotations are on |
 | <kbd>⌘K</kbd> <kbd>G</kbd> | Show this line's commit in the graph |
 
+They are also in the editor's right-click menu, under **GitHawk**, which is
+where the keys announce themselves — a shortcut nobody can find is a shortcut
+nobody has. The hover card names <kbd>⌘K</kbd> <kbd>G</kbd> beside its "show in
+the graph" link for the same reason.
+
 <kbd>⌘K</kbd> <kbd>G</kbd> follows the file rather than the panel: a workspace
 usually holds more than one repository, and if the file you are reading is in a
 different one, GitHawk switches to it and then shows the commit.
