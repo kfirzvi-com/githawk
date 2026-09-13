@@ -203,14 +203,42 @@ exact commit being published first. A version cannot be withdrawn once it is up,
 only superseded, so the gate has to be on the commit rather than on whatever
 happened to be in someone's working tree.
 
-Two registries, one package. `vsce package` builds a single `.vsix`, which is
-then uploaded to the **Visual Studio Marketplace** (`VSCE_PAT`, where VS Code
-installs from) and to **Open VSX** (`OVSX_PAT`, where the forks install from —
-Cursor, Antigravity, VSCodium, Windsurf). Both channels go to both registries,
-so no audience is ever a version behind the other, and what the two install is
-byte-for-byte the same file rather than one build each. Open VSX reads the
-channel from the flag `vsce` stamped into the manifest; passing `--pre-release`
-to `ovsx` for an already-packaged `.vsix` does nothing, and it will say so.
+Two registries, one package, **and a job each**. `package` builds a single
+`.vsix` and uploads it as an artifact; `marketplace` and `openvsx` both take
+that same file and publish it — to the **Visual Studio Marketplace**
+(`VSCE_PAT`, where VS Code installs from) and to **Open VSX** (`OVSX_PAT`, where
+the forks install from — Cursor, Antigravity, VSCodium, Windsurf). Both channels
+go to both registries, so no audience is ever a version behind the other, and
+what the two install is byte-for-byte the same file rather than one build each.
+Open VSX reads the channel from the flag `vsce` stamped into the manifest;
+passing `--pre-release` to `ovsx` for an already-packaged `.vsix` does nothing,
+and it will say so.
+
+The two publishing jobs do **not** depend on each other, which matters more than
+it sounds. They were once two steps in one job, Marketplace first — so the
+Marketplace's recurring three-minute `Request timeout: /_apis/gallery` withheld
+the build from the forks as well, for a failure that had nothing to do with
+them. Separate jobs also make a retry surgical:
+
+```bash
+gh run rerun <run-id> --failed
+```
+
+re-runs only the registry that failed. A combined job would try to reissue a
+version the other registry already has, and be refused — versions cannot be
+reissued anywhere.
+
+**Before any retry, check what actually landed.** A timeout is ambiguous, and a
+version that did go up cannot be replaced:
+
+```bash
+npx vsce show kfirzvi-com.githawk                       # Marketplace
+curl -s https://open-vsx.org/api/kfirzvi-com/githawk/<version>
+```
+
+Both registries index asynchronously — Open VSX takes a couple of minutes and
+the Marketplace rather longer, so "not there yet" right after a successful
+publish is normal.
 
 Two channels on one number line:
 

@@ -82,13 +82,25 @@ jobs:
     if: needs.plan.outputs.channel != 'none'
     uses: ./.github/workflows/ci.yml
 
-  publish:
-    name: Publish ${{ needs.plan.outputs.channel }} ${{ needs.plan.outputs.version }}
+  # One package, built once, published to each registry by a job of its own.
+  #
+  # They used to be two steps in one job, which meant an outage at either
+  # registry withheld the build from both audiences — and the Marketplace was
+  # first, so its three-minute `/_apis/gallery` timeouts blocked Open VSX from
+  # ever being tried. Separate jobs also make the retry surgical: re-running
+  # the failed job hits only the registry that failed, where re-running a
+  # combined one would try to reissue a version the other registry already has,
+  # and be refused.
+  #
+  # Still one file rather than one build each, which is the point of packaging
+  # here and handing both jobs the same artifact: what the two audiences install
+  # is byte-for-byte identical.
+  package:
+    name: Package ${{ needs.plan.outputs.channel }} ${{ needs.plan.outputs.version }}
     needs: [plan, ci]
+    if: needs.plan.outputs.channel != 'none'
     runs-on: ubuntu-24.04
     env:
-      VSCE_PAT: ${{ secrets.VSCE_PAT }}
-      OVSX_PAT: ${{ secrets.OVSX_PAT }}
       VERSION: ${{ needs.plan.outputs.version }}
       CHANNEL: ${{ needs.plan.outputs.channel }}
     steps:
@@ -113,37 +125,92 @@ jobs:
           if [[ "$CHANNEL" == pre-release ]]; then flag=(--pre-release); fi
           npx vsce package "${flag[@]}" --out "githawk-$VERSION.vsix"
 
-      - name: Publish to the Visual Studio Marketplace
+      # Both publishing jobs take the vsix from here, so neither rebuilds it.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: githawk-${{ needs.plan.outputs.version }}
+          path: githawk-*.vsix
+          retention-days: 90
+
+  marketplace:
+    name: Visual Studio Marketplace ${{ needs.plan.outputs.version }}
+    needs: [plan, package]
+    runs-on: ubuntu-24.04
+    env:
+      VSCE_PAT: ${{ secrets.VSCE_PAT }}
+      VERSION: ${{ needs.plan.outputs.version }}
+      CHANNEL: ${{ needs.plan.outputs.channel }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: githawk-${{ needs.plan.outputs.version }}
+
+      - name: Publish
         run: |
           set -euo pipefail
           flag=()
           if [[ "$CHANNEL" == pre-release ]]; then flag=(--pre-release); fi
           npx vsce publish "${flag[@]}" --packagePath "githawk-$VERSION.vsix"
 
-      # The same file, on both channels: VS Code installs from the Marketplace,
-      # the forks — Cursor, Antigravity, VSCodium, Windsurf — install from Open
-      # VSX, and neither audience should be a version behind the other.
-      #
-      # No --pre-release here. ovsx ignores it for an already-packaged vsix and
-      # says so; the channel is read from the flag vsce stamped into the
-      # manifest, which is why both registries get one identical package rather
-      # than one build each.
-      - name: Publish to Open VSX
+  # Where the forks install from — Cursor, Antigravity, VSCodium, Windsurf.
+  # Neither audience should be a version behind the other, which is why this
+  # no longer waits on the Marketplace to succeed first.
+  #
+  # No --pre-release here. ovsx ignores it for an already-packaged vsix and says
+  # so; the channel is read from the flag vsce stamped into the manifest.
+  openvsx:
+    name: Open VSX ${{ needs.plan.outputs.version }}
+    needs: [plan, package]
+    runs-on: ubuntu-24.04
+    env:
+      OVSX_PAT: ${{ secrets.OVSX_PAT }}
+      VERSION: ${{ needs.plan.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: githawk-${{ needs.plan.outputs.version }}
+
+      - name: Publish
         run: npx ovsx publish --packagePath "githawk-$VERSION.vsix" --pat "$OVSX_PAT"
 
-      - name: GitHub Release
-        if: needs.plan.outputs.channel == 'stable'
-        env:
-          GH_TOKEN: ${{ github.token }}
+  # Gated on both, deliberately, unlike the two registries are on each other: a
+  # GitHub Release is an announcement that a version is out, and announcing one
+  # nobody can install from their editor would be a lie. Stable only.
+  release:
+    name: GitHub Release ${{ needs.plan.outputs.version }}
+    needs: [plan, marketplace, openvsx]
+    if: needs.plan.outputs.channel == 'stable'
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.plan.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@v4
+        with:
+          name: githawk-${{ needs.plan.outputs.version }}
+
+      - name: Create it
         run: |
           set -euo pipefail
           node scripts/changelogSection.mjs "$VERSION" > /tmp/notes.md
           gh release create "v$VERSION" "githawk-$VERSION.vsix" \
             --title "GitHawk $VERSION" \
             --notes-file /tmp/notes.md
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: githawk-${{ needs.plan.outputs.version }}
-          path: githawk-*.vsix
-          retention-days: 90
