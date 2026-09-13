@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { Blame, BlameBlock } from '../../domain/models/Blame';
+import { blockAt, type Blame, type BlameBlock } from '../../domain/models/Blame';
 import type {
     BlameRequest,
     IBlameReader,
@@ -147,12 +147,9 @@ export class BlameDecorator implements vscode.Disposable {
                 block.commit.isUncommitted || rank === undefined
                     ? UNCOMMITTED_COLOUR
                     : rampColour(rank, ranks.size);
-            const message = hover(block);
-
             for (let line = block.startLine; line <= block.endLine; line++) {
                 options.push({
                     range: new vscode.Range(line - 1, 0, line - 1, 0),
-                    hoverMessage: message,
                     renderOptions: {
                         before: { contentText: text, backgroundColor: background },
                     },
@@ -188,7 +185,6 @@ export class BlameDecorator implements vscode.Disposable {
         const end = document.lineAt(line).range.end;
         return {
             range: new vscode.Range(end, end),
-            hoverMessage: hover(block),
             renderOptions: { after: { contentText: `    ${text}` } },
         };
     }
@@ -249,6 +245,132 @@ export class BlameDecorator implements vscode.Disposable {
         for (const type of this.types.values()) {
             editor.setDecorations(type, []);
         }
+    }
+
+    /**
+     * Who wrote one line, for the editor's own shortcuts.
+     *
+     * Reads blame whatever the style setting says, unlike `decorate`: turning
+     * the column on to ask about a single line, and off again afterwards, is
+     * the work the shortcut exists to save.
+     *
+     * Returns the file's path alongside the block, because every caller needs
+     * it — a commit is only meaningful to the repository it came from, and that
+     * is decided by where the file is, not by what the panel is pointed at.
+     */
+    async blockFor(
+        document: vscode.TextDocument,
+        line: number
+    ): Promise<{ block: BlameBlock; path: string } | undefined> {
+        const request = requestFor(document);
+        if (!request) {
+            return undefined;
+        }
+
+        const isFile = document.uri.scheme === 'file';
+        const root = this.repositoryRoot(isFile ? document.uri.fsPath : undefined);
+        if (!root) {
+            return undefined;
+        }
+
+        let blame: Blame;
+        try {
+            blame = await this.read(document, root, request);
+        } catch (error) {
+            log.debug(`no blame for ${document.uri.toString()}: ${String(error)}`);
+            return undefined;
+        }
+
+        const block = blockAt(blame, line + 1);
+        // An absolute path for a file, and the repository root for a revision
+        // document, whose own path is relative to it.
+        return block ? { block, path: isFile ? document.uri.fsPath : root } : undefined;
+    }
+
+    /**
+     * The card the mouse shows, offered to the hover widget so the keyboard can
+     * reach it too — `editor.action.showHover` opens whatever the providers
+     * return at the caret, and a decoration's `hoverMessage` is not that.
+     *
+     * Silent while blame is off, so a reader who turned the column off is not
+     * given a blame card under every symbol they hover. The shortcut still
+     * works: it asks for one line by name through `showLineHover`, which lifts
+     * the silence for that request alone.
+     */
+    async provideHover(
+        document: vscode.TextDocument,
+        position: vscode.Position
+    ): Promise<vscode.Hover | undefined> {
+        if (blameStyle() === 'off' && !this.wants(document, position.line)) {
+            return undefined;
+        }
+
+        const found = await this.blockFor(document, position.line);
+        const markdown = found && hover(found.block, found.path);
+        return markdown ? new vscode.Hover(markdown) : undefined;
+    }
+
+    /**
+     * Opens the hover on one line, whatever the style setting says.
+     *
+     * A one-shot rather than a mode: it names the document and the line it is
+     * for, and is spent by the first hover that matches. An unrelated hover
+     * arriving first leaves it untouched, and a request the widget never makes
+     * — the caret is on a line git knows nothing about — expires rather than
+     * arming the next one.
+     */
+    async showLineHover(editor: vscode.TextEditor): Promise<boolean> {
+        const line = editor.selection.active.line;
+        const found = await this.blockFor(editor.document, line);
+        if (!found) {
+            return false;
+        }
+
+        this.oneShot = {
+            uri: editor.document.uri.toString(),
+            line,
+            expires: Date.now() + 5000,
+        };
+        await vscode.commands.executeCommand('editor.action.showHover');
+        return true;
+    }
+
+    private oneShot?: { uri: string; line: number; expires: number };
+
+    private wants(document: vscode.TextDocument, line: number): boolean {
+        const pending = this.oneShot;
+        if (
+            !pending ||
+            pending.expires < Date.now() ||
+            pending.uri !== document.uri.toString() ||
+            pending.line !== line
+        ) {
+            return false;
+        }
+        this.oneShot = undefined;
+        return true;
+    }
+
+    /**
+     * One `git blame` per version of a document, however many hovers ask.
+     *
+     * Hovering is a mouse gesture that fires on every symbol it crosses, and
+     * blaming a large file is not free. Keyed on the version so an edit
+     * invalidates it, and held for one document at a time because a hover only
+     * ever asks about the one under the pointer.
+     */
+    private cached?: { key: string; blame: Promise<Blame> };
+
+    private read(
+        document: vscode.TextDocument,
+        root: string,
+        request: BlameRequest
+    ): Promise<Blame> {
+        const key = `${document.uri.toString()}@${document.version}`;
+        if (this.cached?.key !== key) {
+            this.cached = { key, blame: this.createReader(root).read(request) };
+        }
+        return this.cached.blame;
     }
 
     /**
@@ -330,8 +452,27 @@ const COLUMN_WIDTH = 16;
  * A hover carries what the label had to leave out, and is where the link back
  * to the graph lives — decoration text is not clickable, but a MarkdownString
  * with `isTrusted` can hold a `command:` URI.
+ *
+ * Reached through the hover *provider* rather than a decoration's
+ * `hoverMessage`, which is what it used to be. Two reasons, and the first is
+ * not a matter of taste: the widget merges everything it is offered, so while
+ * both existed the card was drawn twice, one under the other. The second is
+ * that only a provider's contribution can be opened from the keyboard, which is
+ * what Cmd+K H does — a decoration's message has no command behind it.
+ *
+ * It also means the card answers a hover anywhere on the line rather than only
+ * over the label, which is what a reader who turned annotations on was already
+ * expecting.
  */
-function hover(block: BlameBlock): vscode.MarkdownString | undefined {
+function hover(
+    block: BlameBlock,
+    /**
+     * Where the line is. Passed on to the reveal so the panel can point itself
+     * at the right repository first: a workspace holds several, and a commit
+     * only means anything to the one it is in.
+     */
+    fromPath: string
+): vscode.MarkdownString | undefined {
     if (block.commit.isUncommitted) {
         return new vscode.MarkdownString('Not committed yet.');
     }
@@ -339,7 +480,7 @@ function hover(block: BlameBlock): vscode.MarkdownString | undefined {
     const { hash, shortHash, author, authorEmail, authoredAt, summary } =
         block.commit;
     const lines = block.endLine - block.startLine + 1;
-    const argument = encodeURIComponent(JSON.stringify([hash]));
+    const argument = encodeURIComponent(JSON.stringify([hash, fromPath]));
 
     const markdown = new vscode.MarkdownString(
         [

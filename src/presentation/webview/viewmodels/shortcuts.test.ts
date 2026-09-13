@@ -69,6 +69,9 @@ describe('availableShortcuts', () => {
         expect(available).toContain('toggleBranches');
         expect(available).toContain('toggleDetails');
         expect(available).toContain('toggleMaximized');
+        // A repository always has a branch to check out, even before the host
+        // has reported which repositories exist.
+        expect(available).toContain('switchBranch');
     });
 
     /** Nothing to put a cursor on, or to pick from, in a repository with no

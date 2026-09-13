@@ -121,6 +121,8 @@
     let cursorHash = $state<string | null>(null);
     /** Space picks rather than clicks. Entered with Shift+V, left with Escape. */
     let selecting = $state(false);
+    /** A reveal that named a commit the graph had not been sent yet. */
+    let pendingReveal = $state<string | null>(null);
 
     /** Layout is derived, never stored: one source of truth for the graph. */
     const graph = $derived(
@@ -225,6 +227,13 @@
                     isLoading = false;
 
                     dropVanishedCommitsFromSelection();
+                    // Before the scroll is restored: a held reveal is a request
+                    // to look somewhere else, and restoring the old position
+                    // afterwards would undo it.
+                    if (pendingReveal && revealInGraph(pendingReveal)) {
+                        pendingReveal = null;
+                        break;
+                    }
                     if (anchor) {
                         void restoreScroll(anchor);
                     }
@@ -256,23 +265,19 @@
                 case 'worktrees:loaded':
                     worktrees = message.worktrees.map(WorktreeMapper.fromDto);
                     break;
-                case 'commit:reveal': {
-                    // Arriving from a blame hover. The commit may be below the
-                    // fold, so selecting it is not enough to show it.
-                    const commit = graph?.commits.find(
-                        (candidate) => candidate.hash === message.hash
-                    );
-                    if (commit) {
-                        workingTreeSelected = false;
-                        selection = applySelection(selection, rowOrder, commit.hash, {
-                            toggle: false,
-                            range: false,
-                        });
-                        selectedCommit = commit;
-                        void scrollCommitIntoView(commit.hash);
+                case 'commit:reveal':
+                    /*
+                     * Arriving from a blame hover, or from the editor's own
+                     * shortcut. Held rather than dropped when the commit is not
+                     * in the graph yet: the command opens the panel first, and
+                     * on a panel that was closed the reveal outruns the graph
+                     * it names — the Changes tree filled, the graph selected
+                     * nothing, and the feature looked broken.
+                     */
+                    if (!revealInGraph(message.hash)) {
+                        pendingReveal = message.hash;
                     }
                     break;
-                }
                 case 'workingTree:loaded':
                     workingTree = message.status;
                     // Committing everything removes the row; leaving it
@@ -478,6 +483,9 @@
             case 'switchRepository':
                 postToHost({ type: 'repository:menu' });
                 break;
+            case 'switchBranch':
+                switchBranch();
+                break;
             case 'filterBranches':
                 branchList?.focusFilter();
                 // The caret is now in a field, where Shift means a capital and
@@ -639,6 +647,9 @@
     const toggleMaximized = () =>
         postToHost({ type: 'panel:toggleMaximized' });
 
+    /** The branch list as a picker. The host owns it; this only asks. */
+    const switchBranch = () => postToHost({ type: 'branch:switch' });
+
     const togglePane = (pane: Pane) => {
         panes = withPane(panes, pane, !panes[pane]);
         writeWebviewState(PANES_STATE_KEY, panes);
@@ -666,6 +677,32 @@
         );
         selectedCommit = commit;
         requestChangesForSelection();
+    };
+
+    /**
+     * Selects a commit the reader asked for from somewhere else, and shows it.
+     *
+     * Returns false when the graph does not have it — which is not necessarily
+     * an error. The rows may simply not have arrived yet, and the caller holds
+     * the request until they do.
+     */
+    const revealInGraph = (hash: string): boolean => {
+        const commit = graph?.commits.find(
+            (candidate) => candidate.hash === hash
+        );
+        if (!commit) {
+            return false;
+        }
+
+        workingTreeSelected = false;
+        selection = applySelection(selection, rowOrder, commit.hash, {
+            toggle: false,
+            range: false,
+        });
+        selectedCommit = commit;
+        // Below the fold as often as not, so selecting it is not enough.
+        void scrollCommitIntoView(commit.hash);
+        return true;
     };
 
     /**
@@ -799,6 +836,7 @@
                 onSelectRepository={() =>
                     postToHost({ type: 'repository:menu' })}
                 onToggleMaximized={toggleMaximized}
+                onSwitchBranch={switchBranch}
                 hintsShown={shortcutHintsShown}
                 availableHints={liveShortcuts}
             />

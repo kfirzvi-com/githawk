@@ -16,6 +16,8 @@
         onSelectRepository?: () => void;
         /** Asks the host to grow the panel to the window, or put it back. */
         onToggleMaximized?: () => void;
+        /** Opens the branch list as a picker, with a checkout at the end. */
+        onSwitchBranch?: () => void;
         /** Shift is down: every control that has a key says which. */
         hintsShown?: boolean;
         /** Which of them are live right now. */
@@ -29,6 +31,7 @@
         onAction,
         onSelectRepository,
         onToggleMaximized,
+        onSwitchBranch,
         hintsShown = false,
         availableHints = new Set<ShortcutAction>(),
     }: Props = $props();
@@ -81,11 +84,29 @@
         <span class="text-fg-faint">/</span>
     {/if}
 
-    <div class="flex items-center gap-2">
-        <div class="h-2 w-2 rounded-full bg-ok"></div>
-        <span class="text-sm font-medium text-fg-soft">
-            {currentBranchName ?? 'Git Repository'}
-        </span>
+    <!--
+        The branch beside the repository, and a picker for the same reason that
+        one is: these are the two things the whole panel is pointed at, and
+        changing either is a thing people do all day. It read as a label for a
+        long time, which meant the most common action in a git tool was four
+        keystrokes and a menu away in the sidebar.
+    -->
+    <div class="relative flex">
+        <button
+            type="button"
+            data-testid="branch-picker"
+            class="flex items-center gap-2 rounded-md px-2 py-1 text-sm font-medium text-fg-soft hover:bg-control-hover"
+            onclick={() => onSwitchBranch?.()}
+            title="Check out another branch"
+        >
+            <span class="h-2 w-2 rounded-full bg-ok"></span>
+            <span>{currentBranchName ?? 'Git Repository'}</span>
+            <span class="text-[10px] text-fg-dim">▾</span>
+        </button>
+        <ShortcutHint
+            action="switchBranch"
+            shown={hintShownFor('switchBranch')}
+        />
     </div>
 
     <div class="flex-1"></div>

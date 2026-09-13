@@ -142,6 +142,7 @@ four keys go with it.
 | <kbd>⇧M</kbd> <kbd>⇧W</kbd> <kbd>⇧S</kbd> | Manage remotes, worktrees, stashes |
 | <kbd>⇧C</kbd> <kbd>⇧X</kbd> | Clear a multi-commit selection; diff the two selected |
 | <kbd>⇧G</kbd> <kbd>⇧V</kbd> <kbd>⇧A</kbd> | Put the cursor in the graph; pick commits; show what the selection changed |
+| <kbd>⇧T</kbd> | Check out a branch |
 
 Shift alone is only a modifier, so <kbd>Shift</kbd>-click still extends a
 selection in the graph, and a capital letter typed in the branch filter is still
@@ -322,6 +323,22 @@ Each row has buttons to **open a new VS Code window**, **open a terminal**, or
 default, configurable. That is the one place AI appears in GitHawk: launching your
 tool in the right directory. It reads nothing and sends nothing.
 
+### In the editor
+
+Three keys that work where the code is, rather than in the panel. All three are
+chords under <kbd>⌘K</kbd> (<kbd>Ctrl+K</kbd> on Windows and Linux), and none of
+them was already bound by VS Code.
+
+| | |
+| --- | --- |
+| <kbd>⌘K</kbd> <kbd>B</kbd> | Blame on, and off again |
+| <kbd>⌘K</kbd> <kbd>H</kbd> | Who wrote this line — the same card the mouse gets, at the caret. Works whether or not the annotations are on |
+| <kbd>⌘K</kbd> <kbd>G</kbd> | Show this line's commit in the graph |
+
+<kbd>⌘K</kbd> <kbd>G</kbd> follows the file rather than the panel: a workspace
+usually holds more than one repository, and if the file you are reading is in a
+different one, GitHawk switches to it and then shows the commit.
+
 ## Settings
 
 | Setting | Default | What it does |
@@ -337,8 +354,12 @@ tool in the right directory. It reads nothing and sends nothing.
 | Command | |
 | --- | --- |
 | `GitHawk: Open Git Graph` | `Cmd+9` / `Ctrl+9` |
+| `GitHawk: Toggle Blame Annotations` | `Cmd+K B` / `Ctrl+K B` |
 | `GitHawk: Refresh Git Graph` | Also rescans for new repositories |
 | `GitHawk: Switch Repository` | |
+| `GitHawk: Check Out A Branch` | The branch list as a picker |
+| `GitHawk: Who Wrote This Line` | `Cmd+K H` / `Ctrl+K H` |
+| `GitHawk: Show This Line's Commit In The Graph` | `Cmd+K G` / `Ctrl+K G` |
 | `GitHawk: Manage Worktrees` | |
 | `GitHawk: Manage Remotes` | Add, rename, re-point, remove, fetch, prune |
 | `GitHawk: Manage Stashes` | List, show, apply, pop, drop; stash the working tree |
