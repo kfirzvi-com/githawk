@@ -15,6 +15,7 @@ const context = (overrides: Partial<ShortcutContext> = {}): ShortcutContext => (
     hasRepositories: false,
     branchesPaneVisible: true,
     selectionCount: 0,
+    commitCount: 20,
     ...overrides,
 });
 
@@ -68,6 +69,25 @@ describe('availableShortcuts', () => {
         expect(available).toContain('toggleBranches');
         expect(available).toContain('toggleDetails');
         expect(available).toContain('toggleMaximized');
+    });
+
+    /** Nothing to put a cursor on, or to pick from, in a repository with no
+     *  commits — and the graph itself says so in place of rows. */
+    it('withdraws the graph keys from a repository with no commits', () => {
+        const empty = availableShortcuts(context({ commitCount: 0 }));
+
+        expect(empty).not.toContain('focusGraph');
+        expect(empty).not.toContain('selectionMode');
+        expect(empty).toContain('refresh');
+    });
+
+    it('offers the changes shortcut from one selected commit upwards', () => {
+        expect(availableShortcuts(context())).not.toContain(
+            'showSelectionChanges'
+        );
+        expect(
+            availableShortcuts(context({ selectionCount: 1 }))
+        ).toContain('showSelectionChanges');
     });
 
     it('offers the repository picker only once there are repositories', () => {

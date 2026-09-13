@@ -21,6 +21,28 @@ All notable changes to GitHawk are documented here, following
   two side panes are `B` and `D`; the branch filter is `K`; the three managers
   are `M`, `W` and `S`; a multi-commit selection adds `C` and `X`.
 
+- **Drive the graph without the mouse.** `Shift`+`G` puts a cursor on a commit;
+  the arrows, `Home`, `End`, `PgUp` and `PgDn` move it; `Enter` is the left click
+  and `Shift`+`Enter` the right one. The cursor is not the selection, which is
+  what makes it cheap: reading your way down a branch asks the host nothing,
+  where a cursor that selected as it moved would spawn a worktree per keystroke.
+
+  `Shift`+`V` turns `Space` into a picker, with a banner that says so — a mode
+  you can be in without knowing is the one thing wrong with modes. Nothing is
+  sent while you choose, which is the whole point: `Enter` then shows the
+  combined changes and leaves, `Esc` leaves and keeps the picks.
+
+  `Shift`+`A` asks for the selection's changes at any time, however it was made.
+
+  Rows are a real listbox now — one roving tab stop rather than five hundred, a
+  focus ring on the cursor, and `role="option"` with `aria-selected`, so a screen
+  reader is told what a sighted reader can see.
+
+  The three graph keys act on the whole list rather than on any one control, so
+  they have nowhere to hang a badge. They get a strip of their own in the corner
+  of the graph, on the same `Shift`, with a word each — a bare letter is enough
+  on a button that already says "Refresh" and says nothing floating over a graph.
+
 - **Expand the panel to the window**, with the `⇕` button in the toolbar or
   `Shift`+`E`. The panel's height belongs to the workbench, so this asks VS Code
   to run its own `toggleMaximizedPanel` — which is also why it is one toggle and
