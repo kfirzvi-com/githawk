@@ -3,7 +3,14 @@
 All notable changes to GitHawk are documented here, following
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.6.0] — 2026-09-13
+
+The release that makes the mouse optional. Hold Shift and the panel tells you
+every key it has; the graph takes a cursor and the arrows move it; three chords
+reach git from the editor.
+
+Still marked **Preview** on the Marketplace: the known limitations at the bottom
+of the README are real, and a 1.0 should not have them.
 
 ### Added
 
