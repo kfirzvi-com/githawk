@@ -26,6 +26,7 @@ import type { IWorktreeReader } from '../../domain/repositories/IWorktreeReader'
 import type { IRemoteReader } from '../../domain/repositories/IRemoteReader';
 import type { IStashReader } from '../../domain/repositories/IStashReader';
 import { isClean } from '../../domain/models/WorkingTreeStatus';
+import type { Branch } from '../../domain/models/Branch';
 import type { IWorkingTreeReader } from '../../domain/repositories/IWorkingTreeReader';
 import {
     cleanWorkingTree,
@@ -110,6 +111,11 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
         void this.sendGraph();
         void this.sendWorktrees();
         void this.sendWorkingTree();
+
+        // Anything that was waiting for somewhere to send to. The graph is on
+        // its way rather than here, which is why the webview holds a reveal it
+        // cannot satisfy yet rather than dropping it.
+        this.viewReady?.();
     }
 
     /** Re-reads the repository and pushes it to the webview, if one is open. */
@@ -240,6 +246,9 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
                 break;
             case 'repository:menu':
                 void this.repositories.pick();
+                break;
+            case 'branch:switch':
+                void this.pickBranch();
                 break;
             case 'panel:toggleMaximized':
                 /*
@@ -420,16 +429,64 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
     }
 
     /**
-     * Selects a commit from outside the graph — the link in a blame hover.
-     * Runs the same comparison a click in the graph does, so arriving from the
-     * editor leaves you where arriving from the graph would.
+     * Selects a commit from outside the graph — the link in a blame hover, or
+     * the editor's own shortcut. Runs the same comparison a click in the graph
+     * does, so arriving from the editor leaves you where arriving from the
+     * graph would.
+     *
+     * `fromPath` is the file the commit was found in. It matters because a
+     * workspace routinely holds several repositories and the file on screen is
+     * often not in the one the graph is pointed at: without it, the panel was
+     * asked about a commit its repository has never heard of, and answered with
+     * "GitHawk could not compare: fatal: bad object". The commit was not
+     * missing and nothing was wrong — the question had simply gone to the wrong
+     * repository.
      */
-    async revealCommit(hash: string): Promise<void> {
+    async revealCommit(hash: string, fromPath?: string): Promise<void> {
         await vscode.commands.executeCommand(
             'workbench.view.extension.gitHawkPanel'
         );
+        /*
+         * Opening the panel does not build it. `resolveWebviewView` runs after
+         * the command has already resolved, and until it does `post` has
+         * nowhere to send to and silently drops — so revealing a commit with
+         * the panel closed filled the Changes tree and selected nothing, which
+         * looked like the graph ignoring the request.
+         */
+        await this.whenViewReady();
+        if (fromPath) {
+            await this.switchToRepositoryContaining(fromPath);
+        }
         this.post({ type: 'commit:reveal', hash });
         await this.compareCommits([hash], 'focus');
+    }
+
+    /**
+     * Points the panel at the repository a file belongs to, and waits for the
+     * graph to arrive before returning.
+     *
+     * Awaited rather than left to the registry's change event, which reloads
+     * the graph too but on its own schedule: the reveal that follows has to
+     * land on rows that exist, or it selects a commit the webview has not been
+     * told about and appears to do nothing.
+     *
+     * The repositories go first for the same reason. The webview clears its
+     * selection when it is told the active root has changed, so announcing the
+     * switch after the reveal would undo it.
+     */
+    private async switchToRepositoryContaining(filePath: string): Promise<void> {
+        const target = this.repositories.containing(filePath);
+        if (!target || target.root === this.repositories.active?.root) {
+            return;
+        }
+
+        log.info(`revealing a commit from ${target.root}; switching to it`);
+        this.repositories.setActive(target.root);
+        this.forgetOtherRepositorysChanges();
+        this.sendRepositories();
+        await this.sendGraph();
+        void this.sendWorktrees();
+        void this.sendWorkingTree();
     }
 
     /** See gitHawk.changesRevealed. */
@@ -534,6 +591,105 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
      * webview: ahead/behind counts go stale the moment anything fetches, and an
      * offer to fast-forward a branch that has since diverged would fail.
      */
+    /**
+     * The branch list as a picker, with the checkout already chosen.
+     *
+     * The sidebar can do this, in three keystrokes and a menu: filter, tab to
+     * the branch, open its menu, pick "Check out". That menu is the right home
+     * for everything a branch can have done to it, and the wrong one for the
+     * thing people do most — so switching branch gets a way in of its own.
+     *
+     * A remote branch checks out as a local one tracking it, which is what
+     * choosing a remote branch in order to work on it has to mean; picking the
+     * branch already checked out does nothing rather than erroring, and one
+     * held by another worktree says so rather than letting git refuse.
+     */
+    async pickBranch(): Promise<void> {
+        try {
+            const repository = await this.createRepository().getRepository();
+            const current = repository.currentBranch?.name;
+
+            const items: (vscode.QuickPickItem & { branch?: Branch })[] = [];
+            const push = (label: string, branches: Branch[]) => {
+                if (branches.length === 0) {
+                    return;
+                }
+                items.push({
+                    label,
+                    kind: vscode.QuickPickItemKind.Separator,
+                });
+                items.push(...branches.map((branch) => this.branchItem(branch)));
+            };
+
+            // Current first, then the rest of local, then remote: the branch you
+            // are on is the one you are most often coming back to.
+            const locals = repository.localBranches;
+            push(
+                'Local',
+                [
+                    ...locals.filter((b) => b.isCurrent),
+                    ...locals.filter((b) => !b.isCurrent),
+                ]
+            );
+            push('Remote', repository.remoteBranches);
+
+            if (items.length === 0) {
+                vscode.window.showWarningMessage(
+                    'This repository has no branches yet.'
+                );
+                return;
+            }
+
+            const chosen = await vscode.window.showQuickPick(items, {
+                title: 'Check out which branch?',
+                placeHolder: current ? `On ${current}` : 'Choose a branch',
+                matchOnDescription: true,
+            });
+            const branch = chosen?.branch;
+            if (!branch || branch.isCurrent) {
+                return;
+            }
+
+            if (branch.isCheckedOutElsewhere) {
+                vscode.window.showWarningMessage(
+                    `${branch.name} is checked out in ${branch.worktreePath}. A branch lives in one working tree at a time — open that worktree, or make one from the branch's own menu.`
+                );
+                return;
+            }
+
+            await this.createMenu().checkOut(branch.name, branch.isRemote);
+        } catch (error) {
+            vscode.window.showErrorMessage(describeError(error));
+        }
+    }
+
+    private branchItem(
+        branch: Branch
+    ): vscode.QuickPickItem & { branch: Branch } {
+        const detail: string[] = [];
+        if (branch.upstream?.isGone) {
+            detail.push(`${branch.upstream.name} is gone`);
+        } else if (branch.isAhead || branch.isBehind) {
+            // The same question the sidebar's arrows answer: which of these
+            // needs updating before it is worth standing on.
+            if (branch.isBehind) {
+                detail.push(`${branch.upstream?.behind} behind`);
+            }
+            if (branch.isAhead) {
+                detail.push(`${branch.upstream?.ahead} ahead`);
+            }
+        }
+        if (branch.isCheckedOutElsewhere && branch.worktreePath) {
+            detail.push(`in ${branch.worktreePath}`);
+        }
+
+        return {
+            branch,
+            label: `${branch.isCurrent ? '$(check)' : branch.isRemote ? '$(cloud)' : '$(git-branch)'} ${branch.name}`,
+            description: branch.isCurrent ? 'current' : detail.join(', '),
+        };
+    }
+
     private async showBranchMenu(
         name: string,
         isRemote: boolean
@@ -692,6 +848,36 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
 
     private post(message: HostToWebviewMessage): void {
         void this.view?.webview.postMessage(message);
+    }
+
+    /**
+     * Resolves once there is a webview to post to.
+     *
+     * Timed out rather than waited on indefinitely: the panel can fail to open
+     * — another view is dragged into its place, or the reader closes it as it
+     * arrives — and a reveal that hangs for ever would take the command with
+     * it. Giving up simply means the message is dropped, which is what used to
+     * happen every time.
+     */
+    private viewReady?: () => void;
+
+    private whenViewReady(timeoutMs = 5000): Promise<void> {
+        if (this.view) {
+            return Promise.resolve();
+        }
+
+        return new Promise<void>((resolve) => {
+            const timer = setTimeout(() => {
+                this.viewReady = undefined;
+                resolve();
+            }, timeoutMs);
+
+            this.viewReady = () => {
+                clearTimeout(timer);
+                this.viewReady = undefined;
+                resolve();
+            };
+        });
     }
 
     private buildHtml(webview: vscode.Webview): string {

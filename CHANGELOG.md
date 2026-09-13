@@ -21,6 +21,53 @@ All notable changes to GitHawk are documented here, following
   two side panes are `B` and `D`; the branch filter is `K`; the three managers
   are `M`, `W` and `S`; a multi-commit selection adds `C` and `X`.
 
+- **Check out a branch from the toolbar, or with `Shift`+`T`.** The branch name
+  beside the repository was a label; it is a picker now, for the same reason the
+  repository next to it is one. Switching branch was the most common thing a git
+  tool does and the only one that needed the sidebar, a filter, three tabs and a
+  menu to reach.
+
+- **Three keys in the editor**, all chords under `Cmd`/`Ctrl`+`K`, none of them
+  bound by VS Code already:
+
+  | | |
+  | --- | --- |
+  | `Cmd+K B` | Blame on, and off again |
+  | `Cmd+K H` | Who wrote this line |
+  | `Cmd+K G` | Show this line's commit in the graph |
+
+  All three are in the editor's right-click menu too, under a **GitHawk**
+  submenu, which is where they announce themselves: VS Code prints each item's
+  chord beside it, and a shortcut nobody can find is a shortcut nobody has. The
+  hover card names `Cmd+K G` next to its "show in the graph" link for the same
+  reason.
+
+  `Cmd+K H` shows the card the mouse already gets, at the caret, and works
+  whether or not the annotations are on — turning the column on to ask one
+  question and off again afterwards is the work it saves.
+
+  The card moved from the decorations to a real hover provider to get there:
+  only a provider's contribution can be opened from the keyboard. That also
+  fixed it being drawn twice, once from each source, and means a hover anywhere
+  on the line answers rather than only one over the label.
+
+### Fixed
+
+- **"Show in the graph" no longer errors when the file is in another
+  repository.** A workspace usually holds several, and the file being read is
+  often not in the one the panel is pointed at. The commit was looked up in the
+  wrong repository and the answer was `GitHawk could not compare: fatal: bad
+  object` — nothing was missing and nothing was wrong, the question had simply
+  gone to the wrong place. GitHawk now follows the file: it switches to the
+  repository the line belongs to, waits for that graph, and then shows the
+  commit.
+
+- **"Show in the graph" works with the panel closed.** Opening the panel does
+  not build it, so the reveal was sent to a webview that did not exist yet and
+  dropped: the Changes tree filled, the graph selected nothing, and it read as
+  the request being ignored. The message now waits for somewhere to send to, and
+  the graph holds a reveal that names a commit whose rows have not arrived.
+
 - **Drive the graph without the mouse.** `Shift`+`G` puts a cursor on a commit;
   the arrows, `Home`, `End`, `PgUp` and `PgDn` move it; `Enter` is the left click
   and `Shift`+`Enter` the right one. The cursor is not the selection, which is

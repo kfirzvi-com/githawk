@@ -61,6 +61,12 @@ export type WebviewToHostMessage =
     /** Opens the native picker for switching repository. */
     | { type: 'repository:menu' }
     /**
+     * Opens the branch list as a picker, with the checkout already chosen.
+     * Distinct from `branch:menu`, which is everything one named branch can
+     * have done to it.
+     */
+    | { type: 'branch:switch' }
+    /**
      * Grows the panel to the full window, or puts it back. The panel's height
      * belongs to the workbench, not to anything the webview can draw, so this
      * is a request for VS Code to run its own command.

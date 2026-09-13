@@ -18,6 +18,7 @@ export type ShortcutAction =
     | 'pull'
     | 'push'
     | 'switchRepository'
+    | 'switchBranch'
     | 'filterBranches'
     | 'manageRemotes'
     | 'manageWorktrees'
@@ -41,8 +42,10 @@ export interface ShortcutSpec {
 
 /**
  * Every key is a letter, and every letter is a mnemonic for its own action
- * rather than a position in a row. `u` is the exception worth naming: pull and
- * push start with the same letter, so pull is "update".
+ * rather than a position in a row. Two are worth naming: pull and push start
+ * with the same letter, so pull is "update"; and checking out a branch is `t`,
+ * because b, c, s and w had all gone by the time it arrived — "check ouT" is
+ * the story, and it is a thin one.
  *
  * Keys are unique across the whole application, not per pane. Two panes that
  * each claimed `s` would work right up until both were on screen, which is the
@@ -54,6 +57,7 @@ export const shortcuts: readonly ShortcutSpec[] = [
     { id: 'pull', key: 'u', label: 'Pull (update)' },
     { id: 'push', key: 'p', label: 'Push' },
     { id: 'switchRepository', key: 'o', label: 'Switch repository' },
+    { id: 'switchBranch', key: 't', label: 'Check out a branch' },
     { id: 'filterBranches', key: 'k', label: 'Filter branches' },
     { id: 'manageRemotes', key: 'm', label: 'Manage remotes' },
     { id: 'manageWorktrees', key: 'w', label: 'Manage worktrees' },
@@ -112,6 +116,7 @@ export function availableShortcuts(
         'fetch',
         'pull',
         'push',
+        'switchBranch',
         'toggleBranches',
         'toggleDetails',
         'toggleMaximized',

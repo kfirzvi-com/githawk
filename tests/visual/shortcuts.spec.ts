@@ -181,3 +181,34 @@ test('looks right — every badge on screen at once', async ({ page }) => {
         fullPage: true,
     });
 });
+
+/**
+ * The branch indicator beside the repository was a label for a long time, which
+ * left the most common action in a git tool four keystrokes away in the sidebar.
+ */
+test('asks the host for the branch picker, from the key and from the indicator', async ({
+    page,
+}) => {
+    const posted: string[] = [];
+    page.on('console', (message) => {
+        if (message.text().includes('webview → host')) {
+            posted.push(message.text());
+        }
+    });
+
+    await open(page);
+    await holdShift(page);
+    await expect(hint(page, 'switchBranch')).toBeVisible();
+    await page.keyboard.press('T');
+
+    await expect
+        .poll(() => posted.some((line) => line.includes('branch:switch')))
+        .toBe(true);
+
+    await page.keyboard.up('Shift');
+    posted.length = 0;
+    await page.getByTestId('branch-picker').click();
+    await expect
+        .poll(() => posted.some((line) => line.includes('branch:switch')))
+        .toBe(true);
+});

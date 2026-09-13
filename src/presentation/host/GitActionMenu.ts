@@ -614,6 +614,27 @@ export class GitActionMenu {
         await this.runner.run({ type });
     }
 
+    /**
+     * Checks a branch out directly, for a caller that has already chosen one —
+     * the branch picker, which is a menu whose only entry would have been this.
+     *
+     * A remote branch becomes a local one tracking it, exactly as the branch
+     * menu's own entry does: checking out a remote-tracking ref itself would
+     * leave a detached HEAD, which is never what choosing a branch in order to
+     * work on it meant.
+     */
+    async checkOut(name: string, isRemote: boolean): Promise<void> {
+        await this.runner.run(
+            isRemote
+                ? {
+                      type: 'checkoutRemote',
+                      remoteBranch: name,
+                      localName: stripRemote(name),
+                  }
+                : { type: 'checkoutBranch', name }
+        );
+    }
+
     private show = async (items: ActionItem[], title?: string): Promise<void> => {
         const chosen = await vscode.window.showQuickPick(items, {
             title,

@@ -213,6 +213,19 @@
       {
         "command": "gitHawk.workingTree",
         "title": "GitHawk: Report Uncommitted Changes"
+      },
+      {
+        "command": "gitHawk.blameLine",
+        "title": "GitHawk: Who Wrote This Line"
+      },
+      {
+        "command": "gitHawk.revealCommitForLine",
+        "title": "GitHawk: Show This Line's Commit In The Graph"
+      },
+      {
+        "command": "gitHawk.switchBranch",
+        "title": "GitHawk: Check Out A Branch",
+        "icon": "$(git-branch)"
       }
     ],
     "keybindings": [
@@ -221,6 +234,24 @@
         "key": "ctrl+9",
         "mac": "cmd+9",
         "when": "!terminalFocus"
+      },
+      {
+        "command": "gitHawk.toggleBlame",
+        "key": "ctrl+k b",
+        "mac": "cmd+k b",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "gitHawk.blameLine",
+        "key": "ctrl+k h",
+        "mac": "cmd+k h",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "gitHawk.revealCommitForLine",
+        "key": "ctrl+k g",
+        "mac": "cmd+k g",
+        "when": "editorTextFocus"
       }
     ],
     "viewsContainers": {
@@ -258,11 +289,31 @@
         }
       ]
     },
+    "submenus": [
+      {
+        "id": "gitHawk.editorContext",
+        "label": "GitHawk"
+      }
+    ],
     "menus": {
       "editor/context": [
         {
-          "command": "gitHawk.toggleBlame",
+          "submenu": "gitHawk.editorContext",
           "group": "navigation@9"
+        }
+      ],
+      "gitHawk.editorContext": [
+        {
+          "command": "gitHawk.blameLine",
+          "group": "1_line@1"
+        },
+        {
+          "command": "gitHawk.revealCommitForLine",
+          "group": "1_line@2"
+        },
+        {
+          "command": "gitHawk.toggleBlame",
+          "group": "2_file@1"
         }
       ],
       "editor/title": [

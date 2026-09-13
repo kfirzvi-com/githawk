@@ -180,6 +180,76 @@ suite('GitHawk across several repositories', () => {
         assert.equal(current, 'cleared');
     });
 
+    /**
+     * "Show in the graph", from a file in a repository the panel is not pointed
+     * at. It used to report `GitHawk could not compare: fatal: bad object`: the
+     * commit was fine and nothing was wrong, the question had simply gone to
+     * the wrong repository. Only this tier can see it — the webview harness has
+     * no repositories to be wrong about.
+     */
+    test('revealing a commit from another repository switches to it', async () => {
+        const cli = path.join(workspace(), 'tools/cli');
+        const web = path.join(workspace(), 'web');
+
+        await vscode.commands.executeCommand('gitHawk.selectRepository', cli);
+        await eventually('the panel to be pointed at tools/cli', async () => {
+            const { activeRoot } = await discovered();
+            return activeRoot === cli ? cli : undefined;
+        });
+
+        // A commit tools/cli has never heard of, named by a file inside web.
+        const head = git(['rev-parse', 'HEAD'], web);
+        await vscode.commands.executeCommand(
+            'gitHawk.revealCommit',
+            head,
+            path.join(web, 'web-only.txt')
+        );
+
+        const { activeRoot } = await eventually(
+            'the panel to follow the file to web',
+            async () => {
+                const current = await discovered();
+                return current.activeRoot === web ? current : undefined;
+            }
+        );
+        assert.equal(activeRoot, web);
+
+        // And the commit really was compared, rather than the switch alone
+        // being counted as success.
+        const summary = await eventually('the commit to be compared', async () => {
+            const current = await vscode.commands.executeCommand(
+                'gitHawk.lastComparison'
+            );
+            return current && current.files.includes('web-only.txt')
+                ? current
+                : undefined;
+        });
+        assert.deepEqual(summary.files, ['web-only.txt']);
+    });
+
+    test('revealing a commit from the repository already open leaves it alone', async () => {
+        const web = path.join(workspace(), 'web');
+
+        // Selected here rather than inherited from the test above, so this one
+        // states its own starting point.
+        await vscode.commands.executeCommand('gitHawk.selectRepository', web);
+        await eventually('the panel to be pointed at web', async () => {
+            const { activeRoot } = await discovered();
+            return activeRoot === web ? web : undefined;
+        });
+
+        const head = git(['rev-parse', 'HEAD'], web);
+
+        await vscode.commands.executeCommand(
+            'gitHawk.revealCommit',
+            head,
+            path.join(web, 'web-only.txt')
+        );
+
+        const { activeRoot } = await discovered();
+        assert.equal(activeRoot, web);
+    });
+
     test('the picker offers a rescan, with a shortcut to the depth setting', async () => {
         const { labels, withSettingsButton } = await vscode.commands.executeCommand(
             'gitHawk.repositoryPickItems'

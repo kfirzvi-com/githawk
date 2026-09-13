@@ -294,9 +294,60 @@ export async function activate(
          * so arriving from the editor and arriving from the graph leave you in
          * the same place.
          */
-        vscode.commands.registerCommand('gitHawk.revealCommit', (hash: string) =>
-            provider.revealCommit(hash)
+        vscode.commands.registerCommand(
+            'gitHawk.revealCommit',
+            (hash: string, fromPath?: string) =>
+                provider.revealCommit(hash, fromPath)
         ),
+        /*
+         * The same thing from the keyboard, for the line the caret is on. Blame
+         * is read whatever the style setting says: turning the column on to ask
+         * one question and off again is the work this saves.
+         */
+        vscode.commands.registerCommand('gitHawk.revealCommitForLine', async () => {
+            const editor = vscode.window.activeTextEditor;
+            if (!editor) {
+                return;
+            }
+
+            const found = await blame.blockFor(
+                editor.document,
+                editor.selection.active.line
+            );
+            if (!found) {
+                vscode.window.setStatusBarMessage(
+                    'GitHawk: nothing to blame on this line',
+                    3000
+                );
+                return;
+            }
+            if (found.block.commit.isUncommitted) {
+                vscode.window.setStatusBarMessage(
+                    'GitHawk: this line is not committed yet',
+                    3000
+                );
+                return;
+            }
+
+            await provider.revealCommit(found.block.commit.hash, found.path);
+        }),
+        // The branch list as a picker, in the palette as well as on Shift+T.
+        vscode.commands.registerCommand('gitHawk.switchBranch', () =>
+            provider.pickBranch()
+        ),
+        // The hover card the mouse gets, at the caret.
+        vscode.commands.registerCommand('gitHawk.blameLine', async () => {
+            const editor = vscode.window.activeTextEditor;
+            if (!editor) {
+                return;
+            }
+            if (!(await blame.showLineHover(editor))) {
+                vscode.window.setStatusBarMessage(
+                    'GitHawk: nothing to blame on this line',
+                    3000
+                );
+            }
+        }),
         /*
          * The way blame is turned on and off. A setting alone is not a way in:
          * it cannot be found without already knowing its name, and this is a
@@ -344,6 +395,23 @@ export async function activate(
                   }
                 : undefined;
         }),
+        /*
+         * The blame card, offered to the hover widget as well as painted onto
+         * the decorations. The widget is what the keyboard can open — a
+         * decoration's hoverMessage is not reachable from
+         * `editor.action.showHover` — so this is what lets Cmd+K H ask the same
+         * question the mouse asks.
+         *
+         * Both schemes, matching what blame already annotates: a file on disk,
+         * and the historical side of a diff.
+         */
+        vscode.languages.registerHoverProvider(
+            [{ scheme: 'file' }, { scheme: REVISION_SCHEME }],
+            {
+                provideHover: (document, position) =>
+                    blame.provideHover(document, position),
+            }
+        ),
         // Serves file contents at a revision so vscode.diff can compare two
         // historical versions, not just files on disk.
         vscode.workspace.registerTextDocumentContentProvider(
