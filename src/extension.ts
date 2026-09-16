@@ -398,6 +398,9 @@ export async function activate(
         vscode.commands.registerCommand('gitHawk.clearChanges', () =>
             changedFiles.clear()
         ),
+        vscode.commands.registerCommand('gitHawk.expandAllChanges', () =>
+            changedFiles.expandAll()
+        ),
         /*
          * From a diff GitHawk opened to the file in the Explorer. The title
          * bar passes the editor's resource; the palette passes nothing and

@@ -298,6 +298,9 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
                     'workbench.action.toggleMaximizedPanel'
                 );
                 break;
+            case 'panel:close':
+                void vscode.commands.executeCommand('workbench.action.closePanel');
+                break;
             case 'stash:menu':
                 void this.showStashMenu(message.ref);
                 break;

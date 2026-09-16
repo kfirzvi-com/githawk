@@ -58,6 +58,7 @@
     } from './vscodeApi';
     import {
         availableShortcuts,
+        isPanelKey,
         isTextFieldTarget,
         resolveShortcut,
         shortcutKey,
@@ -562,6 +563,13 @@
     $effect(() => {
         const onKeyDown = (event: KeyboardEvent) => {
             const target = event.target as HTMLElement | null;
+
+            // The key that opened the panel, pressed again inside it: close it.
+            if (isPanelKey(event)) {
+                event.preventDefault();
+                postToHost({ type: 'panel:close' });
+                return;
+            }
 
             if (event.key === 'Shift') {
                 // Held down, the browser repeats this indefinitely; the guard

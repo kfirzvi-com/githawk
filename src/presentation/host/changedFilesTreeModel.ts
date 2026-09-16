@@ -27,6 +27,8 @@ export interface DirectoryNode {
     /** Path segment shown, which may span several levels once collapsed. */
     label: string;
     path: string;
+    /** The section this folder is under, when the tree has sections. */
+    group?: ChangeGroupKind;
     children: TreeNode[];
 }
 
@@ -132,6 +134,7 @@ export function buildTree(
                     kind: 'directory',
                     label: segment,
                     path: accumulated,
+                    group: context.group,
                     children: [],
                 };
                 current.children.push(next);
@@ -168,6 +171,7 @@ function collapseSingleChildDirectories(nodes: TreeNode[]): TreeNode[] {
                 kind: 'directory',
                 label: `${collapsed.label}/${only.label}`,
                 path: only.path,
+                group: only.group,
                 children: only.children,
             };
         }

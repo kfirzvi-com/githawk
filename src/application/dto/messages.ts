@@ -72,6 +72,11 @@ export type WebviewToHostMessage =
      * is a request for VS Code to run its own command.
      */
     | { type: 'panel:toggleMaximized' }
+    /**
+     * Hide the whole bottom panel. Sent for Cmd+9 pressed inside the graph —
+     * the key that opened it — because only the page knows it has focus.
+     */
+    | { type: 'panel:close' }
     /** Opens the worktree manager, or one worktree's actions when given a path. */
     | { type: 'worktree:menu'; path?: string }
     /** Opens the stash manager, or one entry's actions when given its ref. */

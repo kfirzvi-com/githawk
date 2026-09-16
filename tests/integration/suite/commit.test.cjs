@@ -205,6 +205,20 @@ suite('commit from the Changes view', () => {
         assert.equal(revealed, undefined);
     });
 
+    /**
+     * `reveal` refuses outright when the provider lacks getParent, so this
+     * proves the wiring rather than the expansion, which the API cannot read
+     * back. Collapsed first through the title bar's own command.
+     */
+    test('expand all runs against the real tree after a collapse all', async () => {
+        await vscode.commands.executeCommand('gitHawk.showUncommittedChanges');
+        await vscode.commands.executeCommand(
+            'workbench.actions.treeView.gitHawkChanges.collapseAll'
+        );
+
+        await vscode.commands.executeCommand('gitHawk.expandAllChanges');
+    });
+
     test('refuses an empty message rather than letting git do it', async () => {
         const head = git(['rev-parse', 'HEAD']);
         const committed = await vscode.commands.executeCommand(

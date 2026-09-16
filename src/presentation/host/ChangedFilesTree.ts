@@ -62,6 +62,16 @@ export class ChangedFilesTree implements vscode.TreeDataProvider<TreeNode> {
 
     private comparison?: ComparisonDto;
     private roots: TreeNode[] = [];
+    /** Each node's parent, which `reveal` needs to find a node's place. */
+    private parents = new Map<TreeNode, TreeNode>();
+    /**
+     * Part of every folder's id. VS Code remembers whether a folder is open
+     * by its id, which is what keeps folders as the reader left them across
+     * a refresh — and is also what stops "expand all" from being a refresh.
+     * Bumping this retires every id at once, so every folder is new again
+     * and opens the way a new folder does.
+     */
+    private generation = 0;
     private view?: vscode.TreeView<TreeNode>;
 
     constructor(private readonly decorations: ChangeDecorationProvider) {}
@@ -88,6 +98,7 @@ export class ChangedFilesTree implements vscode.TreeDataProvider<TreeNode> {
     show(comparison: ComparisonDto): void {
         this.comparison = comparison;
         this.roots = buildComparisonTree(comparison);
+        this.parents = parentsOf(this.roots);
         this.decorations.setChanges(
             this.roots.flatMap(filesBeneath).map((node) => ({
                 change: node.change,
@@ -101,9 +112,28 @@ export class ChangedFilesTree implements vscode.TreeDataProvider<TreeNode> {
     clear(): void {
         this.comparison = undefined;
         this.roots = [];
+        this.parents = new Map();
         this.decorations.clear();
         this.changed.fire(undefined);
         this.describe();
+    }
+
+    getParent(element: TreeNode): TreeNode | undefined {
+        return this.parents.get(element);
+    }
+
+    /**
+     * The opposite of the collapse-all VS Code puts in the title bar, which
+     * has no opposite of its own.
+     *
+     * Not a loop of `reveal({expand})` over every folder: the tree can be
+     * replaced by a background refresh while that loop is awaiting, and a
+     * node from the old tree then has no parent and no row. Retiring the ids
+     * and redrawing is one synchronous step, so there is nothing to race.
+     */
+    expandAll(): void {
+        this.generation += 1;
+        this.changed.fire(undefined);
     }
 
     getChildren(element?: TreeNode): TreeNode[] {
@@ -127,6 +157,8 @@ export class ChangedFilesTree implements vscode.TreeDataProvider<TreeNode> {
             const files = countFiles(node);
             item.description = `${files} ${files === 1 ? 'file' : 'files'}`;
             item.contextValue = 'gitHawkDirectory';
+            // The section is part of it: the same folder can be under two.
+            item.id = `${this.generation}:${node.group ?? ''}:${node.path}`;
             return item;
         }
 
@@ -145,7 +177,7 @@ export class ChangedFilesTree implements vscode.TreeDataProvider<TreeNode> {
         // A stable id per section keeps its expanded state across reloads:
         // staging a file rebuilds the tree, and a section that folded itself
         // every time would be unusable.
-        item.id = `group:${node.group}`;
+        item.id = `${this.generation}:group:${node.group}`;
         return item;
     }
 
@@ -236,4 +268,19 @@ function groupTooltip(kind: ChangeGroupKind): string {
         case 'untracked':
             return 'Files git does not track yet. Stage one to include it in the next commit.';
     }
+}
+
+function parentsOf(roots: TreeNode[]): Map<TreeNode, TreeNode> {
+    const parents = new Map<TreeNode, TreeNode>();
+    const walk = (node: TreeNode) => {
+        if (node.kind === 'file') {
+            return;
+        }
+        for (const child of node.children) {
+            parents.set(child, node);
+            walk(child);
+        }
+    };
+    roots.forEach(walk);
+    return parents;
 }

@@ -140,6 +140,11 @@
         "icon": "$(clear-all)"
       },
       {
+        "command": "gitHawk.expandAllChanges",
+        "title": "GitHawk: Expand All Changes",
+        "icon": "$(expand-all)"
+      },
+      {
         "command": "gitHawk.showLog",
         "title": "GitHawk: Show Log"
       },
@@ -294,12 +299,6 @@
         "when": "!terminalFocus"
       },
       {
-        "command": "workbench.action.closePanel",
-        "key": "ctrl+9",
-        "mac": "cmd+9",
-        "when": "focusedView == gitHawkView"
-      },
-      {
         "command": "gitHawk.openSidebar",
         "key": "ctrl+shift+9",
         "mac": "cmd+shift+9",
@@ -435,6 +434,11 @@
           "command": "gitHawk.clearChanges",
           "when": "view == gitHawkChanges",
           "group": "navigation@2"
+        },
+        {
+          "command": "gitHawk.expandAllChanges",
+          "when": "view == gitHawkChanges",
+          "group": "navigation@3"
         }
       ],
       "view/item/context": [

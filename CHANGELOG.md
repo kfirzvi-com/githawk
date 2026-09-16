@@ -50,7 +50,12 @@ All notable changes to GitHawk are documented here, following
 
 - **`Cmd+9` again hides the panel.** With the graph focused, the key that
   opened it closes the whole bottom panel, so one key summons and dismisses
-  it. From anywhere else it still opens and focuses the graph.
+  it. From anywhere else it still opens and focuses the graph. The page
+  claims the key itself: the workbench's `focusedView` context is not set
+  while focus is inside a webview, so a keybinding on it never fires.
+
+- **Expand all, beside collapse all.** VS Code gives a tree the one and not
+  the other; the Changes view's title bar now has both.
 
 - Commands: `GitHawk: Commit`, `GitHawk: Stage All Changes`, `GitHawk: Reveal
   In Explorer View`, `GitHawk: Open Changes Sidebar`, and `GitHawk: Write The

@@ -32,6 +32,28 @@ export type ShortcutAction =
     | 'clearSelection'
     | 'diffTwo';
 
+/**
+ * Cmd+9 (Ctrl+9 elsewhere), the key that opens the panel from anywhere in
+ * VS Code. Pressed with the graph already focused it means the opposite, and
+ * only the graph can tell: the workbench's `focusedView` context is not set
+ * while focus is inside a webview's iframe, so a keybinding on it never fires.
+ * The page claims the key itself and asks the host to close the panel.
+ */
+export function isPanelKey(event: {
+    key: string;
+    shiftKey: boolean;
+    ctrlKey: boolean;
+    metaKey: boolean;
+    altKey: boolean;
+}): boolean {
+    return (
+        event.key === '9' &&
+        (event.metaKey || event.ctrlKey) &&
+        !event.shiftKey &&
+        !event.altKey
+    );
+}
+
 export interface ShortcutSpec {
     id: ShortcutAction;
     /** Always lowercase: Shift is the modifier, not part of the letter. */

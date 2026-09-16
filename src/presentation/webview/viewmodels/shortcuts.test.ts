@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
     availableShortcuts,
+    isPanelKey,
     isTextFieldTarget,
     resolveShortcut,
     shortcutKey,
@@ -218,5 +219,27 @@ describe('isTextFieldTarget', () => {
         expect(isTextFieldTarget({ tagName: 'BUTTON' })).toBe(false);
         expect(isTextFieldTarget({})).toBe(false);
         expect(isTextFieldTarget(null)).toBe(false);
+    });
+});
+
+describe('isPanelKey', () => {
+    const press = (key: string, mods: Partial<Record<'shiftKey' | 'ctrlKey' | 'metaKey' | 'altKey', boolean>> = {}) => ({
+        key,
+        shiftKey: false,
+        ctrlKey: false,
+        metaKey: false,
+        altKey: false,
+        ...mods,
+    });
+
+    it('is Cmd+9 on a Mac and Ctrl+9 elsewhere', () => {
+        expect(isPanelKey(press('9', { metaKey: true }))).toBe(true);
+        expect(isPanelKey(press('9', { ctrlKey: true }))).toBe(true);
+    });
+
+    it('leaves Cmd+Shift+9 to the sidebar, and a bare 9 to whoever wants it', () => {
+        expect(isPanelKey(press('9', { metaKey: true, shiftKey: true }))).toBe(false);
+        expect(isPanelKey(press('9'))).toBe(false);
+        expect(isPanelKey(press('8', { metaKey: true }))).toBe(false);
     });
 });
