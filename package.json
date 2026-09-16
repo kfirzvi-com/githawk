@@ -2,7 +2,7 @@
   "name": "githawk",
   "displayName": "GitHawk",
   "description": "A simple, fast git graph for VS Code. MIT licensed. No AI, no telemetry.",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "license": "MIT",
   "preview": true,
   "icon": "media/icon.png",
@@ -46,7 +46,11 @@
         },
         "gitHawk.blame.style": {
           "type": "string",
-          "enum": ["off", "column", "endOfLine"],
+          "enum": [
+            "off",
+            "column",
+            "endOfLine"
+          ],
           "default": "off",
           "enumDescriptions": [
             "No blame annotations.",
@@ -65,11 +69,11 @@
           "default": 2,
           "minimum": 0,
           "maximum": 8,
-          "markdownDescription": "How many directory levels below each workspace folder to search for git repositories.\n\n`0` searches the opened folders only. `2` \u2014 the default \u2014 covers a folder of projects, or a folder of buckets each holding projects.\n\nThe search skips dot-directories and heavy build directories such as `node_modules`, `dist`, and `target`, so raising it is usually cheap. Repositories nested inside another repository, including submodules and linked worktrees, are found too."
+          "markdownDescription": "How many directory levels below each workspace folder to search for git repositories.\n\n`0` searches the opened folders only. `2` — the default — covers a folder of projects, or a folder of buckets each holding projects.\n\nThe search skips dot-directories and heavy build directories such as `node_modules`, `dist`, and `target`, so raising it is usually cheap. Repositories nested inside another repository, including submodules and linked worktrees, are found too."
         },
         "gitHawk.aiTools": {
           "type": "array",
-          "markdownDescription": "Coding agents GitHawk can start in a terminal, from a worktree or the current repository \u2014 and, with `commitMessageCommand`, ask to write a commit message.\n\n`command` is typed into a terminal already rooted in the chosen directory, so wrappers and aliases work \u2014 replace `claude` with `npx @anthropic-ai/claude-code`, or with your own script, as you like.\n\n`commitMessageCommand` is the same tool run once, non-interactively, through your default shell: the prompt and the diff arrive on its stdin, and whatever it prints becomes the message. The defaults are each tool's documented form for that (`claude -p`, `codex exec -`, and plain `gemini` or `opencode run`, which read stdin when it is not a terminal). Leave it out for a tool that has no such mode, and it stays out of the commit box's picker. An entry missing `name` or `command` is ignored.",
+          "markdownDescription": "Coding agents GitHawk can start in a terminal, from a worktree or the current repository — and, with `commitMessageCommand`, ask to write a commit message.\n\n`command` is typed into a terminal already rooted in the chosen directory, so wrappers and aliases work — replace `claude` with `npx @anthropic-ai/claude-code`, or with your own script, as you like.\n\n`commitMessageCommand` is the same tool run once, non-interactively, through your default shell: the prompt and the diff arrive on its stdin, and whatever it prints becomes the message. The defaults are each tool's documented form for that (`claude -p`, `codex exec -`, and plain `gemini` or `opencode run`, which read stdin when it is not a terminal). Leave it out for a tool that has no such mode, and it stays out of the commit box's picker. An entry missing `name` or `command` is ignored.",
           "default": [
             {
               "name": "Claude Code",

@@ -3,7 +3,17 @@
 All notable changes to GitHawk are documented here, following
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.7.0] — 2026-09-16
+
+The release that closes the loop. Until now GitHawk showed you what you had
+not committed and left the committing to someone else; the Changes view is now
+where a commit is put together — staged and unstaged in git's own sections,
+untracked files at last in the list, a message box above them, and an AI CLI
+of your choice a click away to write the message. Still no model inside
+GitHawk: the tool is yours, run once, through your own shell.
+
+Still marked **Preview** on the Marketplace: the known limitations at the bottom
+of the README are real, and a 1.0 should not have them.
 
 ### Added
 
