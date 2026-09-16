@@ -85,6 +85,14 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
      */
     private readonly workingTreeRead = new vscode.EventEmitter<WorkingTreeStatus>();
     readonly onDidReadWorkingTree = this.workingTreeRead.event;
+    /**
+     * Which comparison is the one the tree should end up showing. Two can be
+     * in flight at once — a background refresh of the working tree and a
+     * commit the reader just clicked — and git does not answer in the order
+     * it was asked. Without this the slower one landed last and won: the
+     * reader clicked a commit and the tree showed the working tree.
+     */
+    private comparisonTicket = 0;
 
     constructor(
         private readonly extensionUri: vscode.Uri,
@@ -535,10 +543,15 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
         reveal: RevealMode
     ): Promise<void> {
         log.info(`comparing: ${JSON.stringify(spec)}`);
+        const ticket = ++this.comparisonTicket;
         try {
             const comparison = await this.comparisons.compare(spec, {
                 quiet: reveal === 'none',
             });
+            if (ticket !== this.comparisonTicket) {
+                log.debug(`dropping a comparison that was overtaken: ${comparison.label}`);
+                return;
+            }
             log.info(
                 `compared "${comparison.label}" (${comparison.method}): ${comparison.files.length} files, ${comparison.skipped.length} skipped`
             );
@@ -571,6 +584,10 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
                 await this.revealChangedFiles();
             }
         } catch (error) {
+            if (ticket !== this.comparisonTicket) {
+                // Overtaken; whatever replaced it is what the tree shows.
+                return;
+            }
             log.error('comparison failed', error);
             this.changedFiles.clear();
             this.post({ type: 'comparison:cleared' });
