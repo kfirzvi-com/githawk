@@ -812,7 +812,8 @@
     };
 </script>
 
-<div class="flex h-screen flex-col bg-app font-sans text-fg">
+<!-- min-w: below this the graph is unusable, so the page scrolls instead of squashing. -->
+<div class="flex h-screen min-w-[320px] flex-col bg-app font-sans text-fg">
     {#if isLoading}
         <div class="flex h-full flex-col items-center justify-center">
             <div

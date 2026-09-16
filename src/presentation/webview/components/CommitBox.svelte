@@ -151,29 +151,16 @@
 
     {#if tools.length > 0}
         <!--
-            One row: which tool, and the button that runs it. The select is
-            the choice the reader made once; the button is the thing they
-            press every time.
+            The button is the thing pressed every time; the tool is a choice
+            made once and then left alone, so it is a borderless "with … ▾"
+            beside the button rather than a control of equal weight. It is
+            still a real <select>: the keyboard, the screen reader and the
+            platform's own picker all work on it.
         -->
-        <div class="flex flex-wrap items-stretch gap-1.5">
-            <select
-                class="min-w-0 flex-1 basis-28 truncate rounded-sm border border-input-line bg-dropdown px-1.5 py-1 text-xs text-dropdown-fg focus:border-focus focus:outline-none"
-                aria-label="Write the message with"
-                data-testid="commit-tool"
-                value={tool ?? ''}
-                onchange={(event) => {
-                    tool = event.currentTarget.value;
-                    onSelectTool(tool);
-                }}
-                disabled={busy}
-            >
-                {#each tools as name (name)}
-                    <option value={name}>{name}</option>
-                {/each}
-            </select>
+        <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
             <button
                 type="button"
-                class="flex flex-shrink-0 flex-grow items-center justify-center gap-1 rounded-sm border border-line-strong bg-control px-2 py-1 text-xs font-medium text-fg-soft hover:bg-control-hover disabled:cursor-default disabled:opacity-50"
+                class="flex flex-shrink-0 items-center gap-1 rounded-sm border border-line-strong bg-control px-2 py-1 text-xs font-medium text-fg-soft hover:bg-control-hover disabled:cursor-default disabled:opacity-50"
                 data-testid="generate-message"
                 title="Ask {tool} to write the message from the diff. It runs once, non-interactively; the result lands here for you to edit."
                 onclick={generate}
@@ -182,6 +169,34 @@
                 <span aria-hidden="true">✦</span>
                 {busy ? 'Working…' : 'Generate'}
             </button>
+            <label
+                class="flex min-w-0 items-center gap-1 text-[11px] text-fg-dim"
+            >
+                with
+                <span class="relative flex min-w-0 items-center">
+                    <select
+                        class="min-w-0 max-w-full cursor-pointer appearance-none truncate border-0 border-b border-dotted border-line-strong bg-transparent py-0 pr-3 pl-0 text-[11px] text-fg-muted hover:text-fg focus:border-focus focus:outline-none disabled:cursor-default"
+                        aria-label="Write the message with"
+                        data-testid="commit-tool"
+                        value={tool ?? ''}
+                        onchange={(event) => {
+                            tool = event.currentTarget.value;
+                            onSelectTool(tool);
+                        }}
+                        disabled={busy}
+                    >
+                        {#each tools as name (name)}
+                            <option value={name}>{name}</option>
+                        {/each}
+                    </select>
+                    <span
+                        aria-hidden="true"
+                        class="pointer-events-none absolute right-0 text-[9px] text-fg-faint"
+                    >
+                        ▾
+                    </span>
+                </span>
+            </label>
         </div>
     {/if}
 

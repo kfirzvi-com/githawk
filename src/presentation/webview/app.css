@@ -104,9 +104,13 @@
     font-weight: 400;
 }
 
+/*
+ * No minimum width here. The graph page sets its own floor on its root
+ * element (App.svelte); the commit box, which shares this stylesheet, lives
+ * in a sidebar that can be dragged narrower than any floor and must follow.
+ */
 body {
     margin: 0;
-    min-width: 320px;
     background-color: var(--vscode-editor-background, #1e1e1e);
     color: var(--vscode-editor-foreground, #cccccc);
 }
