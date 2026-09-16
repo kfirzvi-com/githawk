@@ -59,7 +59,21 @@
     });
 </script>
 
-<div class="bg-pane font-sans">
+<!--
+    app.css gives the body a 320px floor, which suits a graph panel and not a
+    sidebar view that can be dragged narrower than that: below it the box
+    scrolled sideways and hid its own Commit button.
+-->
+<svelte:head>
+    <style>
+        body {
+            min-width: 0;
+            background-color: var(--vscode-sideBar-background, #1a1a1a);
+        }
+    </style>
+</svelte:head>
+
+<div class="min-w-0 bg-pane font-sans">
     <CommitBox
         bind:this={box}
         {status}

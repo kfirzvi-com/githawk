@@ -150,3 +150,23 @@ test('looks right — the commit box', async ({ page }) => {
 
     await expect(page).toHaveScreenshot('commit-box.png', { fullPage: true });
 });
+
+/**
+ * The sidebar can be dragged to a couple of hundred pixels. Nothing may
+ * scroll sideways there: the Commit button has to stay reachable.
+ */
+test('fits a narrow sidebar without scrolling sideways', async ({ page }) => {
+    await page.setViewportSize({ width: 190, height: 320 });
+    await open(page, '?dirty=3');
+
+    const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+    );
+    expect(overflow).toBe(0);
+    const button = (await commit(page).boundingBox())!;
+    expect(button.x + button.width).toBeLessThanOrEqual(190);
+
+    await expect(page).toHaveScreenshot('commit-box-narrow.png', {
+        fullPage: true,
+    });
+});

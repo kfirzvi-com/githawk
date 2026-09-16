@@ -67,11 +67,11 @@
 
 <button
     type="button"
-    class="flex w-full items-center border-b border-dashed border-line text-left hover:bg-hover focus:outline-none {selected
+    class="flex w-full items-center border-b border-dashed border-line text-left hover:bg-hover {selected
         ? 'bg-selected'
         : ''} {cursor
-        ? 'outline-2 -outline-offset-2 outline-info-strong focus:outline'
-        : ''}"
+        ? 'outline-2 outline-solid -outline-offset-2 outline-info-strong'
+        : 'outline-none'}"
     style="height:{metrics.rowH}px;"
     data-testid="working-tree-row"
     data-hash={WORKING_TREE_ROW}

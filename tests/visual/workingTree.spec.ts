@@ -195,3 +195,43 @@ test('with the tree clean, Up from the newest commit stays put', async ({
 
     await expect(first).toBeFocused();
 });
+
+/**
+ * The cursor has to be seen to be believed: a reader arrowing onto the row
+ * with nothing drawn there pressed Enter to find out where they were.
+ */
+test('the cursor is drawn on the row before anything is pressed', async ({
+    page,
+}) => {
+    await open(page, '1,1');
+
+    await page.keyboard.down('Shift');
+    await page.keyboard.press('G');
+    await page.keyboard.up('Shift');
+
+    await expect(row(page)).toHaveAttribute('aria-pressed', 'false');
+    const outline = await row(page).evaluate((element) => {
+        const style = getComputedStyle(element);
+        return { style: style.outlineStyle, width: style.outlineWidth };
+    });
+    expect(outline.style).toBe('solid');
+    expect(outline.width).toBe('2px');
+
+    await page.keyboard.press('ArrowDown');
+    expect(
+        await row(page).evaluate((element) => getComputedStyle(element).outlineStyle)
+    ).toBe('none');
+});
+
+test('looks right — the cursor on the uncommitted row', async ({ page }) => {
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await open(page, '2,1,3');
+    await page.keyboard.down('Shift');
+    await page.keyboard.press('G');
+    await page.keyboard.up('Shift');
+    await expect(row(page)).toHaveAttribute('aria-current', 'true');
+
+    await expect(page).toHaveScreenshot('working-tree-cursor.png', {
+        fullPage: true,
+    });
+});

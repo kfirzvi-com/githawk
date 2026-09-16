@@ -123,10 +123,15 @@
     }
 </script>
 
-<div class="flex flex-col gap-2 p-2 text-fg" data-testid="commit-box">
+<!--
+    Every control is allowed to shrink to nothing (`min-w-0`) and the rows
+    wrap: the sidebar can be dragged to a couple of hundred pixels, and a
+    box that scrolled sideways there would hide its own Commit button.
+-->
+<div class="flex min-w-0 flex-col gap-2 p-2 text-fg" data-testid="commit-box">
     <textarea
         bind:this={textarea}
-        class="min-h-[4.5rem] w-full resize-y rounded-sm border border-input-line bg-input px-2 py-1.5 font-sans text-[13px] leading-snug text-input-fg placeholder:text-input-placeholder focus:border-focus focus:outline-none"
+        class="block min-h-[4.5rem] w-full min-w-0 max-w-full resize-y rounded-sm border border-input-line bg-input px-2 py-1.5 font-sans text-[13px] leading-snug text-input-fg placeholder:text-input-placeholder focus:border-focus focus:outline-none"
         placeholder="Message ({navigator.platform.includes('Mac') ? '⌘' : 'Ctrl+'}Enter to commit)"
         aria-label="Commit message"
         data-testid="commit-message"
@@ -150,9 +155,9 @@
             the choice the reader made once; the button is the thing they
             press every time.
         -->
-        <div class="flex items-stretch gap-1.5">
+        <div class="flex flex-wrap items-stretch gap-1.5">
             <select
-                class="min-w-0 flex-1 rounded-sm border border-input-line bg-dropdown px-1.5 py-1 text-xs text-dropdown-fg focus:border-focus focus:outline-none"
+                class="min-w-0 flex-1 basis-28 truncate rounded-sm border border-input-line bg-dropdown px-1.5 py-1 text-xs text-dropdown-fg focus:border-focus focus:outline-none"
                 aria-label="Write the message with"
                 data-testid="commit-tool"
                 value={tool ?? ''}
@@ -168,7 +173,7 @@
             </select>
             <button
                 type="button"
-                class="flex flex-shrink-0 items-center gap-1 rounded-sm border border-line-strong bg-control px-2 py-1 text-xs font-medium text-fg-soft hover:bg-control-hover disabled:cursor-default disabled:opacity-50"
+                class="flex flex-shrink-0 flex-grow items-center justify-center gap-1 rounded-sm border border-line-strong bg-control px-2 py-1 text-xs font-medium text-fg-soft hover:bg-control-hover disabled:cursor-default disabled:opacity-50"
                 data-testid="generate-message"
                 title="Ask {tool} to write the message from the diff. It runs once, non-interactively; the result lands here for you to edit."
                 onclick={generate}
@@ -180,10 +185,10 @@
         </div>
     {/if}
 
-    <div class="flex items-center gap-2">
+    <div class="flex flex-wrap items-center gap-2">
         <button
             type="button"
-            class="flex-1 rounded-sm bg-accent px-3 py-1.5 text-xs font-medium text-on-accent hover:bg-accent-hover disabled:cursor-default disabled:opacity-50"
+            class="min-w-0 flex-1 truncate rounded-sm bg-accent px-3 py-1.5 text-xs font-medium text-on-accent hover:bg-accent-hover disabled:cursor-default disabled:opacity-50"
             data-testid="commit-button"
             onclick={submit}
             disabled={!canCommit}
