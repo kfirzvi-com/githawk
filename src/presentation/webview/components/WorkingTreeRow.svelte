@@ -7,6 +7,11 @@
         nodeCenter,
         type GraphMetrics,
     } from '../viewmodels/graphGeometry';
+    import {
+        WORKING_TREE_ROW,
+        resolveGraphKey,
+        type GraphKeyAction,
+    } from '../viewmodels/graphKeys';
 
     interface Props {
         status: WorkingTreeStatus;
@@ -14,6 +19,18 @@
         metrics?: GraphMetrics;
         selected: boolean;
         onSelect: () => void;
+        /** The keyboard is on this row. Drawn as the graph draws its cursor. */
+        cursor?: boolean;
+        /**
+         * Whether Tab lands here. One row in the whole list is tabbable at a
+         * time — this one when the cursor is here, a commit otherwise — so
+         * the graph and this row share one roving tabindex.
+         */
+        tabbable?: boolean;
+        /** Space picks in the graph; here it is the click, so nothing is picked. */
+        selecting?: boolean;
+        /** The arrows and Enter, resolved the way the graph resolves them. */
+        onGraphKey?: (action: GraphKeyAction, row: string) => void;
     }
 
     let {
@@ -22,22 +39,26 @@
         metrics = defaultMetrics,
         selected,
         onSelect,
+        cursor = false,
+        tabbable = false,
+        selecting = false,
+        onGraphKey,
     }: Props = $props();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+        const action = resolveGraphKey(event, selecting);
+        if (!action) {
+            return;
+        }
+        event.preventDefault();
+        onGraphKey?.(action, WORKING_TREE_ROW);
+    };
 
     const summary = $derived(describeWorkingTree(status));
 
-    /*
-     * The one place the count and the changeset disagree, so it is said rather
-     * than left to be discovered: `git diff HEAD` has no blob to compare an
-     * untracked file against, so those files are counted here and absent from
-     * the diff. Counting them anyway is the lesser wrong — a row that ignored
-     * five new files would report a clean tree that is not clean.
-     */
-    const untrackedOnlyCaveat = $derived(
-        status.untracked > 0
-            ? 'Everything uncommitted, compared against HEAD. Untracked files are counted here but not diffed — git has nothing to compare them with until they are added.'
-            : 'Everything uncommitted, compared against HEAD.'
-    );
+    /* What the row leads to, for the hover. */
+    const untrackedOnlyCaveat =
+        'Everything not yet committed — staged, changed, and untracked — with a commit box above the files.';
     /** Lane 0's centre, so the marker lines up with the dots below it. */
     const markerLeft = $derived(
         nodeCenter(0, 0, metrics).x - metrics.dotRadius
@@ -46,14 +67,20 @@
 
 <button
     type="button"
-    class="flex w-full items-center border-b border-dashed border-line text-left hover:bg-hover {selected
+    class="flex w-full items-center border-b border-dashed border-line text-left hover:bg-hover focus:outline-none {selected
         ? 'bg-selected'
+        : ''} {cursor
+        ? 'outline-2 -outline-offset-2 outline-info-strong focus:outline'
         : ''}"
     style="height:{metrics.rowH}px;"
     data-testid="working-tree-row"
+    data-hash={WORKING_TREE_ROW}
     aria-pressed={selected}
+    aria-current={cursor ? 'true' : undefined}
+    tabindex={tabbable ? 0 : -1}
     title={untrackedOnlyCaveat}
     onclick={onSelect}
+    onkeydown={handleKeyDown}
 >
     <!-- Aligned with the graph's lane gutter so the marker sits above the
          topmost commit dot, rather than floating in its own column. -->

@@ -64,8 +64,10 @@
         type ShortcutAction,
     } from './viewmodels/shortcuts';
     import {
+        WORKING_TREE_ROW,
         initialCursor,
         isMove,
+        keyboardRows,
         moveCursor,
         type GraphKeyAction,
     } from './viewmodels/graphKeys';
@@ -135,6 +137,16 @@
     );
     const rowOrder = $derived(graph?.commits.map((c) => c.hash) ?? []);
     const workingTreeIsClean = $derived(isClean(workingTree));
+    /**
+     * What the arrows walk. The commits, plus the uncommitted row at the top
+     * when there is one: a cursor that stopped at the newest commit with a
+     * row visibly above it was a cursor that could not reach the one row a
+     * reader about to commit most wants.
+     */
+    const cursorRows = $derived(keyboardRows(rowOrder, !workingTreeIsClean));
+    const cursorOnWorkingTree = $derived(
+        cursorHash === WORKING_TREE_ROW && !workingTreeIsClean
+    );
     /**
      * The working-tree row shares the graph's scroll container and sits above
      * row 0, so every commit is that much further down than its index says.
@@ -320,7 +332,10 @@
      * so the graph a reader was already looking at stays where it is.
      */
     const focusGraph = () => {
-        const hash = initialCursor(rowOrder, selectedCommit?.hash ?? null);
+        const hash = initialCursor(
+            cursorRows,
+            workingTreeSelected ? WORKING_TREE_ROW : (selectedCommit?.hash ?? null)
+        );
         if (!hash) {
             return;
         }
@@ -337,7 +352,7 @@
             return;
         }
         selecting = true;
-        if (cursorHash === null || !rowOrder.includes(cursorHash)) {
+        if (cursorHash === null || !cursorRows.includes(cursorHash)) {
             focusGraph();
         } else {
             void focusRow(cursorHash);
@@ -375,19 +390,34 @@
      * What the graph's own keys do — the arrows, Enter, Space — once a row has
      * focus. Every one of them runs the handler the mouse already runs, so a
      * keyboard and a click cannot drift apart.
+     *
+     * `row` is a commit hash, or the uncommitted row's key. The moves treat
+     * the two alike; the rest look the commit up, and on the uncommitted row
+     * do what its click does — select it — or nothing, where it has no menu
+     * and cannot join a selection.
      */
-    const handleGraphKey = (action: GraphKeyAction, commit: Commit) => {
+    const handleGraphKey = (action: GraphKeyAction, row: string) => {
         if (isMove(action)) {
-            const next = moveCursor(
-                rowOrder,
-                commit.hash,
-                action,
-                graphPageSize()
-            );
+            const next = moveCursor(cursorRows, row, action, graphPageSize());
             if (next) {
                 cursorHash = next;
                 void focusRow(next);
             }
+            return;
+        }
+
+        if (row === WORKING_TREE_ROW) {
+            if (action === 'activate' || action === 'confirmSelection') {
+                leaveSelectionMode();
+                selectWorkingTree();
+            } else if (action === 'leaveSelectionMode') {
+                leaveSelectionMode();
+            }
+            return;
+        }
+
+        const commit = graph?.commits.find((candidate) => candidate.hash === row);
+        if (!commit) {
             return;
         }
 
@@ -1005,6 +1035,10 @@
                             gutterWidth={graphGutterWidth}
                             selected={workingTreeSelected}
                             onSelect={selectWorkingTree}
+                            cursor={cursorOnWorkingTree}
+                            tabbable={cursorOnWorkingTree}
+                            {selecting}
+                            onGraphKey={handleGraphKey}
                         />
                     {/if}
                     {#if graph}
@@ -1020,7 +1054,9 @@
                                 })}
                             {cursorHash}
                             {selecting}
-                            onGraphKey={handleGraphKey}
+                            cursorAbove={cursorOnWorkingTree}
+                            onGraphKey={(action, commit) =>
+                                handleGraphKey(action, commit.hash)}
                         >
                             {#snippet row(commit: Commit)}
                                 <!-- Fixed-width metadata columns with the

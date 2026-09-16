@@ -110,3 +110,88 @@ test('looks right — uncommitted changes', async ({ page }) => {
         fullPage: true,
     });
 });
+
+/**
+ * The row is a row: the arrows reach it. Before this, Up on the newest commit
+ * stopped dead with the uncommitted changes visibly above it.
+ *
+ * Shift+G starts at the top of the list, which is this row when there is one
+ * — the eye is already there — so the test walks down first and back up.
+ */
+test('Up from the newest commit reaches the row, and Down comes back', async ({
+    page,
+}) => {
+    await open(page, '1,1');
+    const first = page
+        .getByTestId('git-graph')
+        .locator('button[role="option"]')
+        .first();
+
+    await page.keyboard.down('Shift');
+    await page.keyboard.press('G');
+    await page.keyboard.up('Shift');
+    await expect(row(page)).toBeFocused();
+
+    await page.keyboard.press('ArrowDown');
+    await expect(first).toBeFocused();
+    await expect(row(page)).not.toHaveAttribute('aria-current', 'true');
+
+    await page.keyboard.press('ArrowUp');
+    await expect(row(page)).toBeFocused();
+    await expect(row(page)).toHaveAttribute('aria-current', 'true');
+
+    // Clamped at the top, as the graph is at the bottom.
+    await page.keyboard.press('ArrowUp');
+    await expect(row(page)).toBeFocused();
+});
+
+test('Home jumps to the row from anywhere in the graph', async ({ page }) => {
+    await open(page, '1');
+
+    await page.keyboard.down('Shift');
+    await page.keyboard.press('G');
+    await page.keyboard.up('Shift');
+    await page.keyboard.press('End');
+    await page.keyboard.press('Home');
+
+    await expect(row(page)).toBeFocused();
+});
+
+test('Enter on the row is its click', async ({ page }) => {
+    const posted: string[] = [];
+    page.on('console', (message) => {
+        if (message.text().includes('webview → host')) {
+            posted.push(message.text());
+        }
+    });
+    await open(page, '1,1');
+
+    await page.keyboard.down('Shift');
+    await page.keyboard.press('G');
+    await page.keyboard.up('Shift');
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('ArrowUp');
+    await page.keyboard.press('Enter');
+
+    await expect(row(page)).toHaveAttribute('aria-pressed', 'true');
+    await expect
+        .poll(() => posted.some((line) => line.includes('workingTree:select')))
+        .toBe(true);
+});
+
+test('with the tree clean, Up from the newest commit stays put', async ({
+    page,
+}) => {
+    await open(page);
+    const first = page
+        .getByTestId('git-graph')
+        .locator('button[role="option"]')
+        .first();
+
+    await page.keyboard.down('Shift');
+    await page.keyboard.press('G');
+    await page.keyboard.up('Shift');
+    await page.keyboard.press('ArrowUp');
+
+    await expect(first).toBeFocused();
+});
