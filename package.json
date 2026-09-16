@@ -122,6 +122,10 @@
         "title": "GitHawk: Open Git Graph"
       },
       {
+        "command": "gitHawk.closePanel",
+        "title": "GitHawk: Hide The Panel"
+      },
+      {
         "command": "gitHawk.refresh",
         "title": "GitHawk: Refresh Git Graph",
         "icon": "$(refresh)"
@@ -288,6 +292,12 @@
         "key": "ctrl+9",
         "mac": "cmd+9",
         "when": "!terminalFocus"
+      },
+      {
+        "command": "workbench.action.closePanel",
+        "key": "ctrl+9",
+        "mac": "cmd+9",
+        "when": "focusedView == gitHawkView"
       },
       {
         "command": "gitHawk.openSidebar",

@@ -48,6 +48,10 @@ All notable changes to GitHawk are documented here, following
 - **`Cmd+Shift+9` opens the Changes sidebar** with the keyboard on the tree —
   the graph panel's `Cmd+9`, with Shift.
 
+- **`Cmd+9` again hides the panel.** With the graph focused, the key that
+  opened it closes the whole bottom panel, so one key summons and dismisses
+  it. From anywhere else it still opens and focuses the graph.
+
 - Commands: `GitHawk: Commit`, `GitHawk: Stage All Changes`, `GitHawk: Reveal
   In Explorer View`, `GitHawk: Open Changes Sidebar`, and `GitHawk: Write The
   Commit Message With An AI CLI`. The Changes view's title bar gained

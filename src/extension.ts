@@ -274,6 +274,16 @@ export async function activate(
                 'workbench.view.extension.gitHawkPanel'
             )
         ),
+        /*
+         * The other half of Cmd+9. The key opens the graph; pressed again with
+         * the graph focused it hides the whole bottom panel, so one key both
+         * summons and dismisses it. The keybinding in package.json routes the
+         * second press straight to the workbench's closePanel — this command
+         * exists so the palette offers the same thing by name.
+         */
+        vscode.commands.registerCommand('gitHawk.closePanel', () =>
+            vscode.commands.executeCommand('workbench.action.closePanel')
+        ),
         // The sidebar, with the keyboard on the Changes tree: Cmd+Shift+9,
         // the panel's key with Shift, so the two are one thing to remember.
         vscode.commands.registerCommand('gitHawk.openSidebar', () =>

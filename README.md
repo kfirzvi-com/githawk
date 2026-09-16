@@ -364,7 +364,8 @@ them was already bound by VS Code.
 They are also in the editor's right-click menu, under **GitHawk**, which is
 where the keys announce themselves — a shortcut nobody can find is a shortcut
 nobody has. The two views have a key each: <kbd>⌘9</kbd> opens the graph panel,
-<kbd>⌘⇧9</kbd> the Changes sidebar. The hover card names <kbd>⌘K</kbd> <kbd>G</kbd> beside its "show in
+<kbd>⌘⇧9</kbd> the Changes sidebar. <kbd>⌘9</kbd> again, with the graph
+focused, hides the whole bottom panel — one key summons it and dismisses it. The hover card names <kbd>⌘K</kbd> <kbd>G</kbd> beside its "show in
 the graph" link for the same reason.
 
 <kbd>⌘K</kbd> <kbd>G</kbd> follows the file rather than the panel: a workspace
@@ -385,7 +386,8 @@ different one, GitHawk switches to it and then shows the commit.
 
 | Command | |
 | --- | --- |
-| `GitHawk: Open Git Graph` | `Cmd+9` / `Ctrl+9` |
+| `GitHawk: Open Git Graph` | `Cmd+9` / `Ctrl+9` — pressed again with the graph focused, hides the whole panel |
+| `GitHawk: Hide The Panel` | |
 | `GitHawk: Open Changes Sidebar` | `Cmd+Shift+9` / `Ctrl+Shift+9` |
 | `GitHawk: Toggle Blame Annotations` | `Cmd+K B` / `Ctrl+K B` |
 | `GitHawk: Refresh Git Graph` | Also rescans for new repositories |
