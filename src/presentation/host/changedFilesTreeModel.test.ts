@@ -2,12 +2,17 @@ import { describe, expect, test } from 'vitest';
 import {
     DirectoryNode,
     TreeNode,
+    buildComparisonTree,
     buildTree,
     countFiles,
     describeChange,
+    filesBeneath,
     markdownTooltipSource,
 } from './changedFilesTreeModel';
-import { FileChangeDto } from '../../application/dto/ComparisonDto';
+import {
+    ComparisonDto,
+    FileChangeDto,
+} from '../../application/dto/ComparisonDto';
 
 const file = (path: string, overrides: Partial<FileChangeDto> = {}): FileChangeDto => ({
     path,
@@ -19,7 +24,7 @@ const file = (path: string, overrides: Partial<FileChangeDto> = {}): FileChangeD
 });
 
 const labels = (nodes: TreeNode[]) =>
-    nodes.map((node) => (node.kind === 'directory' ? node.label : node.change.path));
+    nodes.map((node) => (node.kind === 'file' ? node.change.path : node.label));
 
 const directory = (nodes: TreeNode[], label: string): DirectoryNode => {
     const found = nodes.find(
@@ -155,7 +160,9 @@ describe('describeChange', () => {
 
 describe('countFiles', () => {
     test('counts a single file', () => {
-        expect(countFiles({ kind: 'file', change: file('a.ts') })).toBe(1);
+        expect(
+            countFiles({ kind: 'file', change: file('a.ts'), baseRev: 'HEAD' })
+        ).toBe(1);
     });
 
     test('counts files nested at any depth', () => {
@@ -194,6 +201,121 @@ describe('markdownTooltipSource', () => {
         );
 
         expect(source).toContain('binary');
+        expect(source).not.toContain('+0');
+    });
+});
+
+describe('buildComparisonTree', () => {
+    const comparison = (
+        overrides: Partial<ComparisonDto> = {}
+    ): ComparisonDto => ({
+        label: 'x',
+        method: 'direct',
+        methodExplanation: '',
+        files: [],
+        totals: { files: 0, insertions: 0, deletions: 0, binaryFiles: 0 },
+        baseRev: 'abc',
+        targetRev: 'def',
+        skipped: [],
+        ...overrides,
+    });
+
+    test('a comparison without groups starts at the directories', () => {
+        const tree = buildComparisonTree(
+            comparison({ files: [file('src/a.ts'), file('b.ts')] })
+        );
+
+        expect(tree.map((node) => node.kind)).toEqual(['directory', 'file']);
+        // Every row opens the comparison's own two revisions.
+        const rows = tree.flatMap(filesBeneath);
+        expect(rows.map((row) => [row.baseRev, row.targetRev])).toEqual([
+            ['abc', 'def'],
+            ['abc', 'def'],
+        ]);
+        expect(rows.every((row) => row.group === undefined)).toBe(true);
+    });
+
+    /**
+     * The working tree keeps git's own sections, and each row opens the
+     * diff its section means: HEAD against the index for a staged file, the
+     * index against the disk for an unstaged one. One pair for the whole
+     * tree would open the wrong diff for half the rows.
+     */
+    test("the working tree is sectioned, and each row carries its section's revisions", () => {
+        const tree = buildComparisonTree(
+            comparison({
+                method: 'workingTree',
+                groups: [
+                    {
+                        kind: 'staged',
+                        files: [file('src/staged.ts')],
+                        baseRev: 'HEAD',
+                        targetRev: ':0',
+                    },
+                    {
+                        kind: 'unstaged',
+                        files: [file('src/edited.ts')],
+                        baseRev: ':0',
+                    },
+                    {
+                        kind: 'untracked',
+                        files: [file('new.ts', { status: 'untracked' })],
+                        baseRev: 'HEAD',
+                    },
+                ],
+            })
+        );
+
+        expect(labels(tree)).toEqual([
+            'Staged Changes',
+            'Changes',
+            'Untracked Files',
+        ]);
+
+        const staged = filesBeneath(tree[0])[0];
+        expect(staged.group).toBe('staged');
+        expect([staged.baseRev, staged.targetRev]).toEqual(['HEAD', ':0']);
+
+        const edited = filesBeneath(tree[1])[0];
+        expect(edited.group).toBe('unstaged');
+        expect([edited.baseRev, edited.targetRev]).toEqual([':0', undefined]);
+
+        const untracked = filesBeneath(tree[2])[0];
+        expect(untracked.group).toBe('untracked');
+        expect(untracked.targetRev).toBeUndefined();
+    });
+
+    test('a file both staged and edited again appears in both sections', () => {
+        const tree = buildComparisonTree(
+            comparison({
+                groups: [
+                    { kind: 'staged', files: [file('a.ts')], baseRev: 'HEAD', targetRev: ':0' },
+                    { kind: 'unstaged', files: [file('a.ts')], baseRev: ':0' },
+                ],
+            })
+        );
+
+        expect(tree.flatMap(filesBeneath).map((row) => row.group)).toEqual([
+            'staged',
+            'unstaged',
+        ]);
+    });
+});
+
+describe('untracked files', () => {
+    test('are described by their status, having no counts', () => {
+        expect(describeChange(file('new.ts', { status: 'untracked', insertions: 0, deletions: 0 }))).toBe(
+            'Untracked'
+        );
+    });
+
+    test('are explained in the tooltip rather than given zero counts', () => {
+        const source = markdownTooltipSource(
+            file('new.ts', { status: 'untracked', insertions: 0, deletions: 0 })
+        );
+
+        expect(source).toContain('**Untracked**');
+        expect(source).toContain('stage it');
         expect(source).not.toContain('+0');
     });
 });

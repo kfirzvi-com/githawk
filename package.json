@@ -69,23 +69,27 @@
         },
         "gitHawk.aiTools": {
           "type": "array",
-          "markdownDescription": "Coding agents GitHawk can start in a terminal, from a worktree or the current repository.\n\nThe command is typed into a terminal already rooted in the chosen directory, so wrappers and aliases work \u2014 replace `claude` with `npx @anthropic-ai/claude-code`, or with your own script, as you like. An entry missing `name` or `command` is ignored.",
+          "markdownDescription": "Coding agents GitHawk can start in a terminal, from a worktree or the current repository \u2014 and, with `commitMessageCommand`, ask to write a commit message.\n\n`command` is typed into a terminal already rooted in the chosen directory, so wrappers and aliases work \u2014 replace `claude` with `npx @anthropic-ai/claude-code`, or with your own script, as you like.\n\n`commitMessageCommand` is the same tool run once, non-interactively, through your default shell: the prompt and the diff arrive on its stdin, and whatever it prints becomes the message. The defaults are each tool's documented form for that (`claude -p`, `codex exec -`, and plain `gemini` or `opencode run`, which read stdin when it is not a terminal). Leave it out for a tool that has no such mode, and it stays out of the commit box's picker. An entry missing `name` or `command` is ignored.",
           "default": [
             {
               "name": "Claude Code",
-              "command": "claude"
+              "command": "claude",
+              "commitMessageCommand": "claude -p"
             },
             {
               "name": "Codex",
-              "command": "codex"
+              "command": "codex",
+              "commitMessageCommand": "codex exec -"
             },
             {
               "name": "Gemini CLI",
-              "command": "gemini"
+              "command": "gemini",
+              "commitMessageCommand": "gemini"
             },
             {
               "name": "opencode",
-              "command": "opencode"
+              "command": "opencode",
+              "commitMessageCommand": "opencode run"
             }
           ],
           "items": {
@@ -102,6 +106,10 @@
               "command": {
                 "type": "string",
                 "description": "Typed into the terminal verbatim."
+              },
+              "commitMessageCommand": {
+                "type": "string",
+                "description": "Run through your shell to write a commit message: the prompt and diff on stdin, the message on stdout. Omit for a tool with no non-interactive mode."
               }
             }
           }
@@ -226,6 +234,39 @@
         "command": "gitHawk.switchBranch",
         "title": "GitHawk: Check Out A Branch",
         "icon": "$(git-branch)"
+      },
+      {
+        "command": "gitHawk.stage",
+        "title": "Stage",
+        "icon": "$(add)"
+      },
+      {
+        "command": "gitHawk.unstage",
+        "title": "Unstage",
+        "icon": "$(remove)"
+      },
+      {
+        "command": "gitHawk.stageAll",
+        "title": "GitHawk: Stage All Changes",
+        "icon": "$(add)"
+      },
+      {
+        "command": "gitHawk.commit",
+        "title": "GitHawk: Commit",
+        "icon": "$(check)"
+      },
+      {
+        "command": "gitHawk.generateCommitMessage",
+        "title": "GitHawk: Write The Commit Message With An AI CLI",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "gitHawk.changesTree",
+        "title": "GitHawk: Describe The Changes Tree"
+      },
+      {
+        "command": "gitHawk.commitForTesting",
+        "title": "GitHawk: Commit With A Given Message"
       }
     ],
     "keybindings": [
@@ -272,6 +313,15 @@
     },
     "views": {
       "gitHawkSidebar": [
+        {
+          "id": "gitHawkCommit",
+          "name": "Commit",
+          "contextualTitle": "GitHawk",
+          "type": "webview",
+          "icon": "$(git-commit)",
+          "when": "gitHawk.workingTreeShown",
+          "initialSize": 1
+        },
         {
           "id": "gitHawkChanges",
           "name": "Changes",
@@ -325,14 +375,57 @@
       ],
       "view/title": [
         {
+          "command": "gitHawk.showUncommittedChanges",
+          "when": "view == gitHawkChanges",
+          "group": "navigation@1"
+        },
+        {
           "command": "gitHawk.clearChanges",
           "when": "view == gitHawkChanges",
-          "group": "navigation"
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "gitHawk.stage",
+          "when": "view == gitHawkChanges && viewItem =~ /^gitHawk(Unstaged|Untracked|Conflicted)(File|Group)$/",
+          "group": "inline@1"
+        },
+        {
+          "command": "gitHawk.unstage",
+          "when": "view == gitHawkChanges && viewItem =~ /^gitHawkStaged(File|Group)$/",
+          "group": "inline@1"
+        },
+        {
+          "command": "gitHawk.stage",
+          "when": "view == gitHawkChanges && viewItem =~ /^gitHawk(Unstaged|Untracked|Conflicted)(File|Group)$/",
+          "group": "1_stage@1"
+        },
+        {
+          "command": "gitHawk.unstage",
+          "when": "view == gitHawkChanges && viewItem =~ /^gitHawkStaged(File|Group)$/",
+          "group": "1_stage@1"
         }
       ],
       "commandPalette": [
         {
           "command": "gitHawk.openChangedFile",
+          "when": "false"
+        },
+        {
+          "command": "gitHawk.stage",
+          "when": "false"
+        },
+        {
+          "command": "gitHawk.changesTree",
+          "when": "false"
+        },
+        {
+          "command": "gitHawk.commitForTesting",
+          "when": "false"
+        },
+        {
+          "command": "gitHawk.unstage",
           "when": "false"
         },
         {
@@ -378,9 +471,9 @@
     "dev": "concurrently -n host,webview -c blue,magenta \"npm:dev:host\" \"npm:dev:webview\"",
     "dev:host": "node esbuild.js --watch",
     "dev:webview": "vite",
-    "dev:vscode": "concurrently -n host,webview -c blue,magenta \"npm:dev:host\" \"vite build --watch\"",
+    "dev:vscode": "concurrently -n host,webview,commit -c blue,magenta,cyan \"npm:dev:host\" \"vite build --watch\" \"GITHAWK_WEBVIEW_ENTRY=commit vite build --watch\"",
     "build": "npm run build:webview && node esbuild.js --production",
-    "build:webview": "vite build",
+    "build:webview": "vite build && GITHAWK_WEBVIEW_ENTRY=commit vite build",
     "check": "npm run check:types && npm run check:svelte && npm run lint",
     "check:types": "tsc -p tsconfig.host.json && tsc -p tsconfig.webview.json",
     "check:svelte": "svelte-check --tsconfig tsconfig.webview.json",

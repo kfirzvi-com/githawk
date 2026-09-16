@@ -227,5 +227,28 @@ export function argsFor(action: GitAction): string[] {
 
         case 'unlockWorktree':
             return ['worktree', 'unlock', action.path];
+
+        case 'stageFiles':
+            // `--` before the paths: a file named `-p` is a file.
+            return ['add', '--', ...action.paths];
+
+        case 'unstageFiles':
+            /*
+             * `restore --staged` rather than `reset HEAD --`: same effect on
+             * the index, but it cannot be mistaken for the reset that moves
+             * a branch, and it never touches the working tree.
+             */
+            return ['restore', '--staged', '--', ...action.paths];
+
+        case 'stageAll':
+            return ['add', '--all'];
+
+        case 'commit':
+            /*
+             * The message as one argument, newlines and all — execFile hands
+             * it to git untouched. `--message` rather than `-m` so a message
+             * that begins with `-` still reads as the message in a log.
+             */
+            return ['commit', '--message', action.message];
     }
 }

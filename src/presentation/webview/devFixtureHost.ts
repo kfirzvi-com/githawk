@@ -315,10 +315,7 @@ function answerRequests(): void {
             case 'workingTree:select':
                 post({
                     type: 'comparison:loaded',
-                    comparison: fixtureComparison(
-                        'HEAD → working tree',
-                        'direct'
-                    ),
+                    comparison: fixtureWorkingTree(),
                 });
                 break;
             case 'compare:clear':
@@ -344,6 +341,60 @@ const explanations = {
     replay:
         'These commits are not contiguous, so their combined effect was reconstructed by replaying them onto their common ancestor in a temporary worktree. Your working tree was not touched.',
 } as const;
+
+/**
+ * The uncommitted changeset as the real host would send it: sectioned, with
+ * each section naming the two revisions its diff compares. The counts match
+ * the row's default `?dirty=2,1,3` so the two agree on screen.
+ */
+function fixtureWorkingTree(): ComparisonDto {
+    const groups: NonNullable<ComparisonDto['groups']> = [
+        {
+            kind: 'staged',
+            baseRev: 'HEAD',
+            targetRev: ':0',
+            files: [
+                { path: 'src/domain/models/Comparison.ts', status: 'modified', insertions: 41, deletions: 2, isBinary: false },
+                { path: 'src/infrastructure/git/GitCliComparer.ts', status: 'modified', insertions: 88, deletions: 6, isBinary: false },
+            ],
+        },
+        {
+            kind: 'unstaged',
+            baseRev: ':0',
+            files: [
+                { path: 'README.md', status: 'modified', insertions: 12, deletions: 9, isBinary: false },
+            ],
+        },
+        {
+            kind: 'untracked',
+            baseRev: 'HEAD',
+            files: [
+                { path: 'src/presentation/host/CommitController.ts', status: 'untracked', insertions: 0, deletions: 0, isBinary: false },
+                { path: 'src/presentation/host/CommitViewProvider.ts', status: 'untracked', insertions: 0, deletions: 0, isBinary: false },
+                { path: 'src/presentation/webview/components/CommitBox.svelte', status: 'untracked', insertions: 0, deletions: 0, isBinary: false },
+            ],
+        },
+    ];
+    const files = groups.flatMap((group) => group.files);
+
+    return {
+        label: 'Uncommitted changes',
+        method: 'workingTree',
+        methodExplanation:
+            'Everything not yet committed, in the groups git keeps: staged files are what a commit would record right now; changes and untracked files are not included until they are staged.',
+        files,
+        totals: {
+            files: files.length,
+            insertions: files.reduce((sum, f) => sum + f.insertions, 0),
+            deletions: files.reduce((sum, f) => sum + f.deletions, 0),
+            binaryFiles: 0,
+        },
+        baseRev: 'HEAD',
+        targetRev: undefined,
+        skipped: [],
+        groups,
+    };
+}
 
 function fixtureComparison(
     label: string,

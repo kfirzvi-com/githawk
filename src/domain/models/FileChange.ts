@@ -4,7 +4,16 @@ export type ChangeStatus =
     | 'deleted'
     | 'renamed'
     | 'copied'
-    | 'typeChanged';
+    | 'typeChanged'
+    /**
+     * A file git has never seen. Only the working tree can hold one — a
+     * commit either contains a file or does not — so this appears solely in
+     * the uncommitted changeset, and there is nothing to diff it against but
+     * an empty file.
+     */
+    | 'untracked'
+    /** An unresolved merge conflict: the repository is mid-operation. */
+    | 'conflicted';
 
 export interface FileChange {
     /** Path as of the newer side of the comparison. */

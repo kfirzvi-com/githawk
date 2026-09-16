@@ -591,3 +591,44 @@ describe('stash commands', () => {
         ).toBe(false);
     });
 });
+
+describe('staging and committing', () => {
+    test('stages named paths behind a -- terminator', () => {
+        expect(
+            argsFor({ type: 'stageFiles', paths: ['src/a.ts', '-p'] })
+        ).toEqual(['add', '--', 'src/a.ts', '-p']);
+    });
+
+    test('unstages with restore --staged, which never touches the disk', () => {
+        expect(argsFor({ type: 'unstageFiles', paths: ['a.ts'] })).toEqual([
+            'restore',
+            '--staged',
+            '--',
+            'a.ts',
+        ]);
+    });
+
+    test('stage-all is git add --all', () => {
+        expect(argsFor({ type: 'stageAll' })).toEqual(['add', '--all']);
+    });
+
+    test('commits with the message as one argument, newlines intact', () => {
+        const message = 'Subject line\n\nA body that\nspans lines.';
+        expect(argsFor({ type: 'commit', message })).toEqual([
+            'commit',
+            '--message',
+            message,
+        ]);
+    });
+
+    test('none of them is destructive: nothing is lost by any of them', () => {
+        for (const action of [
+            { type: 'stageFiles', paths: ['a'] },
+            { type: 'unstageFiles', paths: ['a'] },
+            { type: 'stageAll' },
+            { type: 'commit', message: 'x' },
+        ] satisfies GitAction[]) {
+            expect(isDestructive(action)).toBe(false);
+        }
+    });
+});

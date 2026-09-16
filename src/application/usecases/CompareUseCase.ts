@@ -25,6 +25,12 @@ export function toDto(comparison: Comparison): ComparisonDto {
         baseRev: comparison.baseRev,
         targetRev: comparison.targetRev,
         skipped: comparison.skipped ?? [],
+        groups: comparison.groups?.map((group) => ({
+            kind: group.kind,
+            files: group.files.map((file) => ({ ...file })),
+            baseRev: group.baseRev,
+            targetRev: group.targetRev,
+        })),
     };
 }
 
@@ -45,5 +51,7 @@ function explain(method: ComparisonMethod): string {
             return 'Changes introduced by this commit alone.';
         case 'replay':
             return 'These commits are not contiguous, so their combined effect was reconstructed by replaying them onto their common ancestor in a temporary worktree. Your working tree was not touched.';
+        case 'workingTree':
+            return 'Everything not yet committed, in the groups git keeps: staged files are what a commit would record right now; changes and untracked files are not included until they are staged.';
     }
 }

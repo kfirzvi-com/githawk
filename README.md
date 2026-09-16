@@ -66,20 +66,40 @@ The sidebar is surfaced the first time and then left alone — pulling focus on
 every click would make the graph unbrowsable. To ask for it deliberately, once it
 has been closed or covered, right-click a commit and choose **"Show changes in
 the sidebar"**.
-### See what you have not committed
+### See what you have not committed — and commit it
 
 ![The graph panel](media/screenshots/graph.png)
 
 A row above the newest commit, whenever there is anything uncommitted, saying
-what kind — `2 staged, 1 modified, 3 untracked`. Click it and the **Changes**
-tree fills with everything uncommitted, as one changeset against `HEAD`, and
-comes to the front. The row disappears when the tree is clean, so its presence
-is the answer to "is there anything here?".
+what kind — `2 staged, 1 modified, 3 untracked`. Click it, or arrow up onto it
+and press Enter, and the sidebar becomes the place a commit is made:
 
-Unlike a commit, clicking this row surfaces the sidebar every time. Browsing the
-graph is many clicks across many commits and the sidebar should not chase each
-one; there is only ever one of these rows, so clicking it is only ever a request
-to see the files.
+- The **Changes** tree fills with everything uncommitted, in the sections git
+  itself keeps — **Staged Changes**, **Changes**, **Untracked Files**, and
+  **Merge Conflicts** when there are any. Each file opens the diff its section
+  means: a staged file is `HEAD` against the index, an unstaged one the index
+  against the disk, an untracked one against nothing. Hover a row for **+** to
+  stage it or **−** to unstage it; the same buttons on a section or a folder
+  take everything beneath.
+- A **Commit** box appears above the tree: a message, a button that says what it
+  will do — `Commit 2 staged files`, or `Commit all changes` when nothing is
+  staged, which asks before staging everything — and <kbd>⌘</kbd>/<kbd>Ctrl</kbd>
+  <kbd>Enter</kbd> to press it. A first line over 72 characters is pointed out.
+  The draft survives clicking around the graph; the box leaves with the last
+  uncommitted file.
+- **Generate** asks an AI CLI to write the message. Pick the tool in the select
+  beside it — Claude Code, Codex, Gemini CLI and opencode are configured out of
+  the box, in `gitHawk.aiTools` — and the diff of what would be committed is
+  piped to it, once, non-interactively, through your shell; what it prints lands
+  in the box for you to edit. Nothing is committed on the strength of it. No
+  model runs inside GitHawk and nothing leaves your machine except through the
+  tool you chose, exactly as if you had run it in a terminal.
+
+The row disappears when the tree is clean, so its presence is the answer to "is
+there anything here?". Unlike a commit, clicking it surfaces the sidebar every
+time: browsing the graph is many clicks across many commits and the sidebar
+should not chase each one; there is only ever one of these rows, so clicking it
+is only ever a request to see the files.
 
 Its marker is hollow and dashed rather than a commit dot, because it is not a
 commit: nothing points at it, it has no hash, and it looks different the moment
@@ -87,10 +107,10 @@ you save a file. Nothing draws a line from it to `HEAD` either — the graph rea
 every ref, so the topmost row is often not the commit your changes sit on, and a
 line saying otherwise would be wrong more often than right.
 
-One honest gap: untracked files are counted in the row but are not in the
-changeset. `git diff HEAD` has nothing to compare a file git has never seen
-against. `GitHawk: Show Uncommitted Changes` opens the same comparison without
-the panel.
+The tree keeps up by itself: saving a file, or creating or deleting one through
+the explorer, moves it to the section it now belongs in. `GitHawk: Show
+Uncommitted Changes` opens the same view without the panel; `GitHawk: Commit`
+opens it and puts the caret in the message.
 
 ### See who wrote a line, and jump to why
 
@@ -352,7 +372,7 @@ different one, GitHawk switches to it and then shows the commit.
 | `gitHawk.blame.style` | `off` | Blame in the editor: `column` for IntelliJ's annotate, `endOfLine` for one label per block. |
 | `gitHawk.autoRefresh` | `true` | Reload the graph when the repository changes outside GitHawk. Watches git's metadata, never your working tree. |
 | `gitHawk.repositoryScanDepth` | `2` | Directory levels below each opened folder to search for repositories. `0` searches the folders only; `2` covers a folder of projects, or a folder of buckets each holding projects. |
-| `gitHawk.aiTools` | Claude Code, Codex, Gemini CLI, opencode | Commands offered by "Start an AI CLI here". |
+| `gitHawk.aiTools` | Claude Code, Codex, Gemini CLI, opencode | The AI CLIs GitHawk knows: `command` for "Start an AI CLI here", and `commitMessageCommand` — the same tool run once, non-interactively, prompt on stdin — for **Generate** in the commit box. Leave the latter out to keep a tool out of the picker. |
 
 ## Commands
 
@@ -368,7 +388,10 @@ different one, GitHawk switches to it and then shows the commit.
 | `GitHawk: Manage Worktrees` | |
 | `GitHawk: Manage Remotes` | Add, rename, re-point, remove, fetch, prune |
 | `GitHawk: Manage Stashes` | List, show, apply, pop, drop; stash the working tree |
-| `GitHawk: Show Uncommitted Changes` | Everything uncommitted, against `HEAD` |
+| `GitHawk: Show Uncommitted Changes` | Staged, changed and untracked files, with the commit box |
+| `GitHawk: Commit` | The same, with the caret in the message |
+| `GitHawk: Write The Commit Message With An AI CLI` | Generate, from the palette |
+| `GitHawk: Stage All Changes` | |
 | `GitHawk: Start An AI CLI Here` | |
 | `GitHawk: Update All Branches From Upstream` | Fast-forwards every branch that can be |
 | `GitHawk: Show Log` | GitHawk's own output, when something goes wrong |

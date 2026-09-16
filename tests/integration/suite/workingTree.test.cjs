@@ -53,7 +53,7 @@ suite('uncommitted changes', () => {
         );
 
         assert.ok(comparison, 'nothing reached the Changes view');
-        assert.match(comparison.label, /working tree/);
+        assert.match(comparison.label, /Uncommitted changes/);
         assert.ok(
             comparison.files.length > 0,
             `the sample repository is dirty, so this should not be empty: ${JSON.stringify(comparison)}`
@@ -61,14 +61,12 @@ suite('uncommitted changes', () => {
     });
 
     /**
-     * Pinned deliberately, because it is the one place the row's summary and
-     * its changeset disagree. `git diff HEAD` cannot show a file git has never
-     * seen — there is no blob to diff against — so an untracked file is counted
-     * in the row and absent from the comparison. The row says so in its
-     * tooltip; changing it means teaching the comparer to synthesise an
-     * addition, which is a bigger change than it looks.
+     * Untracked files used to be counted in the row and absent from the
+     * changeset — `git diff HEAD` has no blob for a file git has never seen.
+     * The working tree is now read in git's own sections, and the untracked
+     * one is listed from `ls-files --others`, so the row and the tree agree.
      */
-    test('untracked files are counted but not diffed', async () => {
+    test('untracked files are counted and listed', async () => {
         const scratch = join(root(), 'uncommitted-probe.txt');
         writeFileSync(scratch, 'not committed\n');
 
@@ -88,11 +86,10 @@ suite('uncommitted changes', () => {
                 'gitHawk.lastComparison'
             );
 
+            assert.equal(comparison.method, 'workingTree');
             assert.ok(
-                !comparison.files.some((f) =>
-                    f.endsWith('uncommitted-probe.txt')
-                ),
-                'the comparison now includes untracked files — update the row’s tooltip and the README, which both say it does not'
+                comparison.files.some((f) => f.endsWith('uncommitted-probe.txt')),
+                `the untracked file is missing from ${JSON.stringify(comparison.files)}`
             );
         } finally {
             rmSync(scratch, { force: true });

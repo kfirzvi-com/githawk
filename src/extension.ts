@@ -42,6 +42,17 @@ import {
     REVISION_SCHEME,
     RevisionContentProvider,
 } from './presentation/host/RevisionContentProvider';
+import { CommitController } from './presentation/host/CommitController';
+import {
+    COMMIT_VIEW_ID,
+    CommitViewProvider,
+} from './presentation/host/CommitViewProvider';
+import { ShellCommandRunner } from './infrastructure/shell/ShellCommandRunner';
+import {
+    filesBeneath,
+    type FileNode,
+    type TreeNode,
+} from './presentation/host/changedFilesTreeModel';
 
 export { CONFIG_SECTION } from './presentation/host/config';
 
@@ -52,6 +63,13 @@ export { CONFIG_SECTION } from './presentation/host/config';
  */
 const BLAME_REDRAW_MS = 600;
 const BLAME_REDRAW_MAX_MS = 4_000;
+
+/**
+ * A save is one keystroke; a "save all" is a burst. One re-read of the
+ * working tree per burst is plenty, and the tree it feeds is on screen, so it
+ * should not lag a whole second behind either.
+ */
+const WORKING_TREE_REFRESH_MS = 300;
 
 /**
  * Set once at activation. The adapter factories are module-level so they can be
@@ -148,11 +166,105 @@ export async function activate(
         createWorkingTreeReader
     );
 
+    /*
+     * The commit side of the Changes view. The shell is the user's default,
+     * which is what "runs like the terminal" has to mean for a command they
+     * typed into settings — see ShellCommandRunner for why this one spawn is
+     * a shell when every git call is not.
+     */
+    const commits = new CommitController({
+        createWriter: createGitWriter,
+        createWorkingTreeReader,
+        commandRunner: new ShellCommandRunner(vscode.env.shell || undefined),
+        repositoryRoot: activeRepositoryRoot,
+        onCompleted: () => provider.refresh(),
+    });
+    const commitView = new CommitViewProvider(
+        context.extensionUri,
+        context.globalState,
+        commits
+    );
+
+    const refreshWorkingTree = new Debouncer(
+        () => void provider.refreshWorkingTree(),
+        WORKING_TREE_REFRESH_MS,
+        WORKING_TREE_REFRESH_MS * 4
+    );
+    context.subscriptions.push({ dispose: () => refreshWorkingTree.cancel() });
+
+    /** A file event under the active repository is a change to its working tree. */
+    const touchesActiveRepository = (uris: readonly vscode.Uri[]) => {
+        const root = repositories.active?.root;
+        return (
+            root !== undefined &&
+            uris.some(
+                (uri) =>
+                    uri.scheme === 'file' &&
+                    repositories.containing(uri.fsPath)?.root === root
+            )
+        );
+    };
+
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(GITHAWK_VIEW_ID, provider, {
             // Keep the graph alive while the panel is hidden; rebuilding it on
             // every tab switch is the difference between instant and sluggish.
             webviewOptions: { retainContextWhenHidden: true },
+        }),
+        vscode.window.registerWebviewViewProvider(COMMIT_VIEW_ID, commitView, {
+            webviewOptions: { retainContextWhenHidden: true },
+        }),
+        // The counts the graph's row shows are the counts the box commits.
+        provider.onDidReadWorkingTree((status) => commitView.setStatus(status)),
+        /*
+         * Stage, unstage, and commit, from the rows of the Changes tree. A
+         * directory or a section stages everything beneath it, which is what
+         * clicking the + on a folder has to mean.
+         */
+        vscode.commands.registerCommand('gitHawk.stage', (node?: TreeNode) =>
+            commits.stage(pathsBeneath(node))
+        ),
+        vscode.commands.registerCommand('gitHawk.unstage', (node?: TreeNode) =>
+            commits.unstage(pathsBeneath(node))
+        ),
+        vscode.commands.registerCommand('gitHawk.stageAll', () =>
+            commits.stageAll()
+        ),
+        // The box, brought to the front with the working tree in the tree
+        // above it — reachable from the palette and a keybinding.
+        vscode.commands.registerCommand('gitHawk.commit', async () => {
+            await provider.compareWorkingTree('focus');
+            await commitView.focus();
+        }),
+        vscode.commands.registerCommand(
+            'gitHawk.generateCommitMessage',
+            async () => {
+                await provider.compareWorkingTree('focus');
+                await commitView.generateFromCommand();
+            }
+        ),
+        // A save changes what is uncommitted; so does creating, deleting or
+        // renaming a file through the explorer. The graph's watcher deliberately
+        // ignores the working tree, so this is where it is kept current.
+        vscode.workspace.onDidSaveTextDocument((document) => {
+            if (touchesActiveRepository([document.uri])) {
+                refreshWorkingTree.schedule();
+            }
+        }),
+        vscode.workspace.onDidCreateFiles((event) => {
+            if (touchesActiveRepository(event.files)) {
+                refreshWorkingTree.schedule();
+            }
+        }),
+        vscode.workspace.onDidDeleteFiles((event) => {
+            if (touchesActiveRepository(event.files)) {
+                refreshWorkingTree.schedule();
+            }
+        }),
+        vscode.workspace.onDidRenameFiles((event) => {
+            if (touchesActiveRepository(event.files.map((file) => file.newUri))) {
+                refreshWorkingTree.schedule();
+            }
         }),
         vscode.commands.registerCommand('gitHawk.open', () =>
             vscode.commands.executeCommand(
@@ -241,18 +353,23 @@ export async function activate(
             })),
             activeRoot: repositories.active?.root,
         })),
-        // Clicking a file in the Changes tree opens the native diff editor.
-        vscode.commands.registerCommand(OPEN_DIFF_COMMAND, (change) => {
-            const comparison = changedFiles.current;
-            if (!comparison || !change) {
+        /*
+         * Clicking a file in the Changes tree opens the native diff editor.
+         * The row carries its own two revisions: in the working tree a staged
+         * file is HEAD against the index and an unstaged one the index
+         * against the disk, and a single pair for the whole tree would open
+         * the wrong diff for one of them.
+         */
+        vscode.commands.registerCommand(OPEN_DIFF_COMMAND, (node?: FileNode) => {
+            if (!changedFiles.current || !node) {
                 return;
             }
             void comparisons
                 .openFile({
-                    path: change.path,
-                    previousPath: change.previousPath,
-                    baseRev: comparison.baseRev,
-                    targetRev: comparison.targetRev,
+                    path: node.change.path,
+                    previousPath: node.change.previousPath,
+                    baseRev: node.baseRev,
+                    targetRev: node.targetRev,
                 })
                 .catch((error: unknown) =>
                     vscode.window.showErrorMessage(
@@ -381,6 +498,21 @@ export async function activate(
         ),
         vscode.commands.registerCommand('gitHawk.updateAllBranches', () =>
             updateAllBranches(provider)
+        ),
+        /*
+         * The Changes tree's own rows, as built for the view — sections,
+         * folders, files, each file with the revisions its diff opens. The
+         * integration tests stage and unstage through these rows rather than
+         * through ones they built themselves, for the reason CLAUDE.md gives.
+         */
+        vscode.commands.registerCommand('gitHawk.changesTree', () =>
+            changedFiles.rootsForTesting()
+        ),
+        // The commit itself, without the box: the same controller the box
+        // drives, so what the tests commit is what the button commits.
+        vscode.commands.registerCommand(
+            'gitHawk.commitForTesting',
+            (message: string) => commits.commit(message)
         ),
         // Returns the comparison currently in the Changes view. Lets the
         // integration tests assert on real state instead of scraping logs.
@@ -591,6 +723,14 @@ async function updateAllBranches(
             log.show();
         }
     });
+}
+
+/** The files a tree row stands for: itself, or everything beneath a folder or section. */
+function pathsBeneath(node: TreeNode | undefined): string[] {
+    if (!node) {
+        return [];
+    }
+    return filesBeneath(node).map((file) => file.change.path);
 }
 
 export function deactivate(): void {

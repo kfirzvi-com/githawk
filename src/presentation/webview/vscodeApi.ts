@@ -1,10 +1,10 @@
 import type {
-    HostToWebviewMessage,
-    WebviewToHostMessage,
+    AnyHostToWebviewMessage,
+    AnyWebviewToHostMessage,
 } from '../../application/dto/messages';
 
 export interface VsCodeApi {
-    postMessage(message: WebviewToHostMessage): void;
+    postMessage(message: AnyWebviewToHostMessage): void;
     getState(): unknown;
     setState(state: unknown): void;
 }
@@ -60,7 +60,7 @@ const api: VsCodeApi = isHostedInVsCode
  * bug rather than each call site, and every message type is JSON-shaped by
  * design, so a JSON round trip is a faithful copy.
  */
-export function postToHost(message: WebviewToHostMessage): void {
+export function postToHost(message: AnyWebviewToHostMessage): void {
     api.postMessage(toPlainObject(message));
 }
 
@@ -101,9 +101,9 @@ export function writeWebviewState(key: string, value: unknown): void {
 
 /** Subscribes to host messages. Returns an unsubscribe function. */
 export function onHostMessage(
-    handler: (message: HostToWebviewMessage) => void
+    handler: (message: AnyHostToWebviewMessage) => void
 ): () => void {
-    const listener = (event: MessageEvent<HostToWebviewMessage>) =>
+    const listener = (event: MessageEvent<AnyHostToWebviewMessage>) =>
         handler(event.data);
 
     window.addEventListener('message', listener);

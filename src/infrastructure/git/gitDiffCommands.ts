@@ -7,12 +7,62 @@
 /** Common flags: NUL-delimited, rename detection on, no pager, no colour. */
 const SHARED = ['--find-renames', '--no-color', '-z'] as const;
 
-export function nameStatusArgs(revisions: string[]): string[] {
-    return ['diff', ...SHARED, '--name-status', ...revisions, '--'];
+export interface DiffOptions {
+    /**
+     * The index against the given revision (HEAD when none), rather than the
+     * working tree — what `git commit` would record right now.
+     */
+    cached?: boolean;
 }
 
-export function numstatArgs(revisions: string[]): string[] {
-    return ['diff', ...SHARED, '--numstat', ...revisions, '--'];
+export function nameStatusArgs(
+    revisions: string[],
+    options: DiffOptions = {}
+): string[] {
+    return [
+        'diff',
+        ...SHARED,
+        ...(options.cached ? ['--cached'] : []),
+        '--name-status',
+        ...revisions,
+        '--',
+    ];
+}
+
+export function numstatArgs(
+    revisions: string[],
+    options: DiffOptions = {}
+): string[] {
+    return [
+        'diff',
+        ...SHARED,
+        ...(options.cached ? ['--cached'] : []),
+        '--numstat',
+        ...revisions,
+        '--',
+    ];
+}
+
+/**
+ * Files git does not track and is not told to ignore. `--exclude-standard`
+ * honours .gitignore, the repository's info/exclude and the global excludes,
+ * which is the same rule `git status` applies — without it every build
+ * artefact in the tree would be offered for commit.
+ */
+export function untrackedFilesArgs(): string[] {
+    return ['ls-files', '--others', '--exclude-standard', '-z'];
+}
+
+/**
+ * A unified diff as text, for reading rather than parsing. `staged` is what a
+ * commit would record; `all` is every tracked change against HEAD, staged or
+ * not. Untracked files are in neither — git has no blob to diff them against
+ * — so a caller that wants them has to read them itself.
+ */
+export function patchArgs(scope: 'staged' | 'all'): string[] {
+    return scope === 'staged'
+        ? ['diff', '--no-color', '--cached', '--']
+        : ['diff', '--no-color', 'HEAD', '--'];
 }
 
 /**

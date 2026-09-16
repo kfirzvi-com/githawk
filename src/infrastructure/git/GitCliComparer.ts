@@ -1,16 +1,21 @@
 import {
+    ChangeGroup,
     Comparison,
     ComparisonSpec,
+    INDEX_REVISION,
+    changeGroupOrder,
 } from '../../domain/models/Comparison';
-import { bySizeDescending } from '../../domain/models/FileChange';
+import { FileChange, bySizeDescending } from '../../domain/models/FileChange';
 import { IComparisonReader } from '../../domain/repositories/IComparisonReader';
 import { GitDiffParser } from './GitDiffParser';
 import {
+    DiffOptions,
     mergeBaseArgs,
     nameStatusArgs,
     numstatArgs,
     revParseArgs,
     showFileArgs,
+    untrackedFilesArgs,
 } from './gitDiffCommands';
 import { ExecFileGitRunner, GitRunner } from './GitRunner';
 import { GitWorktreeReplay } from './GitWorktreeReplay';
@@ -37,7 +42,104 @@ export class GitCliComparer implements IComparisonReader {
                 return this.compareRange(spec);
             case 'commitSet':
                 return this.compareSet(spec);
+            case 'workingTree':
+                return this.compareWorkingTree(spec);
         }
+    }
+
+    /**
+     * The uncommitted changeset in git's own groups.
+     *
+     * Three questions, each its own diff: HEAD against the index is what a
+     * commit would record, the index against the disk is what it would leave
+     * behind, and `ls-files --others` is what git has never seen. A file can
+     * be in two of them at once — staged, then edited again — and is listed
+     * in both, because it genuinely is two changes.
+     *
+     * Conflicts come out of the second diff as `U` and are pulled into a
+     * group of their own: they block the commit, so they go first.
+     */
+    private async compareWorkingTree(
+        spec: Extract<ComparisonSpec, { kind: 'workingTree' }>
+    ): Promise<Comparison> {
+        const [stagedAndConflicted, unstagedAndConflicted, untrackedList] =
+            await Promise.all([
+                this.readChanges([], this.cwd, { cached: true }),
+                this.readChanges([]),
+                this.runner.run(untrackedFilesArgs(), this.cwd),
+            ]);
+
+        /*
+         * Git reports an unmerged path from both diffs, and from the working
+         * tree one twice — once as `U` and once as `M` against whichever
+         * stage it picked. The path is what identifies the conflict; every
+         * mention of it is pulled out of the other two sections, and it is
+         * listed once, in its own.
+         */
+        const conflictedPaths = new Set(
+            [...stagedAndConflicted, ...unstagedAndConflicted]
+                .filter((file) => file.status === 'conflicted')
+                .map((file) => file.path)
+        );
+        const conflicted = [...conflictedPaths].sort().map<FileChange>((path) => ({
+            path,
+            status: 'conflicted',
+            insertions: 0,
+            deletions: 0,
+            isBinary: false,
+        }));
+        const staged = stagedAndConflicted.filter(
+            (file) => !conflictedPaths.has(file.path)
+        );
+        const unstaged = unstagedAndConflicted.filter(
+            (file) => !conflictedPaths.has(file.path)
+        );
+        const untracked: FileChange[] = untrackedList
+            .split('\0')
+            .filter((path) => path.length > 0)
+            .sort()
+            .map((path) => ({
+                path,
+                status: 'untracked',
+                // No blob to count against. Zero would claim an empty file;
+                // the tree shows the status word instead when both are zero.
+                insertions: 0,
+                deletions: 0,
+                isBinary: false,
+            }));
+
+        const byKind: Record<ChangeGroup['kind'], ChangeGroup> = {
+            // HEAD on the left, the disk on the right: the merge result as
+            // the reader is building it.
+            conflicted: { kind: 'conflicted', files: conflicted, baseRev: 'HEAD' },
+            staged: {
+                kind: 'staged',
+                files: staged,
+                baseRev: 'HEAD',
+                targetRev: INDEX_REVISION,
+            },
+            unstaged: {
+                kind: 'unstaged',
+                files: unstaged,
+                baseRev: INDEX_REVISION,
+            },
+            // HEAD has no such file, so the left side reads as empty — which
+            // is the diff of a new file.
+            untracked: { kind: 'untracked', files: untracked, baseRev: 'HEAD' },
+        };
+        const groups = changeGroupOrder
+            .map((kind) => byKind[kind])
+            .filter((group) => group.files.length > 0);
+
+        return {
+            spec,
+            method: 'workingTree',
+            label: 'Uncommitted changes',
+            files: groups.flatMap((group) => group.files),
+            baseRev: 'HEAD',
+            targetRev: undefined,
+            groups,
+        };
     }
 
     async fileContentAt(rev: string, path: string): Promise<string> {
@@ -184,10 +286,14 @@ export class GitCliComparer implements IComparisonReader {
         }
     }
 
-    private async readChanges(revisions: string[], cwd = this.cwd) {
+    private async readChanges(
+        revisions: string[],
+        cwd = this.cwd,
+        options: DiffOptions = {}
+    ) {
         const [nameStatus, numstat] = await Promise.all([
-            this.runner.run(nameStatusArgs(revisions), cwd),
-            this.runner.run(numstatArgs(revisions), cwd),
+            this.runner.run(nameStatusArgs(revisions, options), cwd),
+            this.runner.run(numstatArgs(revisions, options), cwd),
         ]);
 
         return GitDiffParser.parse(nameStatus, numstat).sort(bySizeDescending);

@@ -93,6 +93,13 @@ export interface AiTool {
     name: string;
     /** Typed into the terminal verbatim. */
     command: string;
+    /**
+     * The same tool run once, non-interactively, to write a commit message:
+     * the prompt and diff arrive on stdin, the message is whatever it prints.
+     * Absent for a tool that has no such mode, which keeps it out of the
+     * commit box's picker without keeping it out of the terminal.
+     */
+    commitMessageCommand?: string;
 }
 
 /**
@@ -101,12 +108,18 @@ export interface AiTool {
  * A setting rather than a fixed list because the binary is what varies: people
  * alias these, install them per-project, or run them through `npx`. The names
  * are the tools' own.
+ *
+ * Each one's non-interactive form is the one its own documentation gives for
+ * piping a prompt in: `claude -p` prints and exits, `codex exec -` reads the
+ * prompt from stdin, and `gemini` and `opencode run` do so when stdin is not
+ * a terminal. Only Claude Code is exercised here; the rest are the documented
+ * shapes, and the setting exists for the day one of them changes.
  */
 export const DEFAULT_AI_TOOLS: AiTool[] = [
-    { name: 'Claude Code', command: 'claude' },
-    { name: 'Codex', command: 'codex' },
-    { name: 'Gemini CLI', command: 'gemini' },
-    { name: 'opencode', command: 'opencode' },
+    { name: 'Claude Code', command: 'claude', commitMessageCommand: 'claude -p' },
+    { name: 'Codex', command: 'codex', commitMessageCommand: 'codex exec -' },
+    { name: 'Gemini CLI', command: 'gemini', commitMessageCommand: 'gemini' },
+    { name: 'opencode', command: 'opencode', commitMessageCommand: 'opencode run' },
 ];
 
 export const AI_TOOLS_SETTING = 'aiTools';
@@ -122,8 +135,19 @@ export function aiTools(): AiTool[] {
 
     // Hand-edited settings are untrusted input: a malformed entry should cost
     // that entry, not the whole feature.
-    const valid = configured.filter(isAiTool);
+    const valid = configured.filter(isAiTool).map(normaliseAiTool);
     return valid.length > 0 ? valid : DEFAULT_AI_TOOLS;
+}
+
+/** The tools that can write a commit message, in the order the setting lists them. */
+export function commitMessageTools(): (AiTool & {
+    commitMessageCommand: string;
+})[] {
+    return aiTools().filter(
+        (tool): tool is AiTool & { commitMessageCommand: string } =>
+            typeof tool.commitMessageCommand === 'string' &&
+            tool.commitMessageCommand.trim().length > 0
+    );
 }
 
 function isAiTool(value: unknown): value is AiTool {
@@ -137,6 +161,17 @@ function isAiTool(value: unknown): value is AiTool {
         typeof candidate.command === 'string' &&
         candidate.command.trim().length > 0
     );
+}
+
+/** A blank or non-string generate command means "none", not "run nothing". */
+function normaliseAiTool(tool: AiTool): AiTool {
+    const generate =
+        typeof tool.commitMessageCommand === 'string'
+            ? tool.commitMessageCommand.trim()
+            : '';
+    return generate.length > 0
+        ? { name: tool.name, command: tool.command, commitMessageCommand: generate }
+        : { name: tool.name, command: tool.command };
 }
 
 export function repositoryScanDepth(): number {

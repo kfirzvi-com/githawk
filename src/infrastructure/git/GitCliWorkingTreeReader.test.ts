@@ -119,3 +119,71 @@ describe('GitCliWorkingTreeReader', () => {
         expect(status.untracked).toBeGreaterThan(0);
     });
 });
+
+describe('GitCliWorkingTreeReader.patch', () => {
+    let repo: TemporaryRepository | undefined;
+
+    afterEach(() => {
+        repo?.dispose();
+        repo = undefined;
+    });
+
+    const write = (name: string, content: string | Buffer) => {
+        writeFileSync(join(repo!.path, name), content);
+    };
+
+    it('the staged scope is exactly what a commit would record', async () => {
+        repo = TemporaryRepository.create();
+        write('a.txt', 'one\n');
+        repo.git(['add', 'a.txt']);
+        repo.git(['commit', '-m', 'a']);
+        write('a.txt', 'two\n');
+        repo.git(['add', 'a.txt']);
+        write('a.txt', 'three\n');
+        write('loose.txt', 'not staged\n');
+
+        const patch = await new GitCliWorkingTreeReader(repo.path).patch('staged');
+
+        expect(patch).toContain('+two');
+        expect(patch).not.toContain('+three');
+        expect(patch).not.toContain('loose.txt');
+    });
+
+    it('the whole scope includes untracked files as new-file diffs', async () => {
+        repo = TemporaryRepository.create();
+        repo.commit('first');
+        write('tracked.txt', 'x\n');
+        repo.git(['add', 'tracked.txt']);
+        repo.git(['commit', '-m', 'tracked']);
+        write('tracked.txt', 'y\n');
+        mkdirSync(join(repo.path, 'dir'));
+        write('dir/new.txt', 'line one\nline two\n');
+
+        const patch = await new GitCliWorkingTreeReader(repo.path).patch('all');
+
+        expect(patch).toContain('-x\n+y');
+        expect(patch).toContain('diff --git a/dir/new.txt b/dir/new.txt');
+        expect(patch).toContain('new file mode');
+        expect(patch).toContain('@@ -0,0 +1,2 @@\n+line one\n+line two');
+    });
+
+    it('names a binary or oversized untracked file without quoting it', async () => {
+        repo = TemporaryRepository.create();
+        repo.commit('first');
+        write('blob.bin', Buffer.from([0, 1, 2, 3, 0, 255]));
+        write('huge.txt', 'x'.repeat(70 * 1024));
+
+        const patch = await new GitCliWorkingTreeReader(repo.path).patch('all');
+
+        expect(patch).toContain('b/blob.bin\nBinary file');
+        expect(patch).toMatch(/b\/huge\.txt\n\(\d+ bytes, not shown\)/);
+        expect(patch).not.toContain('xxxxxxxxxx');
+    });
+
+    it('is empty for a clean tree', async () => {
+        repo = TemporaryRepository.create();
+        repo.commit('first');
+
+        expect(await new GitCliWorkingTreeReader(repo.path).patch('all')).toBe('');
+    });
+});

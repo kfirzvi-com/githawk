@@ -3,6 +3,50 @@
 All notable changes to GitHawk are documented here, following
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- **Commit from the Changes view.** The uncommitted-changes row now fills the
+  sidebar with the working tree in git's own sections — **Staged Changes**,
+  **Changes**, **Untracked Files**, and **Merge Conflicts** when there are any —
+  and puts a **Commit** box above them. Hover a row for **+** and **−** to stage
+  and unstage; on a section or a folder they take everything beneath. Each row
+  opens the diff its section means: `HEAD` against the index for a staged file,
+  the index against the disk for an unstaged one.
+
+  The button says what it will do — `Commit 2 staged files`, or `Commit all
+  changes` when nothing is staged, which asks before staging everything.
+  <kbd>⌘</kbd>/<kbd>Ctrl</kbd> <kbd>Enter</kbd> presses it. The draft survives
+  clicking around the graph, and the box leaves with the last uncommitted file.
+
+- **Generate the message with an AI CLI.** A select beside the box names the
+  tools from `gitHawk.aiTools` that have a `commitMessageCommand` — Claude Code,
+  Codex, Gemini CLI and opencode out of the box — and **Generate** pipes the
+  diff of what would be committed to the chosen one, once, non-interactively,
+  through your shell. What it prints lands in the box for you to edit; nothing
+  is committed on the strength of it, and nothing runs inside GitHawk.
+
+- **Untracked files are in the changeset.** They were counted in the row and
+  absent from the tree, because `git diff HEAD` has no blob for a file git has
+  never seen. The working tree is now read in sections, and the untracked one
+  comes from `ls-files --others`, so the row and the tree finally agree.
+
+- **The tree keeps up with the working tree.** Saving a file, or creating,
+  deleting or renaming one through the explorer, moves it to the section it now
+  belongs in, without pressing Refresh. The graph's watcher still ignores the
+  working tree on purpose; this is a cheaper read of just the uncommitted side.
+
+- Commands: `GitHawk: Commit`, `GitHawk: Stage All Changes`, and `GitHawk:
+  Write The Commit Message With An AI CLI`. The Changes view's title bar gained
+  a button for the uncommitted changes.
+
+### Fixed
+
+- **The arrows reach the uncommitted-changes row.** <kbd>↑</kbd> on the newest
+  commit stopped dead with the row visibly above it. It is a row now: Up lands
+  on it, Home jumps to it, Enter is its click, and Down comes back to the graph.
+
 ## [0.6.0] — 2026-09-13
 
 The release that makes the mouse optional. Hold Shift and the panel tells you

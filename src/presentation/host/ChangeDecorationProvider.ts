@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { FileChangeDto } from '../../application/dto/ComparisonDto';
+import type { ChangeGroupKind } from '../../domain/models/Comparison';
 
 /**
  * A dedicated scheme for changed-file rows in the tree.
@@ -11,12 +12,26 @@ import { FileChangeDto } from '../../application/dto/ComparisonDto';
  */
 export const CHANGE_SCHEME = 'githawk-change';
 
-export function changeUri(path: string): vscode.Uri {
-    return vscode.Uri.from({ scheme: CHANGE_SCHEME, path: `/${path}` });
+/**
+ * The group rides in the query. A file that is both staged and edited again
+ * is two rows with one path, and each has to be badged for its own state —
+ * keyed on the path alone, the second would repaint the first.
+ */
+export function changeUri(path: string, group?: ChangeGroupKind): vscode.Uri {
+    return vscode.Uri.from({
+        scheme: CHANGE_SCHEME,
+        path: `/${path}`,
+        query: group ?? '',
+    });
 }
 
-function pathOf(uri: vscode.Uri): string {
-    return uri.path.replace(/^\//, '');
+function keyOf(uri: vscode.Uri): string {
+    return `${uri.query}:${uri.path.replace(/^\//, '')}`;
+}
+
+export interface DecoratedChange {
+    change: FileChangeDto;
+    group?: ChangeGroupKind;
 }
 
 /**
@@ -32,15 +47,26 @@ export class ChangeDecorationProvider
     private readonly changed = new vscode.EventEmitter<vscode.Uri[] | undefined>();
     readonly onDidChangeFileDecorations = this.changed.event;
 
-    private byPath = new Map<string, FileChangeDto>();
+    private byKey = new Map<string, FileChangeDto>();
 
-    setChanges(changes: FileChangeDto[]): void {
-        const affected = [
-            ...[...this.byPath.keys()].map(changeUri),
-            ...changes.map((change) => changeUri(change.path)),
-        ];
+    setChanges(changes: DecoratedChange[]): void {
+        const next = new Map(
+            changes.map(({ change, group }) => [
+                keyOf(changeUri(change.path, group)),
+                change,
+            ])
+        );
+        const affected = [...this.byKey.keys(), ...next.keys()].map((key) => {
+            const separator = key.indexOf(':');
+            return changeUri(
+                key.slice(separator + 1),
+                (key.slice(0, separator) || undefined) as
+                    | ChangeGroupKind
+                    | undefined
+            );
+        });
 
-        this.byPath = new Map(changes.map((change) => [change.path, change]));
+        this.byKey = next;
         this.changed.fire(affected);
     }
 
@@ -53,7 +79,7 @@ export class ChangeDecorationProvider
             return undefined;
         }
 
-        const change = this.byPath.get(pathOf(uri));
+        const change = this.byKey.get(keyOf(uri));
         if (!change) {
             return undefined;
         }
@@ -68,6 +94,7 @@ export class ChangeDecorationProvider
     }
 }
 
+/** The same letters the Source Control view uses, so nothing has to be learned twice. */
 function badgeFor(change: FileChangeDto): string {
     switch (change.status) {
         case 'added':
@@ -80,6 +107,10 @@ function badgeFor(change: FileChangeDto): string {
             return 'C';
         case 'typeChanged':
             return 'T';
+        case 'untracked':
+            return 'U';
+        case 'conflicted':
+            return '!';
         default:
             return 'M';
     }
@@ -99,6 +130,14 @@ function colourFor(change: FileChangeDto): vscode.ThemeColor {
             return new vscode.ThemeColor(
                 'gitDecoration.renamedResourceForeground'
             );
+        case 'untracked':
+            return new vscode.ThemeColor(
+                'gitDecoration.untrackedResourceForeground'
+            );
+        case 'conflicted':
+            return new vscode.ThemeColor(
+                'gitDecoration.conflictingResourceForeground'
+            );
         default:
             return new vscode.ThemeColor(
                 'gitDecoration.modifiedResourceForeground'
@@ -114,6 +153,8 @@ function tooltipFor(change: FileChangeDto): string {
         copied: 'Copied',
         typeChanged: 'Type changed',
         modified: 'Modified',
+        untracked: 'Untracked',
+        conflicted: 'Conflicted',
     };
     return words[change.status];
 }

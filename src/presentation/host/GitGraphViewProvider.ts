@@ -53,9 +53,10 @@ export type WorkingTreeReaderFactory = () => IWorkingTreeReader;
 /**
  * `focus` puts the Changes view in front, for an action the user explicitly asked
  * for. `ifUnseen` only does so the first time, which is enough to make the view
- * discoverable without hijacking every click.
+ * discoverable without hijacking every click. `none` is for a refresh of what
+ * is already there: the tree is brought up to date and nothing moves.
  */
-type RevealMode = 'focus' | 'ifUnseen';
+type RevealMode = 'focus' | 'ifUnseen' | 'none';
 
 export class GitGraphViewProvider implements vscode.WebviewViewProvider {
     private view?: vscode.WebviewView;
@@ -77,6 +78,13 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
      */
     private lastSentGraph?: { head?: string; commits: number };
     private graphsSent = 0;
+    /**
+     * Who else wants the working-tree counts. The commit box shows what a
+     * commit would contain, and it lives in a different view with a different
+     * provider — so the status is read once here and announced.
+     */
+    private readonly workingTreeRead = new vscode.EventEmitter<WorkingTreeStatus>();
+    readonly onDidReadWorkingTree = this.workingTreeRead.event;
 
     constructor(
         private readonly extensionUri: vscode.Uri,
@@ -125,7 +133,29 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
             this.sendRepositories();
             void this.sendGraph();
             void this.sendWorktrees();
-            void this.sendWorkingTree();
+        }
+        // Outside the view guard, like the tree it feeds: the sidebar is
+        // visible whether or not the graph panel is open.
+        void this.refreshWorkingTree();
+    }
+
+    /**
+     * Only the uncommitted side of things: the row's counts, the commit box,
+     * and — when the Changes tree is showing the working tree — the tree
+     * itself, so a file staged or saved shows up where it now belongs without
+     * the sidebar being asked for again.
+     *
+     * Cheaper than a full refresh, which is why a document save can afford to
+     * call it: two diffs and a status, no log.
+     */
+    async refreshWorkingTree(): Promise<void> {
+        if (this.view) {
+            await this.sendWorkingTree();
+        } else {
+            await this.readWorkingTree();
+        }
+        if (this.changedFiles.showsWorkingTree) {
+            await this.compareWorkingTree('none');
         }
     }
 
@@ -220,18 +250,23 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
      * as clean, so the row goes away as readily as it appears.
      */
     private async sendWorkingTree(): Promise<void> {
+        this.post({
+            type: 'workingTree:loaded',
+            status: await this.readWorkingTree(),
+        });
+    }
+
+    /** The status, announced to whoever listens; clean when it cannot be read. */
+    private async readWorkingTree(): Promise<WorkingTreeStatus> {
+        let status: WorkingTreeStatus;
         try {
-            this.post({
-                type: 'workingTree:loaded',
-                status: await this.createWorkingTreeReader().read(),
-            });
+            status = await this.createWorkingTreeReader().read();
         } catch (error) {
             log.warn(`could not read the working tree: ${describeError(error)}`);
-            this.post({
-                type: 'workingTree:loaded',
-                status: cleanWorkingTree,
-            });
+            status = cleanWorkingTree;
         }
+        this.workingTreeRead.fire(status);
+        return status;
     }
 
     private handleMessage(message: WebviewToHostMessage): void {
@@ -412,20 +447,13 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
     }
 
     /**
-     * Everything uncommitted, as one changeset. Backs both the row above the
-     * graph and the command, so a keybinding reaches it without the panel being
-     * open.
+     * Everything uncommitted, in git's own groups — staged, changed, untracked,
+     * conflicted — so the tree is the place a commit is put together. Backs
+     * both the row above the graph and the command, so a keybinding reaches it
+     * without the panel being open.
      */
     async compareWorkingTree(reveal: RevealMode = 'focus'): Promise<void> {
-        await this.runComparison(
-            {
-                kind: 'twoRefs',
-                left: 'HEAD',
-                right: 'WORKTREE',
-                rightIsWorkingTree: true,
-            },
-            reveal
-        );
+        await this.runComparison({ kind: 'workingTree' }, reveal);
     }
 
     /**
@@ -505,23 +533,50 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
     ): Promise<void> {
         log.info(`comparing: ${JSON.stringify(spec)}`);
         try {
-            const comparison = await this.comparisons.compare(spec);
+            const comparison = await this.comparisons.compare(spec, {
+                quiet: reveal === 'none',
+            });
             log.info(
                 `compared "${comparison.label}" (${comparison.method}): ${comparison.files.length} files, ${comparison.skipped.length} skipped`
             );
+
+            /*
+             * A clean working tree is not an empty changeset to display: the
+             * last file was just committed, and a tree titled "Uncommitted
+             * changes" with nothing in it — and a commit box above it — would
+             * be describing something that no longer exists.
+             */
+            if (comparison.groups && comparison.groups.length === 0) {
+                this.changedFiles.clear();
+                this.post({ type: 'comparison:cleared' });
+                if (reveal === 'focus') {
+                    vscode.window.setStatusBarMessage(
+                        'GitHawk: nothing to commit — the working tree is clean',
+                        4000
+                    );
+                }
+                return;
+            }
+
             this.changedFiles.show(comparison);
 
             // The webview needs telling too: without this the tree fills but the
             // graph panel shows nothing, so an action looks like it did nothing.
             this.post({ type: 'comparison:loaded', comparison });
 
-            if (reveal === 'focus' || !this.hasRevealedChanges) {
+            if (reveal === 'focus' || (reveal === 'ifUnseen' && !this.hasRevealedChanges)) {
                 await this.revealChangedFiles();
             }
         } catch (error) {
             log.error('comparison failed', error);
             this.changedFiles.clear();
             this.post({ type: 'comparison:cleared' });
+            if (reveal === 'none') {
+                // A background refresh that fails is the log's business, not a
+                // dialog's: a repository mid-rebase would otherwise raise one
+                // on every save.
+                return;
+            }
             vscode.window.showErrorMessage(
                 `GitHawk could not compare: ${describeError(error)}`,
                 'Show log'

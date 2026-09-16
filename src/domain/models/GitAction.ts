@@ -97,7 +97,26 @@ export type GitAction =
     | { type: 'pruneWorktrees' }
     /** Stops prune from discarding a worktree that is temporarily unreachable. */
     | { type: 'lockWorktree'; path: string; reason?: string }
-    | { type: 'unlockWorktree'; path: string };
+    | { type: 'unlockWorktree'; path: string }
+    /**
+     * Adds these paths to the index. An untracked file becomes tracked; a
+     * deleted one is recorded as deleted. Paths come from git's own listing,
+     * never typed, and are terminated with `--` so none can read as a flag.
+     */
+    | { type: 'stageFiles'; paths: string[] }
+    /**
+     * Takes these paths out of the index, leaving the files on disk exactly
+     * as they are. Not destructive: nothing is lost, only un-chosen.
+     */
+    | { type: 'unstageFiles'; paths: string[] }
+    /** Stages every change, untracked files included — `git add --all`. */
+    | { type: 'stageAll' }
+    /**
+     * Commits whatever is staged, with this message. Nothing is staged on the
+     * way: a commit that quietly added files would commit work the reader
+     * had deliberately left out.
+     */
+    | { type: 'commit'; message: string };
 
 export type GitActionType = GitAction['type'];
 

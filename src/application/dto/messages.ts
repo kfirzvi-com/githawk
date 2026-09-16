@@ -76,3 +76,53 @@ export type WebviewToHostMessage =
     | { type: 'worktree:menu'; path?: string }
     /** Opens the stash manager, or one entry's actions when given its ref. */
     | { type: 'stash:menu'; ref?: string };
+
+/**
+ * The commit box's half of the protocol. A separate pair of unions from the
+ * graph's, because the two views are separate webviews with nothing in common
+ * but the channel — a message meant for one arriving at the other should be a
+ * type error, not a silently ignored case.
+ */
+export type HostToCommitViewMessage =
+    /**
+     * Everything the box shows. Sent whole on every change rather than as
+     * deltas: the box is small, and a view that is rebuilt whenever the
+     * sidebar hides it has to be able to draw itself from one message.
+     */
+    | {
+          type: 'commit:state';
+          status: WorkingTreeStatus;
+          /** Names of the tools that can write a message, in setting order. */
+          tools: string[];
+          /** The last tool used, when it is still configured. */
+          selectedTool: string | null;
+          /** The reader's unsent message, kept by the host across rebuilds. */
+          draft: string;
+          /** A generation or a commit is in flight; the controls wait. */
+          busy: boolean;
+      }
+    /** A tool wrote this; the box replaces the draft with it. */
+    | { type: 'commit:generated'; message: string }
+    /** The commit landed; the box empties. */
+    | { type: 'commit:committed' };
+
+export type CommitViewToHostMessage =
+    /** The box exists and wants its state. */
+    | { type: 'commit:ready' }
+    /** The reader typed; the host keeps the draft so a rebuild does not lose it. */
+    | { type: 'commit:draft'; message: string }
+    | { type: 'commit:selectTool'; tool: string }
+    /** Run the named tool over the changes and put its answer in the box. */
+    | { type: 'commit:generate'; tool: string }
+    /** Commit what is staged with this message. */
+    | { type: 'commit:submit'; message: string }
+    /** Open the Changes view's stage-everything action from the box. */
+    | { type: 'commit:stageAll' };
+
+/** What `vscodeApi` carries in either direction, for whichever view is running. */
+export type AnyHostToWebviewMessage =
+    | HostToWebviewMessage
+    | HostToCommitViewMessage;
+export type AnyWebviewToHostMessage =
+    | WebviewToHostMessage
+    | CommitViewToHostMessage;

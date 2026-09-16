@@ -1,17 +1,46 @@
 import * as vscode from 'vscode';
 import { ComparisonDto } from '../../application/dto/ComparisonDto';
+import type { ChangeGroupKind } from '../../domain/models/Comparison';
 import {
+    FileNode,
+    GroupNode,
     TreeNode,
     basename,
-    buildTree,
+    buildComparisonTree,
     countFiles,
     describeChange,
+    filesBeneath,
     markdownTooltipSource,
 } from './changedFilesTreeModel';
 import { ChangeDecorationProvider, changeUri } from './ChangeDecorationProvider';
 
 export const CHANGED_FILES_VIEW_ID = 'gitHawkChanges';
 export const OPEN_DIFF_COMMAND = 'gitHawk.openChangedFile';
+
+/**
+ * Set while the tree shows the working tree. The commit box's `when` clause
+ * reads it, so the box exists exactly as long as there is something it could
+ * commit — and disappears with the last file.
+ */
+export const WORKING_TREE_SHOWN_CONTEXT = 'gitHawk.workingTreeShown';
+
+/**
+ * What a row offers, by where its file stands. The menus in package.json key
+ * on these: a staged file can be unstaged, the other two staged, and a file
+ * from a commit's history can only be opened.
+ */
+export const FILE_CONTEXT: Record<ChangeGroupKind, string> = {
+    staged: 'gitHawkStagedFile',
+    unstaged: 'gitHawkUnstagedFile',
+    untracked: 'gitHawkUntrackedFile',
+    conflicted: 'gitHawkConflictedFile',
+};
+export const GROUP_CONTEXT: Record<ChangeGroupKind, string> = {
+    staged: 'gitHawkStagedGroup',
+    unstaged: 'gitHawkUnstagedGroup',
+    untracked: 'gitHawkUntrackedGroup',
+    conflicted: 'gitHawkConflictedGroup',
+};
 
 /**
  * Shows the changed files of the current comparison as a folder tree in the
@@ -21,6 +50,11 @@ export const OPEN_DIFF_COMMAND = 'gitHawk.openChangedFile';
  * icon theme, keyboard navigation, collapse-all, and search, none of which would
  * be worth rebuilding. The shaping logic lives in changedFilesTreeModel so it can
  * be tested without VS Code.
+ *
+ * For the working tree the top level is the sections git itself keeps —
+ * staged, changed, untracked, conflicted — each a folder tree of its own, with
+ * stage and unstage on the rows. That makes this view the place a commit is
+ * assembled, which is why the commit box sits directly above it.
  */
 export class ChangedFilesTree implements vscode.TreeDataProvider<TreeNode> {
     private readonly changed = new vscode.EventEmitter<TreeNode | undefined>();
@@ -41,10 +75,25 @@ export class ChangedFilesTree implements vscode.TreeDataProvider<TreeNode> {
         return this.comparison;
     }
 
+    /** See gitHawk.changesTree: the rows exactly as the view has them. */
+    rootsForTesting(): TreeNode[] {
+        return this.roots;
+    }
+
+    /** True while the tree shows the uncommitted changeset. */
+    get showsWorkingTree(): boolean {
+        return this.comparison?.groups !== undefined;
+    }
+
     show(comparison: ComparisonDto): void {
         this.comparison = comparison;
-        this.roots = buildTree(comparison.files);
-        this.decorations.setChanges(comparison.files);
+        this.roots = buildComparisonTree(comparison);
+        this.decorations.setChanges(
+            this.roots.flatMap(filesBeneath).map((node) => ({
+                change: node.change,
+                group: node.group,
+            }))
+        );
         this.changed.fire(undefined);
         this.describe();
     }
@@ -61,10 +110,14 @@ export class ChangedFilesTree implements vscode.TreeDataProvider<TreeNode> {
         if (!element) {
             return this.roots;
         }
-        return element.kind === 'directory' ? element.children : [];
+        return element.kind === 'file' ? [] : element.children;
     }
 
     getTreeItem(node: TreeNode): vscode.TreeItem {
+        if (node.kind === 'group') {
+            return this.groupItem(node);
+        }
+
         if (node.kind === 'directory') {
             const item = new vscode.TreeItem(
                 node.label,
@@ -77,22 +130,44 @@ export class ChangedFilesTree implements vscode.TreeDataProvider<TreeNode> {
             return item;
         }
 
+        return this.fileItem(node);
+    }
+
+    private groupItem(node: GroupNode): vscode.TreeItem {
+        const item = new vscode.TreeItem(
+            node.label,
+            vscode.TreeItemCollapsibleState.Expanded
+        );
+        const files = node.files.length;
+        item.description = `${files}`;
+        item.contextValue = GROUP_CONTEXT[node.group];
+        item.tooltip = groupTooltip(node.group);
+        // A stable id per section keeps its expanded state across reloads:
+        // staging a file rebuilds the tree, and a section that folded itself
+        // every time would be unusable.
+        item.id = `group:${node.group}`;
+        return item;
+    }
+
+    private fileItem(node: FileNode): vscode.TreeItem {
         const { change } = node;
         const item = new vscode.TreeItem(basename(change.path));
 
         // A private scheme, not file:. VS Code still resolves the icon from the
         // extension, and the decoration provider can colour these rows without
         // touching identically-named files elsewhere in the workbench.
-        item.resourceUri = changeUri(change.path);
+        item.resourceUri = changeUri(change.path, node.group);
         item.description = describeChange(change);
         item.tooltip = new vscode.MarkdownString(
             markdownTooltipSource(change)
         );
-        item.contextValue = 'gitHawkChangedFile';
+        item.contextValue = node.group
+            ? FILE_CONTEXT[node.group]
+            : 'gitHawkChangedFile';
         item.command = {
             command: OPEN_DIFF_COMMAND,
             title: 'Open Changes',
-            arguments: [change],
+            arguments: [node],
         };
         return item;
     }
@@ -103,6 +178,12 @@ export class ChangedFilesTree implements vscode.TreeDataProvider<TreeNode> {
      * duplicated in the webview.
      */
     private describe(): void {
+        void vscode.commands.executeCommand(
+            'setContext',
+            WORKING_TREE_SHOWN_CONTEXT,
+            this.showsWorkingTree
+        );
+
         if (!this.view) {
             return;
         }
@@ -141,5 +222,18 @@ export class ChangedFilesTree implements vscode.TreeDataProvider<TreeNode> {
             value: totals.files,
             tooltip: `${totals.files} changed files`,
         };
+    }
+}
+
+function groupTooltip(kind: ChangeGroupKind): string {
+    switch (kind) {
+        case 'conflicted':
+            return 'Files with unresolved merge conflicts. Resolve and stage them before committing.';
+        case 'staged':
+            return 'What the next commit will contain. Compared: HEAD against the index.';
+        case 'unstaged':
+            return 'Tracked files changed on disk but not staged. Compared: the index against the file on disk.';
+        case 'untracked':
+            return 'Files git does not track yet. Stage one to include it in the next commit.';
     }
 }
