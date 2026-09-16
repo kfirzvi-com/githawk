@@ -34,6 +34,12 @@
         /** Space picks rather than clicks, and the rows say so. */
         selecting?: boolean;
         onGraphKey?: (action: GraphKeyAction, commit: Commit) => void;
+        /**
+         * The cursor is on a row that is not a commit — the uncommitted
+         * changes above the graph — which then holds the one tabbable slot.
+         * Two tab stops in one list would be two lists.
+         */
+        cursorAbove?: boolean;
     }
 
     let {
@@ -47,6 +53,7 @@
         cursorHash = null,
         selecting = false,
         onGraphKey,
+        cursorAbove = false,
     }: Props = $props();
 
     const maxLane = $derived(
@@ -65,9 +72,12 @@
      * a graph nobody has touched yet lands somewhere sensible.
      */
     const tabbableHash = $derived(
-        cursorHash && graph.commits.some((commit) => commit.hash === cursorHash)
-            ? cursorHash
-            : (graph.commits[0]?.hash ?? null)
+        cursorAbove
+            ? null
+            : cursorHash &&
+                graph.commits.some((commit) => commit.hash === cursorHash)
+              ? cursorHash
+              : (graph.commits[0]?.hash ?? null)
     );
 
     const handleKeyDown = (event: KeyboardEvent, commit: Commit) => {

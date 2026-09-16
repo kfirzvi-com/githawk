@@ -13,6 +13,25 @@
  * Shift+letter shortcut or a keystroke meant for VS Code.
  */
 
+/**
+ * The uncommitted-changes row, as a cursor position. Not a hash — it has
+ * none — but it is a row the arrows can land on, above the newest commit, so
+ * the keyboard's row order carries this key at its head whenever the tree is
+ * dirty. Nothing in git can produce a hash with a hyphen in it, so it cannot
+ * collide with a commit.
+ */
+export const WORKING_TREE_ROW = 'working-tree';
+
+/** The rows the keyboard walks: the uncommitted row first, when there is one. */
+export function keyboardRows(
+    commitHashes: readonly string[],
+    workingTreeIsDirty: boolean
+): string[] {
+    return workingTreeIsDirty
+        ? [WORKING_TREE_ROW, ...commitHashes]
+        : [...commitHashes];
+}
+
 /** Where the cursor goes, or what it does where it is. */
 export type GraphKeyAction =
     | 'moveUp'

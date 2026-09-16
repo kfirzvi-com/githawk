@@ -1,4 +1,4 @@
-import { writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, test } from 'vitest';
 import { GitCliComparer } from './GitCliComparer';
@@ -406,5 +406,171 @@ describe('CompareUseCase', () => {
         expect(dto.totals.insertions).toBe(2);
         expect(dto.methodExplanation).toMatch(/diverged/i);
         expect(dto.skipped).toEqual([]);
+    });
+});
+
+describe('the working tree, in groups', () => {
+    const groupsOf = (comparison: Awaited<ReturnType<GitCliComparer['compare']>>) =>
+        Object.fromEntries(
+            (comparison.groups ?? []).map((group) => [
+                group.kind,
+                pathsOf(group.files),
+            ])
+        );
+
+    test('a clean tree has no groups at all', async () => {
+        const repo = newRepo();
+        commitFile(repo, 'a.txt', 'a\n', 'a');
+
+        const comparison = await new GitCliComparer(repo.path).compare({
+            kind: 'workingTree',
+        });
+
+        expect(comparison.method).toBe('workingTree');
+        expect(comparison.groups).toEqual([]);
+        expect(comparison.files).toEqual([]);
+    });
+
+    test('sorts each file into the section git puts it in', async () => {
+        const repo = newRepo();
+        commitFile(repo, 'staged.txt', 'before\n', 'add staged');
+        commitFile(repo, 'edited.txt', 'before\n', 'add edited');
+
+        writeFileSync(join(repo.path, 'staged.txt'), 'after\n');
+        repo.git(['add', 'staged.txt']);
+        writeFileSync(join(repo.path, 'edited.txt'), 'after\n');
+        mkdirSync(join(repo.path, 'new'));
+        writeFileSync(join(repo.path, 'new', 'file.txt'), 'brand new\n');
+
+        const comparison = await new GitCliComparer(repo.path).compare({
+            kind: 'workingTree',
+        });
+
+        expect(groupsOf(comparison)).toEqual({
+            staged: ['staged.txt'],
+            unstaged: ['edited.txt'],
+            untracked: ['new/file.txt'],
+        });
+        // Untracked files are in the changeset now, which the row used to
+        // apologise for not managing.
+        expect(pathsOf(comparison.files)).toEqual([
+            'edited.txt',
+            'new/file.txt',
+            'staged.txt',
+        ]);
+        const untracked = comparison.groups!.find((g) => g.kind === 'untracked')!;
+        expect(untracked.files[0].status).toBe('untracked');
+    });
+
+    /**
+     * Each section opens the diff it means. These are the revisions the diff
+     * editor is handed, so they are pinned here: `:0` is git's own name for
+     * the index, and `undefined` on the right is the file on disk.
+     */
+    test('gives each section the two revisions its diff compares', async () => {
+        const repo = newRepo();
+        commitFile(repo, 'a.txt', 'one\n', 'a');
+        writeFileSync(join(repo.path, 'a.txt'), 'two\n');
+        repo.git(['add', 'a.txt']);
+        writeFileSync(join(repo.path, 'a.txt'), 'three\n');
+        writeFileSync(join(repo.path, 'b.txt'), 'new\n');
+
+        const comparer = new GitCliComparer(repo.path);
+        const comparison = await comparer.compare({ kind: 'workingTree' });
+        const byKind = Object.fromEntries(
+            comparison.groups!.map((group) => [group.kind, group])
+        );
+
+        expect([byKind.staged.baseRev, byKind.staged.targetRev]).toEqual([
+            'HEAD',
+            ':0',
+        ]);
+        expect([byKind.unstaged.baseRev, byKind.unstaged.targetRev]).toEqual([
+            ':0',
+            undefined,
+        ]);
+        expect([byKind.untracked.baseRev, byKind.untracked.targetRev]).toEqual([
+            'HEAD',
+            undefined,
+        ]);
+
+        // And those revisions read what they claim to: the staged content
+        // is "two", not what is on disk.
+        expect(await comparer.fileContentAt(':0', 'a.txt')).toBe('two\n');
+        expect(await comparer.fileContentAt('HEAD', 'a.txt')).toBe('one\n');
+        // An untracked file has no HEAD side, which reads as empty.
+        expect(await comparer.fileContentAt('HEAD', 'b.txt')).toBe('');
+    });
+
+    test('a file staged and then edited again is in both sections', async () => {
+        const repo = newRepo();
+        commitFile(repo, 'a.txt', 'one\n', 'a');
+        writeFileSync(join(repo.path, 'a.txt'), 'two\n');
+        repo.git(['add', 'a.txt']);
+        writeFileSync(join(repo.path, 'a.txt'), 'three\n');
+
+        const comparison = await new GitCliComparer(repo.path).compare({
+            kind: 'workingTree',
+        });
+
+        expect(groupsOf(comparison)).toEqual({
+            staged: ['a.txt'],
+            unstaged: ['a.txt'],
+        });
+    });
+
+    test('honours .gitignore when listing untracked files', async () => {
+        const repo = newRepo();
+        commitFile(repo, '.gitignore', 'build/\n', 'ignore build');
+        mkdirSync(join(repo.path, 'build'));
+        writeFileSync(join(repo.path, 'build', 'out.js'), 'x');
+        writeFileSync(join(repo.path, 'kept.txt'), 'x');
+
+        const comparison = await new GitCliComparer(repo.path).compare({
+            kind: 'workingTree',
+        });
+
+        expect(groupsOf(comparison)).toEqual({ untracked: ['kept.txt'] });
+    });
+
+    test('puts a conflicted file in its own section, first', async () => {
+        const repo = newRepo();
+        commitFile(repo, 'c.txt', 'base\n', 'base');
+        repo.branch('theirs');
+        commitFile(repo, 'c.txt', 'theirs\n', 'theirs');
+        repo.checkout('main');
+        commitFile(repo, 'c.txt', 'ours\n', 'ours');
+        writeFileSync(join(repo.path, 'other.txt'), 'untracked\n');
+        try {
+            repo.git(['merge', 'theirs']);
+        } catch {
+            // The conflict is the point.
+        }
+
+        const comparison = await new GitCliComparer(repo.path).compare({
+            kind: 'workingTree',
+        });
+
+        expect(comparison.groups!.map((g) => g.kind)).toEqual([
+            'conflicted',
+            'untracked',
+        ]);
+        expect(comparison.groups![0].files[0].status).toBe('conflicted');
+    });
+
+    test('works on a repository with no commits yet', async () => {
+        const repo = newRepo();
+        writeFileSync(join(repo.path, 'first.txt'), 'hello\n');
+        repo.git(['add', 'first.txt']);
+        writeFileSync(join(repo.path, 'loose.txt'), 'hello\n');
+
+        const comparison = await new GitCliComparer(repo.path).compare({
+            kind: 'workingTree',
+        });
+
+        expect(groupsOf(comparison)).toEqual({
+            staged: ['first.txt'],
+            untracked: ['loose.txt'],
+        });
     });
 });

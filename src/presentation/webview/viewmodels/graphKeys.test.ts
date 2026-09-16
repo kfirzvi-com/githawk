@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+    WORKING_TREE_ROW,
     initialCursor,
     isMove,
+    keyboardRows,
     moveCursor,
     resolveGraphKey,
     type GraphKeyEvent,
@@ -172,5 +174,38 @@ describe('initialCursor', () => {
 
     it('has nothing to point at in an empty graph', () => {
         expect(initialCursor([], null)).toBe(null);
+    });
+});
+
+describe('keyboardRows', () => {
+    it('puts the uncommitted row above the newest commit when the tree is dirty', () => {
+        expect(keyboardRows(rows, true)).toEqual([WORKING_TREE_ROW, ...rows]);
+    });
+
+    it('is the commits alone when the tree is clean', () => {
+        expect(keyboardRows(rows, false)).toEqual(rows);
+    });
+
+    /**
+     * The bug this exists for: Up on the newest commit stopped dead, with the
+     * uncommitted row visibly above it.
+     */
+    it('lets Up reach the uncommitted row from the newest commit, and Home from anywhere', () => {
+        const withWorkingTree = keyboardRows(rows, true);
+
+        expect(moveCursor(withWorkingTree, 'a', 'moveUp', 10)).toBe(
+            WORKING_TREE_ROW
+        );
+        expect(moveCursor(withWorkingTree, 'd', 'moveFirst', 10)).toBe(
+            WORKING_TREE_ROW
+        );
+        // And Down from it lands on the newest commit.
+        expect(moveCursor(withWorkingTree, WORKING_TREE_ROW, 'moveDown', 10)).toBe(
+            'a'
+        );
+    });
+
+    it('cannot be mistaken for a hash', () => {
+        expect(/^[0-9a-f]+$/i.test(WORKING_TREE_ROW)).toBe(false);
     });
 });

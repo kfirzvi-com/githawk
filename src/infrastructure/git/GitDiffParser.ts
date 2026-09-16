@@ -136,6 +136,10 @@ function statusFromCode(code: string): ChangeStatus {
             return 'copied';
         case 'T':
             return 'typeChanged';
+        case 'U':
+            // Only `git diff` against the working tree reports this: a path
+            // with unresolved merge stages in the index.
+            return 'conflicted';
         case 'M':
         default:
             return 'modified';

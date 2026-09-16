@@ -16,6 +16,7 @@
         range: 'Contiguous range',
         singleCommit: 'This commit alone',
         replay: 'Reconstructed',
+        workingTree: 'Not yet committed',
     };
 </script>
 

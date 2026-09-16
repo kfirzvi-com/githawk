@@ -44,6 +44,11 @@ suite('GitHawk in a real extension host', () => {
             'gitHawk.compareCommits',
             'gitHawk.openChangedFile',
             'gitHawk.clearChanges',
+            'gitHawk.openSidebar',
+            'gitHawk.revealInExplorer',
+            'gitHawk.commit',
+            'gitHawk.stage',
+            'gitHawk.unstage',
         ]) {
             assert.ok(
                 commands.includes(expected),

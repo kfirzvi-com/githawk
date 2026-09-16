@@ -3,6 +3,71 @@
 All notable changes to GitHawk are documented here, following
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- **Commit from the Changes view.** The uncommitted-changes row now fills the
+  sidebar with the working tree in git's own sections — **Staged Changes**,
+  **Changes**, **Untracked Files**, and **Merge Conflicts** when there are any —
+  and puts a **Commit** box above them. Hover a row for **+** and **−** to stage
+  and unstage; on a section or a folder they take everything beneath. Each row
+  opens the diff its section means: `HEAD` against the index for a staged file,
+  the index against the disk for an unstaged one.
+
+  The button says what it will do — `Commit 2 staged files`, or `Commit all
+  changes` when nothing is staged, which asks before staging everything.
+  <kbd>⌘</kbd>/<kbd>Ctrl</kbd> <kbd>Enter</kbd> presses it. The draft survives
+  clicking around the graph, and the box leaves with the last uncommitted file.
+
+- **Generate the message with an AI CLI.** A select beside the box names the
+  tools from `gitHawk.aiTools` that have a `commitMessageCommand` — Claude Code,
+  Codex, Gemini CLI and opencode out of the box — and **Generate** pipes the
+  diff of what would be committed to the chosen one, once, non-interactively,
+  through your shell. What it prints lands in the box for you to edit; nothing
+  is committed on the strength of it, and nothing runs inside GitHawk.
+
+- **Untracked files are in the changeset.** They were counted in the row and
+  absent from the tree, because `git diff HEAD` has no blob for a file git has
+  never seen. The working tree is now read in sections, and the untracked one
+  comes from `ls-files --others`, so the row and the tree finally agree.
+
+- **The tree keeps up with the working tree.** Saving a file, or creating,
+  deleting or renaming one through the explorer, moves it to the section it now
+  belongs in, without pressing Refresh. The graph's watcher still ignores the
+  working tree on purpose; this is a cheaper read of just the uncommitted side.
+
+- **Reveal in Explorer View, from a diff.** Every diff GitHawk opens has the
+  button in its title bar and its tab's right-click menu. VS Code's own reveal
+  works on a file on disk and not on the historical side of a diff, which has
+  a path and no location until it is joined to its repository; this does both.
+  The Changes tree's rows offer it on right-click too. `Cmd+K X` runs it from
+  the editor, and it joins the **GitHawk** submenu of the editor's right-click
+  menu, where the chord is printed beside it.
+
+- **`Cmd+Shift+9` opens the Changes sidebar** with the keyboard on the tree —
+  the graph panel's `Cmd+9`, with Shift.
+
+- **`Cmd+9` again hides the panel.** With the graph focused, the key that
+  opened it closes the whole bottom panel, so one key summons and dismisses
+  it. From anywhere else it still opens and focuses the graph. The page
+  claims the key itself: the workbench's `focusedView` context is not set
+  while focus is inside a webview, so a keybinding on it never fires.
+
+- **Expand all, beside collapse all.** VS Code gives a tree the one and not
+  the other; the Changes view's title bar now has both.
+
+- Commands: `GitHawk: Commit`, `GitHawk: Stage All Changes`, `GitHawk: Reveal
+  In Explorer View`, `GitHawk: Open Changes Sidebar`, and `GitHawk: Write The
+  Commit Message With An AI CLI`. The Changes view's title bar gained
+  a button for the uncommitted changes.
+
+### Fixed
+
+- **The arrows reach the uncommitted-changes row.** <kbd>↑</kbd> on the newest
+  commit stopped dead with the row visibly above it. It is a row now: Up lands
+  on it, Home jumps to it, Enter is its click, and Down comes back to the graph.
+
 ## [0.6.0] — 2026-09-13
 
 The release that makes the mouse optional. Hold Shift and the panel tells you

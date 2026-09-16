@@ -26,7 +26,9 @@ export class ComparisonController {
     constructor(
         private readonly readerFor: () => IComparisonReader,
         private readonly repositoryFor: () => IGitRepository,
-        private readonly workspaceRootFor: () => string
+        private readonly workspaceRootFor: () => string,
+        /** Told about every diff opened, so its reveal button can find them. */
+        private readonly onOpened: (rightSide: vscode.Uri) => void = () => {}
     ) {}
 
     /**
@@ -113,11 +115,21 @@ export class ComparisonController {
         };
     }
 
-    async compare(spec: ComparisonSpec): Promise<ComparisonDto> {
+    async compare(
+        spec: ComparisonSpec,
+        options: { quiet?: boolean } = {}
+    ): Promise<ComparisonDto> {
+        // A refresh of a tree already on screen says nothing at all: the
+        // reader did not ask, and a status-bar flicker on every save would be
+        // the only sign anything happened.
+        if (options.quiet) {
+            return new CompareUseCase(this.readerFor()).execute(spec);
+        }
+
         // A single commit's diff is fast and happens on every click, so it
         // reports in the status bar. Only the slow reconstruction, which spawns a
         // worktree, is worth a notification.
-        const isQuick = spec.kind === 'singleCommit';
+        const isQuick = spec.kind === 'singleCommit' || spec.kind === 'workingTree';
 
         return vscode.window.withProgress(
             {
@@ -148,6 +160,7 @@ export class ComparisonController {
             ? `${request.previousPath} → ${request.path}`
             : request.path;
 
+        this.onOpened(right);
         await vscode.commands.executeCommand(
             'vscode.diff',
             left,

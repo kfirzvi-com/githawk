@@ -194,5 +194,17 @@ export function describe(action: GitAction): string {
             return `Lock worktree ${action.path}`;
         case 'unlockWorktree':
             return `Unlock worktree ${action.path}`;
+        case 'stageFiles':
+            return action.paths.length === 1
+                ? `Stage ${action.paths[0]}`
+                : `Stage ${action.paths.length} files`;
+        case 'unstageFiles':
+            return action.paths.length === 1
+                ? `Unstage ${action.paths[0]}`
+                : `Unstage ${action.paths.length} files`;
+        case 'stageAll':
+            return 'Stage all changes';
+        case 'commit':
+            return 'Commit';
     }
 }

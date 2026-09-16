@@ -67,6 +67,19 @@
      * Warnings therefore come from `editorWarning-foreground`, which is opaque
      * in both and is what the editor itself uses to say the same thing.
      */
+    /*
+     * Form controls, for the commit box. VS Code's own input tokens, so the
+     * textarea and the select look like the ones in the Source Control view
+     * rather than like a web page that happens to be docked there.
+     */
+    --color-input: var(--vscode-input-background, #111827);
+    --color-input-fg: var(--vscode-input-foreground, #f3f4f6);
+    --color-input-placeholder: var(--vscode-input-placeholderForeground, #6b7280);
+    --color-input-line: var(--vscode-input-border, #4b5563);
+    --color-dropdown: var(--vscode-dropdown-background, #1f2937);
+    --color-dropdown-fg: var(--vscode-dropdown-foreground, #f3f4f6);
+    --color-focus: var(--vscode-focusBorder, #60a5fa);
+
     --color-info: var(--vscode-charts-blue, #93c5fd);
     --color-info-strong: var(--vscode-charts-blue, #60a5fa);
     --color-ok: var(--vscode-charts-green, #4ade80);
@@ -91,9 +104,13 @@
     font-weight: 400;
 }
 
+/*
+ * No minimum width here. The graph page sets its own floor on its root
+ * element (App.svelte); the commit box, which shares this stylesheet, lives
+ * in a sidebar that can be dragged narrower than any floor and must follow.
+ */
 body {
     margin: 0;
-    min-width: 320px;
     background-color: var(--vscode-editor-background, #1e1e1e);
     color: var(--vscode-editor-foreground, #cccccc);
 }
