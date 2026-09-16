@@ -261,6 +261,15 @@
         "icon": "$(sparkle)"
       },
       {
+        "command": "gitHawk.revealInExplorer",
+        "title": "GitHawk: Reveal In Explorer View",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "gitHawk.revealChangedFileInExplorer",
+        "title": "Reveal in Explorer View"
+      },
+      {
         "command": "gitHawk.changesTree",
         "title": "GitHawk: Describe The Changes Tree"
       },
@@ -371,6 +380,18 @@
           "command": "gitHawk.toggleBlame",
           "when": "resourceScheme == file",
           "group": "navigation@9"
+        },
+        {
+          "command": "gitHawk.revealInExplorer",
+          "when": "resourceScheme == githawk-rev || isInDiffEditor && resourcePath in gitHawk.diffFiles",
+          "group": "navigation@8"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "command": "gitHawk.revealInExplorer",
+          "when": "resourceScheme == githawk-rev || isInDiffEditor && resourcePath in gitHawk.diffFiles",
+          "group": "2_files@1"
         }
       ],
       "view/title": [
@@ -405,6 +426,11 @@
           "command": "gitHawk.unstage",
           "when": "view == gitHawkChanges && viewItem =~ /^gitHawkStaged(File|Group)$/",
           "group": "1_stage@1"
+        },
+        {
+          "command": "gitHawk.revealChangedFileInExplorer",
+          "when": "view == gitHawkChanges && viewItem =~ /File$/",
+          "group": "2_reveal@1"
         }
       ],
       "commandPalette": [
@@ -418,6 +444,10 @@
         },
         {
           "command": "gitHawk.changesTree",
+          "when": "false"
+        },
+        {
+          "command": "gitHawk.revealChangedFileInExplorer",
           "when": "false"
         },
         {

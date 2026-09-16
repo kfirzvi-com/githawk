@@ -37,8 +37,14 @@ All notable changes to GitHawk are documented here, following
   belongs in, without pressing Refresh. The graph's watcher still ignores the
   working tree on purpose; this is a cheaper read of just the uncommitted side.
 
-- Commands: `GitHawk: Commit`, `GitHawk: Stage All Changes`, and `GitHawk:
-  Write The Commit Message With An AI CLI`. The Changes view's title bar gained
+- **Reveal in Explorer View, from a diff.** Every diff GitHawk opens has the
+  button in its title bar and its tab's right-click menu. VS Code's own reveal
+  works on a file on disk and not on the historical side of a diff, which has
+  a path and no location until it is joined to its repository; this does both.
+  The Changes tree's rows offer it on right-click too.
+
+- Commands: `GitHawk: Commit`, `GitHawk: Stage All Changes`, `GitHawk: Reveal
+  In Explorer View`, and `GitHawk: Write The Commit Message With An AI CLI`. The Changes view's title bar gained
   a button for the uncommitted changes.
 
 ### Fixed

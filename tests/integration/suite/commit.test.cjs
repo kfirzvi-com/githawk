@@ -156,6 +156,55 @@ suite('commit from the Changes view', () => {
         }
     });
 
+    /**
+     * From a diff GitHawk opened to the file in the Explorer. The historical
+     * side is a `githawk-rev` document with a path and no location; the
+     * command has to join it to the repository. Asserted on what the command
+     * resolved to, because the Explorer's selection cannot be read back.
+     */
+    test('reveals the file behind a historical diff document', async () => {
+        await vscode.commands.executeCommand('gitHawk.showUncommittedChanges');
+        const roots = await vscode.commands.executeCommand('gitHawk.changesTree');
+        const staged = roots.find((node) => node.kind === 'group' && node.group === 'staged');
+        const row = rows(staged)[0];
+        assert.ok(row, 'the sample repository keeps something staged');
+
+        // The staged side of the diff: the index, not the disk.
+        const historical = vscode.Uri.from({
+            scheme: 'githawk-rev',
+            path: `/${row.change.path}`,
+            query: row.targetRev,
+        });
+        const revealed = await vscode.commands.executeCommand(
+            'gitHawk.revealInExplorer',
+            historical
+        );
+
+        assert.equal(revealed, join(root(), row.change.path));
+    });
+
+    test('reveals a row of the Changes tree', async () => {
+        await vscode.commands.executeCommand('gitHawk.showUncommittedChanges');
+        const roots = await vscode.commands.executeCommand('gitHawk.changesTree');
+        const row = roots.flatMap(rows)[0];
+
+        const revealed = await vscode.commands.executeCommand(
+            'gitHawk.revealChangedFileInExplorer',
+            row
+        );
+
+        assert.equal(revealed, join(root(), row.change.path));
+    });
+
+    test('says so rather than revealing a file that is not on disk', async () => {
+        const revealed = await vscode.commands.executeCommand(
+            'gitHawk.revealInExplorer',
+            vscode.Uri.from({ scheme: 'githawk-rev', path: '/no/such/file.txt', query: 'HEAD' })
+        );
+
+        assert.equal(revealed, undefined);
+    });
+
     test('refuses an empty message rather than letting git do it', async () => {
         const head = git(['rev-parse', 'HEAD']);
         const committed = await vscode.commands.executeCommand(

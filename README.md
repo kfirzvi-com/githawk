@@ -107,6 +107,11 @@ you save a file. Nothing draws a line from it to `HEAD` either — the graph rea
 every ref, so the topmost row is often not the commit your changes sit on, and a
 line saying otherwise would be wrong more often than right.
 
+Every diff GitHawk opens — from a commit or from the working tree — has a
+**Reveal in Explorer View** button in its title bar and its tab's right-click
+menu, so the file you are reading a change to is one click from where it lives.
+The Changes tree's rows offer the same on right-click.
+
 The tree keeps up by itself: saving a file, or creating or deleting one through
 the explorer, moves it to the section it now belongs in. `GitHawk: Show
 Uncommitted Changes` opens the same view without the panel; `GitHawk: Commit`
@@ -392,6 +397,7 @@ different one, GitHawk switches to it and then shows the commit.
 | `GitHawk: Commit` | The same, with the caret in the message |
 | `GitHawk: Write The Commit Message With An AI CLI` | Generate, from the palette |
 | `GitHawk: Stage All Changes` | |
+| `GitHawk: Reveal In Explorer View` | The file behind the diff you are reading |
 | `GitHawk: Start An AI CLI Here` | |
 | `GitHawk: Update All Branches From Upstream` | Fast-forwards every branch that can be |
 | `GitHawk: Show Log` | GitHawk's own output, when something goes wrong |

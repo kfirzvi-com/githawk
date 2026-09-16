@@ -26,7 +26,9 @@ export class ComparisonController {
     constructor(
         private readonly readerFor: () => IComparisonReader,
         private readonly repositoryFor: () => IGitRepository,
-        private readonly workspaceRootFor: () => string
+        private readonly workspaceRootFor: () => string,
+        /** Told about every diff opened, so its reveal button can find them. */
+        private readonly onOpened: (rightSide: vscode.Uri) => void = () => {}
     ) {}
 
     /**
@@ -158,6 +160,7 @@ export class ComparisonController {
             ? `${request.previousPath} → ${request.path}`
             : request.path;
 
+        this.onOpened(right);
         await vscode.commands.executeCommand(
             'vscode.diff',
             left,

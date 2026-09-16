@@ -43,6 +43,7 @@ import {
     RevisionContentProvider,
 } from './presentation/host/RevisionContentProvider';
 import { CommitController } from './presentation/host/CommitController';
+import { ExplorerReveal } from './presentation/host/ExplorerReveal';
 import {
     COMMIT_VIEW_ID,
     CommitViewProvider,
@@ -109,10 +110,12 @@ export async function activate(
     repositoryRegistry = repositories;
     context.subscriptions.push(repositories);
 
+    const explorer = new ExplorerReveal(() => repositories.active?.root);
     const comparisons = new ComparisonController(
         createGitComparer,
         createGitRepository,
-        activeRepositoryRoot
+        activeRepositoryRoot,
+        (rightSide) => explorer.noteOpened(rightSide)
     );
 
     const decorations = new ChangeDecorationProvider();
@@ -379,6 +382,28 @@ export async function activate(
         }),
         vscode.commands.registerCommand('gitHawk.clearChanges', () =>
             changedFiles.clear()
+        ),
+        /*
+         * From a diff GitHawk opened to the file in the Explorer. The title
+         * bar passes the editor's resource; the palette passes nothing and
+         * the active editor is used. Returns the path it revealed, for the
+         * integration tests.
+         */
+        vscode.commands.registerCommand(
+            'gitHawk.revealInExplorer',
+            (resource?: vscode.Uri) =>
+                explorer.reveal(resource instanceof vscode.Uri ? resource : undefined)
+        ),
+        // The same, from a row of the Changes tree.
+        vscode.commands.registerCommand(
+            'gitHawk.revealChangedFileInExplorer',
+            (node?: TreeNode) => {
+                const path =
+                    node?.kind === 'file'
+                        ? explorer.resolvePath(node.change.path)
+                        : undefined;
+                return path ? explorer.reveal(vscode.Uri.file(path)) : undefined;
+            }
         ),
         // Scriptable comparison: usable from a keybinding or automation, and the
         // hook the integration tests drive.
