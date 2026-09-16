@@ -266,6 +266,10 @@
         "icon": "$(go-to-file)"
       },
       {
+        "command": "gitHawk.openSidebar",
+        "title": "GitHawk: Open Changes Sidebar"
+      },
+      {
         "command": "gitHawk.revealChangedFileInExplorer",
         "title": "Reveal in Explorer View"
       },
@@ -284,6 +288,18 @@
         "key": "ctrl+9",
         "mac": "cmd+9",
         "when": "!terminalFocus"
+      },
+      {
+        "command": "gitHawk.openSidebar",
+        "key": "ctrl+shift+9",
+        "mac": "cmd+shift+9",
+        "when": "!terminalFocus"
+      },
+      {
+        "command": "gitHawk.revealInExplorer",
+        "key": "ctrl+k x",
+        "mac": "cmd+k x",
+        "when": "resourceScheme == githawk-rev || isInDiffEditor"
       },
       {
         "command": "gitHawk.toggleBlame",
@@ -373,6 +389,11 @@
         {
           "command": "gitHawk.toggleBlame",
           "group": "2_file@1"
+        },
+        {
+          "command": "gitHawk.revealInExplorer",
+          "when": "resourceScheme == githawk-rev || isInDiffEditor",
+          "group": "2_file@2"
         }
       ],
       "editor/title": [

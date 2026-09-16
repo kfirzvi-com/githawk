@@ -350,7 +350,7 @@ tool in the right directory. It reads nothing and sends nothing.
 
 ### In the editor
 
-Three keys that work where the code is, rather than in the panel. All three are
+Four keys that work where the code is, rather than in the panel. All four are
 chords under <kbd>⌘K</kbd> (<kbd>Ctrl+K</kbd> on Windows and Linux), and none of
 them was already bound by VS Code.
 
@@ -359,10 +359,12 @@ them was already bound by VS Code.
 | <kbd>⌘K</kbd> <kbd>B</kbd> | Blame on, and off again |
 | <kbd>⌘K</kbd> <kbd>H</kbd> | Who wrote this line — the same card the mouse gets, at the caret. Works whether or not the annotations are on |
 | <kbd>⌘K</kbd> <kbd>G</kbd> | Show this line's commit in the graph |
+| <kbd>⌘K</kbd> <kbd>X</kbd> | Reveal the file behind this diff in the Explorer |
 
 They are also in the editor's right-click menu, under **GitHawk**, which is
 where the keys announce themselves — a shortcut nobody can find is a shortcut
-nobody has. The hover card names <kbd>⌘K</kbd> <kbd>G</kbd> beside its "show in
+nobody has. The two views have a key each: <kbd>⌘9</kbd> opens the graph panel,
+<kbd>⌘⇧9</kbd> the Changes sidebar. The hover card names <kbd>⌘K</kbd> <kbd>G</kbd> beside its "show in
 the graph" link for the same reason.
 
 <kbd>⌘K</kbd> <kbd>G</kbd> follows the file rather than the panel: a workspace
@@ -384,6 +386,7 @@ different one, GitHawk switches to it and then shows the commit.
 | Command | |
 | --- | --- |
 | `GitHawk: Open Git Graph` | `Cmd+9` / `Ctrl+9` |
+| `GitHawk: Open Changes Sidebar` | `Cmd+Shift+9` / `Ctrl+Shift+9` |
 | `GitHawk: Toggle Blame Annotations` | `Cmd+K B` / `Ctrl+K B` |
 | `GitHawk: Refresh Git Graph` | Also rescans for new repositories |
 | `GitHawk: Switch Repository` | |
@@ -397,7 +400,7 @@ different one, GitHawk switches to it and then shows the commit.
 | `GitHawk: Commit` | The same, with the caret in the message |
 | `GitHawk: Write The Commit Message With An AI CLI` | Generate, from the palette |
 | `GitHawk: Stage All Changes` | |
-| `GitHawk: Reveal In Explorer View` | The file behind the diff you are reading |
+| `GitHawk: Reveal In Explorer View` | `Cmd+K X` / `Ctrl+K X` — the file behind the diff you are reading |
 | `GitHawk: Start An AI CLI Here` | |
 | `GitHawk: Update All Branches From Upstream` | Fast-forwards every branch that can be |
 | `GitHawk: Show Log` | GitHawk's own output, when something goes wrong |

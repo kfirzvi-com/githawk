@@ -274,6 +274,11 @@ export async function activate(
                 'workbench.view.extension.gitHawkPanel'
             )
         ),
+        // The sidebar, with the keyboard on the Changes tree: Cmd+Shift+9,
+        // the panel's key with Shift, so the two are one thing to remember.
+        vscode.commands.registerCommand('gitHawk.openSidebar', () =>
+            vscode.commands.executeCommand(`${CHANGED_FILES_VIEW_ID}.focus`)
+        ),
         changesView,
         vscode.window.registerFileDecorationProvider(decorations),
         // Refreshing rescans as well as reloads: a repository cloned since the
