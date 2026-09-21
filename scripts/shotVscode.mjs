@@ -9,9 +9,10 @@
  *   node scripts/shotVscode.mjs [output-dir] [workspace] [scenes]
  *
  * `scenes` is `all` (the default, and specific to the sample repository's
- * branches), `repositories`, which captures only what any workspace has, or
- * `blame`, which wants a workspace with real history rather than the sample —
- * the annotate column has nothing to say about a file with two commits.
+ * branches), `repositories`, which captures only what any workspace has,
+ * `files`, which browses the whole project at an older commit in the Files
+ * view, or `blame`, which wants a workspace with real history rather than the
+ * sample — the annotate column has nothing to say about a file with two commits.
  *
  * Doubles as the way to produce documentation screenshots, so the README shows the
  * real thing rather than a mock.
@@ -330,6 +331,43 @@ try {
         await capture('14-branch-menu-in-worktree');
         await page.keyboard.press('Escape');
         await page.waitForTimeout(600);
+    }
+
+    if (scenes === 'files') {
+        /*
+         * The Files view: the whole project at one commit, in the sidebar.
+         * Driven from the palette rather than the commit's right-click menu:
+         * a QuickPick opened from inside the webview loses focus to it under
+         * Playwright and closes before it can be typed into. A commit is
+         * selected first so the Changes tree is in shot above it.
+         */
+        await click(rows.nth(6));
+        await page.waitForTimeout(2500);
+        await runCommand('GitHawk: Browse Files At A Commit');
+        await page.waitForSelector('.quick-input-widget:visible');
+        await page.waitForTimeout(800);
+        await page.keyboard.type('main');
+        await page.waitForTimeout(700);
+        await page.keyboard.press('Enter');
+        await page.waitForTimeout(2500);
+        await runCommand('GitHawk: Expand All Files');
+        await page.waitForTimeout(1000);
+        await runCommand('View: Toggle Maximized Panel');
+        await page.waitForTimeout(1500);
+        // Bring GitHawk's own sidebar forward: the palette can leave the
+        // Explorer in front, and it has a README.md row of its own.
+        await runCommand('GitHawk: Open Changes Sidebar');
+        await page.waitForTimeout(1000);
+
+        // Open a file from the Files tree, so the read-only editor is in shot too.
+        await page
+            .locator('#workbench\\.view\\.extension\\.gitHawkSidebar .monaco-list-row', {
+                hasText: 'config.ts',
+            })
+            .first()
+            .click();
+        await page.waitForTimeout(2000);
+        await capture('files-at-commit');
     }
 
     console.log(JSON.stringify({ shots }, null, 2));

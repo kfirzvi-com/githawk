@@ -3,6 +3,22 @@
 All notable changes to GitHawk are documented here, following
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- **Browse the whole project at a commit.** Right-click a commit and choose
+  **Browse files at this commit**: every file the project had at that point —
+  not only the ones the commit changed — fills a **Files** tree in the sidebar,
+  beside **Changes**, laid out like the Explorer with folder counts and your
+  file icon theme. A file opens that commit's version of itself, read-only,
+  through the same revision scheme the diff editor already uses, so syntax
+  highlighting, blame, and **Reveal In Explorer View** all work on it. Hover a
+  row for **Compare With Working Tree**. Nothing is checked out and the working
+  tree is untouched. The view appears when a commit is browsed and leaves with
+  the **×** in its title bar; `GitHawk: Browse Files At A Commit` reaches it
+  from the palette and asks which branch, tag, or commit.
+
 ## [0.7.0] — 2026-09-16
 
 The release that closes the loop. Until now GitHawk showed you what you had

@@ -66,6 +66,25 @@ The sidebar is surfaced the first time and then left alone — pulling focus on
 every click would make the graph unbrowsable. To ask for it deliberately, once it
 has been closed or covered, right-click a commit and choose **"Show changes in
 the sidebar"**.
+### See the whole project as it was
+
+![The Files view, showing every file at an older commit](media/screenshots/files-at-commit.png)
+
+Right-click a commit and choose **"Browse files at this commit"**: every file the
+project had at that commit — not only the ones it changed — fills a **Files** tree
+in the sidebar, laid out like the Explorer, with folder counts and your file icon
+theme. Click a file to open that commit's version of it, read-only, with syntax
+highlighting and blame; hover a row for **Compare With Working Tree**, which opens
+the diff against the file on disk, or right-click for **Reveal in Explorer View**.
+
+Nothing is checked out. The working tree, the index, and whatever is half-done in
+them are left exactly as they are — this is how "what did this look like before
+the refactor" gets answered without stashing anything. The view appears when a
+commit is browsed and leaves with the **×** in its title bar.
+
+`GitHawk: Browse Files At A Commit` reaches it from the palette, and asks which
+branch, tag, or commit.
+
 ### See what you have not committed — and commit it
 
 ![The graph panel](media/screenshots/graph.png)
@@ -399,6 +418,7 @@ different one, GitHawk switches to it and then shows the commit.
 | `GitHawk: Manage Remotes` | Add, rename, re-point, remove, fetch, prune |
 | `GitHawk: Manage Stashes` | List, show, apply, pop, drop; stash the working tree |
 | `GitHawk: Show Uncommitted Changes` | Staged, changed and untracked files, with the commit box |
+| `GitHawk: Browse Files At A Commit` | Every file at a branch, tag, or commit, in the **Files** tree — read-only, nothing checked out |
 | `GitHawk: Commit` | The same, with the caret in the message |
 | `GitHawk: Write The Commit Message With An AI CLI` | Generate, from the palette |
 | `GitHawk: Stage All Changes` | |
