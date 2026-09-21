@@ -26,6 +26,14 @@ import { FileSystemRepositoryLocator } from './infrastructure/fs/FileSystemRepos
 import { RepositoryRegistry } from './presentation/host/RepositoryRegistry';
 import { RepositoryWatcher } from './presentation/host/RepositoryWatcher';
 import { GitCliDirectoryReader } from './infrastructure/git/GitCliDirectoryReader';
+import { GitCliTreeReader } from './infrastructure/git/GitCliTreeReader';
+import {
+    OPEN_FILE_AT_REVISION_COMMAND,
+    REVISION_FILES_VIEW_ID,
+    RevisionFilesTree,
+} from './presentation/host/RevisionFilesTree';
+import { RevisionBrowser } from './presentation/host/RevisionBrowser';
+import type { RevisionNode } from './presentation/host/revisionFilesTreeModel';
 import {
     AUTO_REFRESH_SETTING,
     BLAME_STYLE_SETTING,
@@ -41,6 +49,7 @@ import {
 import {
     REVISION_SCHEME,
     RevisionContentProvider,
+    encodeRevisionUri,
 } from './presentation/host/RevisionContentProvider';
 import { CommitController } from './presentation/host/CommitController';
 import { ExplorerReveal } from './presentation/host/ExplorerReveal';
@@ -126,6 +135,23 @@ export async function activate(
     });
     changedFiles.attach(changesView);
 
+    /*
+     * The whole project at one commit, beside the Changes tree. Contributed
+     * with a `when` clause, so it takes no room in the sidebar until a
+     * commit is browsed and gives it back when the view is closed.
+     */
+    const revisionFiles = new RevisionFilesTree();
+    const filesView = vscode.window.createTreeView(REVISION_FILES_VIEW_ID, {
+        treeDataProvider: revisionFiles,
+        showCollapseAll: true,
+    });
+    revisionFiles.attach(filesView);
+    const revisions = new RevisionBrowser(
+        revisionFiles,
+        createTreeReader,
+        createGitRepository
+    );
+
     const watcher = new RepositoryWatcher(
         (root) => new GitCliDirectoryReader(root)
     );
@@ -166,7 +192,8 @@ export async function activate(
         createWorktreeReader,
         createRemoteReader,
         createStashReader,
-        createWorkingTreeReader
+        createWorkingTreeReader,
+        revisions
     );
 
     /*
@@ -290,6 +317,87 @@ export async function activate(
             vscode.commands.executeCommand(`${CHANGED_FILES_VIEW_ID}.focus`)
         ),
         changesView,
+        filesView,
+        /*
+         * The Files view. With a hash — from the commit menu, a keybinding,
+         * or the integration tests — it browses that commit; with none it
+         * asks which branch, tag or commit, so the palette reaches it too.
+         */
+        vscode.commands.registerCommand(
+            'gitHawk.browseCommit',
+            async (rev?: string) => {
+                if (typeof rev === 'string') {
+                    await revisions.browse(rev);
+                    return;
+                }
+                const chosen = await comparisons.pickRevision(
+                    'Browse the files at…',
+                    { includeWorkingTree: false }
+                );
+                if (chosen) {
+                    await revisions.browse(chosen.rev);
+                }
+            }
+        ),
+        // Clicking a file opens that commit's version of it, read-only.
+        // Returns the URI it opened, for the integration tests.
+        vscode.commands.registerCommand(
+            OPEN_FILE_AT_REVISION_COMMAND,
+            async (node?: RevisionNode) => {
+                if (node?.kind !== 'file') {
+                    return undefined;
+                }
+                const uri = encodeRevisionUri(node.rev, node.path);
+                await vscode.window.showTextDocument(uri, { preview: true });
+                return uri.toString();
+            }
+        ),
+        /*
+         * That commit's version against the file on disk — the diff the
+         * Changes tree would open for it, had the file been in a changeset.
+         * A file that no longer exists diffs against an empty right side,
+         * which is what "deleted since" looks like.
+         */
+        vscode.commands.registerCommand(
+            'gitHawk.compareFileWithWorkingTree',
+            (node?: RevisionNode) => {
+                if (node?.kind !== 'file') {
+                    return;
+                }
+                void comparisons
+                    .openFile({ path: node.path, baseRev: node.rev })
+                    .catch((error: unknown) =>
+                        vscode.window.showErrorMessage(
+                            error instanceof Error ? error.message : String(error)
+                        )
+                    );
+            }
+        ),
+        vscode.commands.registerCommand(
+            'gitHawk.revealRevisionFileInExplorer',
+            (node?: RevisionNode) => {
+                const path =
+                    node?.kind === 'file'
+                        ? explorer.resolvePath(node.path)
+                        : undefined;
+                return path ? explorer.reveal(vscode.Uri.file(path)) : undefined;
+            }
+        ),
+        vscode.commands.registerCommand('gitHawk.closeFiles', () =>
+            revisions.clear()
+        ),
+        vscode.commands.registerCommand('gitHawk.expandAllFiles', () =>
+            revisions.expandAll()
+        ),
+        // The Files tree's own rows, as built for the view.
+        vscode.commands.registerCommand('gitHawk.filesTree', () =>
+            revisionFiles.rootsForTesting()
+        ),
+        // Which revision the Files view shows, so a test can assert on real
+        // state rather than on a screenshot.
+        vscode.commands.registerCommand('gitHawk.browsedRevision', () =>
+            revisions.current
+        ),
         vscode.window.registerFileDecorationProvider(decorations),
         // Refreshing rescans as well as reloads: a repository cloned since the
         // window opened is exactly what someone pressing refresh is after. The
@@ -689,6 +797,10 @@ function createStashReader(): GitCliStashReader {
 
 function createWorkingTreeReader(): GitCliWorkingTreeReader {
     return new GitCliWorkingTreeReader(activeRepositoryRoot());
+}
+
+function createTreeReader(): GitCliTreeReader {
+    return new GitCliTreeReader(activeRepositoryRoot());
 }
 
 /**

@@ -176,3 +176,21 @@ export function blameArgs(
         path,
     ];
 }
+
+/**
+ * Every file a revision contains, as paths.
+ *
+ * `-r` recurses, so the whole project comes back in one call and the tree is
+ * shaped in memory rather than by one git process per folder opened. `-z`
+ * because a path may contain a newline; `--name-only` because the mode and
+ * blob hash are not shown. `--` before the revision so a branch called
+ * `--help` is a revision rather than a flag.
+ */
+export function lsTreeArgs(rev: string): string[] {
+    return ['ls-tree', '-r', '-z', '--name-only', rev, '--'];
+}
+
+/** `--verify` so an ambiguous or unknown name fails rather than being echoed back. */
+export function resolveRevisionArgs(rev: string): string[] {
+    return ['rev-parse', '--verify', '--end-of-options', `${rev}^{commit}`];
+}

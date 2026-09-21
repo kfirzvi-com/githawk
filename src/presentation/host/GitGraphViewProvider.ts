@@ -33,6 +33,7 @@ import {
     type WorkingTreeStatus,
 } from '../../domain/models/WorkingTreeStatus';
 import { WorktreeMapper } from '../../application/dto/mappers';
+import type { RevisionBrowser } from './RevisionBrowser';
 import { baseName } from '../../domain/services/paths';
 import { log } from './log';
 
@@ -104,7 +105,8 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
         private readonly createWorktreeReader: WorktreeReaderFactory,
         private readonly createRemoteReader: RemoteReaderFactory,
         private readonly createStashReader: StashReaderFactory,
-        private readonly createWorkingTreeReader: WorkingTreeReaderFactory
+        private readonly createWorkingTreeReader: WorkingTreeReaderFactory,
+        private readonly revisions: RevisionBrowser
     ) {}
 
     resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -186,6 +188,11 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
         if (this.changedFiles.current) {
             this.changedFiles.clear();
             this.post({ type: 'comparison:cleared' });
+        }
+        // The Files view too: its rows name a commit of the repository it
+        // came from, and opening one would ask the new repository for it.
+        if (this.revisions.current) {
+            this.revisions.clear();
         }
     }
 
@@ -891,7 +898,8 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
             this.createWriter(),
             () => this.refresh(),
             (request) => this.handleCompareRequest(request),
-            (request) => this.handleWorktreeRequest(request)
+            (request) => this.handleWorktreeRequest(request),
+            (hash) => this.revisions.browse(hash)
         );
     }
 
