@@ -105,7 +105,9 @@ export class GitActionMenu {
         /** Worktrees are owned by WorktreeMenu; the menu only asks. */
         private readonly onWorktreeRequested?: (
             request: WorktreeRequest
-        ) => Promise<void>
+        ) => Promise<void>,
+        /** The Files view is owned by RevisionBrowser; the menu only asks. */
+        private readonly onBrowseRequested?: (hash: string) => Promise<void>
     ) {
         this.runner = new ActionRunner(writer, onCompleted);
     }
@@ -150,6 +152,23 @@ export class GitActionMenu {
                         left: commit.hash,
                         leftLabel: commit.shortHash,
                     });
+                    return undefined;
+                },
+            },
+        ];
+
+        /*
+         * Not a comparison: the whole project as it stood, every file and not
+         * only the changed ones. It is how "what did this look like before
+         * the refactor" is answered without checking anything out, so the
+         * working tree, and whatever is half-done in it, is left alone.
+         */
+        const browse: ActionItem[] = [
+            {
+                label: '$(files) Browse files at this commit',
+                description: 'the whole project as it was, in the sidebar',
+                build: async () => {
+                    await this.onBrowseRequested?.(commit.hash);
                     return undefined;
                 },
             },
@@ -231,6 +250,7 @@ export class GitActionMenu {
         await this.show(
             [
                 ...group('Compare', compare),
+                ...group('Browse', browse),
                 ...group('Branch', branches),
                 ...group('Tag', tags),
                 ...group('Apply to current branch', applyElsewhere),

@@ -293,6 +293,42 @@
       {
         "command": "gitHawk.commitForTesting",
         "title": "GitHawk: Commit With A Given Message"
+      },
+      {
+        "command": "gitHawk.browseCommit",
+        "title": "GitHawk: Browse Files At A Commit",
+        "icon": "$(files)"
+      },
+      {
+        "command": "gitHawk.openFileAtRevision",
+        "title": "GitHawk: Open File At This Commit"
+      },
+      {
+        "command": "gitHawk.compareFileWithWorkingTree",
+        "title": "Compare With Working Tree",
+        "icon": "$(git-compare)"
+      },
+      {
+        "command": "gitHawk.revealRevisionFileInExplorer",
+        "title": "Reveal in Explorer View"
+      },
+      {
+        "command": "gitHawk.closeFiles",
+        "title": "GitHawk: Close The Files View",
+        "icon": "$(close)"
+      },
+      {
+        "command": "gitHawk.expandAllFiles",
+        "title": "GitHawk: Expand All Files",
+        "icon": "$(expand-all)"
+      },
+      {
+        "command": "gitHawk.filesTree",
+        "title": "GitHawk: Describe The Files Tree"
+      },
+      {
+        "command": "gitHawk.browsedRevision",
+        "title": "GitHawk: Report The Browsed Revision"
       }
     ],
     "keybindings": [
@@ -365,6 +401,13 @@
           "name": "Changes",
           "contextualTitle": "GitHawk",
           "icon": "$(git-compare)"
+        },
+        {
+          "id": "gitHawkFiles",
+          "name": "Files",
+          "contextualTitle": "GitHawk",
+          "icon": "$(files)",
+          "when": "gitHawk.revisionShown"
         }
       ],
       "gitHawkPanel": [
@@ -443,6 +486,16 @@
           "command": "gitHawk.expandAllChanges",
           "when": "view == gitHawkChanges",
           "group": "navigation@3"
+        },
+        {
+          "command": "gitHawk.expandAllFiles",
+          "when": "view == gitHawkFiles",
+          "group": "navigation@1"
+        },
+        {
+          "command": "gitHawk.closeFiles",
+          "when": "view == gitHawkFiles",
+          "group": "navigation@2"
         }
       ],
       "view/item/context": [
@@ -469,6 +522,21 @@
         {
           "command": "gitHawk.revealChangedFileInExplorer",
           "when": "view == gitHawkChanges && viewItem =~ /File$/",
+          "group": "2_reveal@1"
+        },
+        {
+          "command": "gitHawk.compareFileWithWorkingTree",
+          "when": "view == gitHawkFiles && viewItem == gitHawkRevisionFile",
+          "group": "inline@1"
+        },
+        {
+          "command": "gitHawk.compareFileWithWorkingTree",
+          "when": "view == gitHawkFiles && viewItem == gitHawkRevisionFile",
+          "group": "1_compare@1"
+        },
+        {
+          "command": "gitHawk.revealRevisionFileInExplorer",
+          "when": "view == gitHawkFiles && viewItem == gitHawkRevisionFile",
           "group": "2_reveal@1"
         }
       ],
@@ -531,6 +599,30 @@
         },
         {
           "command": "gitHawk.worktrees",
+          "when": "false"
+        },
+        {
+          "command": "gitHawk.openFileAtRevision",
+          "when": "false"
+        },
+        {
+          "command": "gitHawk.compareFileWithWorkingTree",
+          "when": "false"
+        },
+        {
+          "command": "gitHawk.revealRevisionFileInExplorer",
+          "when": "false"
+        },
+        {
+          "command": "gitHawk.closeFiles",
+          "when": "false"
+        },
+        {
+          "command": "gitHawk.filesTree",
+          "when": "false"
+        },
+        {
+          "command": "gitHawk.browsedRevision",
           "when": "false"
         }
       ]
