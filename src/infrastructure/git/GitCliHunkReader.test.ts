@@ -87,6 +87,22 @@ describe('GitCliHunkReader', () => {
         expect(hunks.map((hunk) => hunk.newStart)).toEqual([10, 13]);
     });
 
+    test('names a hunk by the function it is in, without its opening brace', async () => {
+        const repo = newRepo();
+        const lines = ['function total(a, b) {', ...Array.from({ length: 8 }, (_, i) => `    const v${i} = ${i};`), '}', ''];
+        const before = commitFile(repo, 'sum.js', lines.join('\n'));
+        lines[7] = '    const v6 = 60;';
+        const after = commitFile(repo, 'sum.js', lines.join('\n'));
+
+        const [hunk] = await new GitCliHunkReader(repo.path).hunks({
+            path: 'sum.js',
+            baseRev: before,
+            targetRev: after,
+        });
+
+        expect(hunk.context).toBe('function total(a, b)');
+    });
+
     test('a hunk keeps its id when an edit above it moves it down', async () => {
         const repo = newRepo();
         commitFile(repo, 'list.txt', numbered(40));

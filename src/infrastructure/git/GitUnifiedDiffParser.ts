@@ -26,7 +26,9 @@ export function parseUnifiedDiff(path: string, output: string): Hunk[] {
                 oldLines: header[2] === undefined ? 1 : Number(header[2]),
                 newStart: Number(header[3]),
                 newLines: header[4] === undefined ? 1 : Number(header[4]),
-                context: header[5].trim(),
+                // The line git found the hunk under, without the brace it
+                // usually ends on: "function total(a, b)" reads as a name.
+                context: header[5].trim().replace(/\s*\{\s*$/, ''),
                 lines: [],
             };
             hunks.push(current);

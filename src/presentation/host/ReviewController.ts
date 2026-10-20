@@ -2,7 +2,14 @@ import * as vscode from 'vscode';
 import { randomUUID } from 'node:crypto';
 import type { ComparisonDto } from '../../application/dto/ComparisonDto';
 import type { ComparisonSpec } from '../../domain/models/Comparison';
-import { hunkFocusLine, hunkNewRange, hunkOldRange, type Hunk } from '../../domain/models/Hunk';
+import {
+    hunkDeletions,
+    hunkFocusLine,
+    hunkInsertions,
+    hunkNewRange,
+    hunkOldRange,
+    type Hunk,
+} from '../../domain/models/Hunk';
 import {
     fileState,
     isHunkViewed,
@@ -568,7 +575,16 @@ export class ReviewController
      */
     async prepareComment(
         target?: { file: FileNode; hunk?: Hunk }
-    ): Promise<string | { path: string; line: number; range: { start: number; end: number } }> {
+    ): Promise<
+        | string
+        | {
+              path: string;
+              line: number;
+              range: { start: number; end: number };
+              /** What the change is, in a line: the code it starts with, and where. */
+              summary: string;
+          }
+    > {
         if (!this.review || !this.active) {
             return `No review is on screen. Start one with ${keys('⇧R')}.`;
         }
@@ -611,7 +627,7 @@ export class ReviewController
         log.info(
             `comment: ${stop.file.change.path} line ${line} (${located.side} side, change at ${range.start}–${range.end}) in ${editor.document.uri.toString()}`
         );
-        return { path: stop.file.change.path, line, range };
+        return { path: stop.file.change.path, line, range, summary: summarise(hunk, located.side) };
     }
 
     /** Opens one hunk of a file, or the file, and selects its row. */
@@ -1052,6 +1068,29 @@ export class ReviewController
             })),
         };
     }
+}
+
+/**
+ * A change in one line, for the comment box: its first changed line on the
+ * side being read, and the function git found it in. A line of the file is
+ * no good here — the cursor is as likely on a closing brace as on the change.
+ */
+export function summarise(hunk: Hunk, side: 'new' | 'old'): string {
+    const marker = side === 'new' && hunkInsertions(hunk) > 0 ? '+' : '-';
+    const first = hunk.lines.find((line) => line.startsWith(marker))?.slice(1).trim() ?? '';
+    const shown = first.length > 70 ? `${first.slice(0, 69)}…` : first;
+    const counts = [
+        hunkInsertions(hunk) > 0 ? `+${hunkInsertions(hunk)}` : '',
+        hunkDeletions(hunk) > 0 ? `−${hunkDeletions(hunk)}` : '',
+    ]
+        .filter(Boolean)
+        .join(' ');
+    return [
+        `Change ${counts}${hunk.context ? ` in ${hunk.context}` : ''}`,
+        shown ? `${marker === '+' ? 'starts' : 'removes'} “${shown}”` : '',
+    ]
+        .filter(Boolean)
+        .join(' — ');
 }
 
 /** "2/3 files · 1 comment", from the review's last snapshot. */

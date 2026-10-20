@@ -145,13 +145,13 @@ export class ReviewComments implements vscode.Disposable {
      */
     async askForComment(
         editor: vscode.TextEditor,
-        at: { path: string; line: number; range: { start: number; end: number } }
+        at: { path: string; line: number; range: { start: number; end: number }; summary: string }
     ): Promise<string | undefined> {
         const { start, end } = at.range;
         const where = start === end ? `line ${start}` : `lines ${start}–${end}`;
         const text = await vscode.window.showInputBox({
             title: `Comment on ${at.path}, ${where}`,
-            prompt: editor.document.lineAt(Math.min(at.line, editor.document.lineCount) - 1).text.trim() || undefined,
+            prompt: at.summary,
             placeHolder: 'What should change here? Enter saves it; it stays on this machine until you send the review.',
             ignoreFocusOut: true,
         });
