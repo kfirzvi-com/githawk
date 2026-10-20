@@ -7,6 +7,11 @@
  *
  *   npm run build && node scripts/e2eReview.mjs [screenshot-dir]
  *
+ * GITHAWK_E2E_EXTENSIONS=1 loads your own installed extensions instead of
+ * none: other extensions' keybindings are what took Cmd+Enter in a comment
+ * box away (Markdown All in One binds it in every Markdown editor, which a
+ * comment box is), and only a run with them catches that.
+ *
  * Prints what each step found and exits non-zero if any step failed. Every
  * bug this has caught passed the unit and integration tiers: they cannot see
  * where the keyboard is, what VS Code's comment widget does, or what a click
@@ -28,7 +33,7 @@ rmSync('/tmp/githawk-e2e-received.txt', { force: true });
 const results = {};
 const launch = async () => {
   const app = await electron.launch({ executablePath,
-    args: [`--extensionDevelopmentPath=${process.cwd()}`, `--user-data-dir=${profile}`, '--disable-extensions', '--disable-workspace-trust', '--skip-welcome', '/tmp/githawk-e2e-sample'] });
+    args: [`--extensionDevelopmentPath=${process.cwd()}`, `--user-data-dir=${profile}`, process.env.GITHAWK_E2E_EXTENSIONS === '1' ? `--extensions-dir=${process.env.HOME}/.vscode/extensions` : '--disable-extensions', '--disable-workspace-trust', '--skip-welcome', '/tmp/githawk-e2e-sample'] });
   const page = await app.firstWindow();
   await page.setViewportSize({ width: 1500, height: 950 });
   await page.waitForSelector('.monaco-workbench', { timeout: 60000 });
@@ -143,7 +148,8 @@ if (commentId && repliesPath) {
 
 // 6. Reload the window: the review, its marks and comments come back.
 await run('Developer: Reload Window');
-await page.waitForTimeout(8000);
+// Many extensions take a while to come back after a reload.
+await page.waitForTimeout(process.env.GITHAWK_E2E_EXTENSIONS === '1' ? 20000 : 8000);
 await run('GitHawk: Show Uncommitted Changes');
 await page.waitForTimeout(3000);
 await page.locator('.monaco-list-row', { hasText: /Lines 14/ }).first().click(); await page.waitForTimeout(2500);

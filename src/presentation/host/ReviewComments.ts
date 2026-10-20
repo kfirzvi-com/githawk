@@ -171,7 +171,9 @@ export class ReviewComments implements vscode.Disposable {
             reviews.onDidChange(() => {
                 this.offerRanges();
                 this.draw();
-            })
+                this.scheduleHealthCheck();
+            }),
+            vscode.window.onDidChangeVisibleTextEditors(() => this.scheduleHealthCheck())
         );
     }
 
@@ -194,6 +196,45 @@ export class ReviewComments implements vscode.Disposable {
         return controller;
     }
 
+    private healthTimer?: ReturnType<typeof setTimeout>;
+    private lastReregistered = 0;
+
+    /**
+     * Checks, a moment after a reviewed file comes on screen, that VS Code
+     * has asked GitHawk which of its lines take comments — and registers
+     * again when it has not.
+     *
+     * VS Code asks about every document it opens, and keeps asking for as
+     * long as it knows the controller. In a window with many extensions it
+     * can stop knowing it: a second extension host starting later (a web
+     * worker host, for one extension that needs it) was seen to wipe it, and
+     * from then on no comment showed and none could be added, with nothing
+     * said. Asking nothing about a document on screen is the sign.
+     */
+    private scheduleHealthCheck(): void {
+        if (this.healthTimer) {
+            clearTimeout(this.healthTimer);
+        }
+        this.healthTimer = setTimeout(() => this.checkHealth(), 2500);
+    }
+
+    private checkHealth(): void {
+        const unasked = vscode.window.visibleTextEditors.filter((editor) => {
+            const located = this.reviews.locate(editor.document.uri);
+            return (
+                located !== undefined &&
+                this.reviews.hunksOf(located.file) !== undefined &&
+                !this.answered.has(editor.document.uri.toString())
+            );
+        });
+        // Once in a while at most: a VS Code that never asks should not be
+        // re-registered with forever.
+        if (unasked.length > 0 && Date.now() - this.lastReregistered > 15_000) {
+            this.lastReregistered = Date.now();
+            this.reregister();
+        }
+    }
+
     /**
      * Registers the controller afresh and redraws every thread on it — for
      * a window whose VS Code has stopped asking GitHawk about comments.
@@ -212,6 +253,9 @@ export class ReviewComments implements vscode.Disposable {
     }
 
     dispose(): void {
+        if (this.healthTimer) {
+            clearTimeout(this.healthTimer);
+        }
         this.controller.dispose();
         this.drawnThreads.forEach(({ thread }) => thread.dispose());
         this.disposables.forEach((disposable) => disposable.dispose());

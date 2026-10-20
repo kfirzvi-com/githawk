@@ -627,6 +627,12 @@
         "key": "ctrl+k shift+[",
         "mac": "cmd+k shift+[",
         "when": "gitHawk.reviewing && !terminalFocus"
+      },
+      {
+        "command": "editor.action.submitComment",
+        "key": "ctrl+enter",
+        "mac": "cmd+enter",
+        "when": "commentEditorFocused && commentController =~ /^gitHawk\\.review/"
       }
     ],
     "viewsContainers": {
