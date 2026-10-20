@@ -697,18 +697,64 @@ export class ReviewController implements vscode.Disposable, ReviewOverlay {
                 located = undefined;
             }
             const hunks = located ? (this.hunksOf(located.file) ?? []) : [];
-            const viewed: vscode.Range[] = [];
-            const unviewed: vscode.Range[] = [];
+            const viewed: vscode.DecorationOptions[] = [];
+            const unviewed: vscode.DecorationOptions[] = [];
             for (const hunk of hunks) {
                 const line = hunkFocusLine(hunk, located!.side) - 1;
                 if (line >= editor.document.lineCount) {
                     continue;
                 }
-                const range = new vscode.Range(line, Number.MAX_SAFE_INTEGER, line, Number.MAX_SAFE_INTEGER);
-                (this.isViewed(located!.file, hunk) ? viewed : unviewed).push(range);
+                const isViewed = this.isViewed(located!.file, hunk);
+                (isViewed ? viewed : unviewed).push({
+                    range: new vscode.Range(line, 0, line, editor.document.lineAt(line).text.length),
+                    hoverMessage: this.hunkActions(located!.file, hunk, isViewed),
+                });
             }
             editor.setDecorations(this.viewedMarker, viewed);
             editor.setDecorations(this.unviewedMarker, unviewed);
+        }
+    }
+
+    /**
+     * The marker's hover: the change's own buttons, where the change is.
+     * Command links rather than a CodeLens, which the diff editor hides by
+     * default (`diffEditor.codeLens`).
+     */
+    private hunkActions(file: FileNode, hunk: Hunk, viewed: boolean): vscode.MarkdownString {
+        const link = (command: string, label: string) =>
+            `[${label}](command:${command}?${encodeURIComponent(
+                JSON.stringify([file.change.path, file.group ?? null, hunk.id])
+            )})`;
+        const actions = new vscode.MarkdownString(
+            [
+                link('gitHawk.review.commentOnHunk', '$(comment) Comment on this change'),
+                link(
+                    'gitHawk.review.toggleHunk',
+                    viewed ? '$(circle-large-outline) Mark not viewed' : '$(check) Mark viewed'
+                ),
+            ].join('&nbsp;&nbsp;·&nbsp;&nbsp;'),
+            true
+        );
+        actions.isTrusted = {
+            enabledCommands: ['gitHawk.review.commentOnHunk', 'gitHawk.review.toggleHunk'],
+        };
+        return actions;
+    }
+
+    /** A hunk named the way a hover link names it: path, section, id. */
+    findHunk(path: string, group: string | null, hunkId: string): Stop | undefined {
+        const file = this.deps.tree.files.find(
+            (node) => node.change.path === path && (node.group ?? null) === group
+        );
+        const hunk = file ? this.hunksOf(file)?.find((candidate) => candidate.id === hunkId) : undefined;
+        return file && hunk ? { file, hunk } : undefined;
+    }
+
+    async toggleHunk(path: string, group: string | null, hunkId: string): Promise<void> {
+        const stop = this.findHunk(path, group, hunkId);
+        if (stop?.hunk) {
+            this.mark(stop.file, stop.hunk, !this.isViewed(stop.file, stop.hunk));
+            await this.saveAndRedraw();
         }
     }
 

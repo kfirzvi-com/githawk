@@ -660,6 +660,22 @@ export async function activate(
             }
             await vscode.commands.executeCommand('workbench.action.addComment');
         }),
+        // The links in a diff marker's hover.
+        vscode.commands.registerCommand(
+            'gitHawk.review.commentOnHunk',
+            async (path: string, group: string | null, hunkId: string) => {
+                const stop = reviews.findHunk(path, group, hunkId);
+                if (stop?.hunk) {
+                    await reviews.openStop(stop.file, stop.hunk);
+                    await vscode.commands.executeCommand('workbench.action.addComment');
+                }
+            }
+        ),
+        vscode.commands.registerCommand(
+            'gitHawk.review.toggleHunk',
+            (path: string, group: string | null, hunkId: string) =>
+                reviews.toggleHunk(path, group, hunkId)
+        ),
         vscode.commands.registerCommand(
             'gitHawk.review.saveComment',
             (reply: vscode.CommentReply) => reviewComments.save(reply)

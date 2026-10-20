@@ -91,7 +91,7 @@ mkdirSync(outDir, { recursive: true });
  * prints what it was given: the screenshot shows the handoff, and nothing
  * acts on the sample repository behind the script's back.
  */
-if (scenes === 'review') {
+if (scenes.startsWith('review')) {
     const agent = fileURLToPath(new URL('./fixtures/demoAgent.mjs', import.meta.url));
     mkdirSync(join(userDataDir, 'User'), { recursive: true });
     writeFileSync(
@@ -242,7 +242,7 @@ try {
      * The repository selector, and the picker behind it. Present in any
      * workspace, so this runs before the sample-specific scenes.
      */
-    if (scenes !== 'blame' && scenes !== 'review') {
+    if (scenes !== 'blame' && !scenes.startsWith('review')) {
         const repositoryPicker = inner.getByTestId('repository-picker');
         await repositoryPicker.waitFor();
         await capture('09-repository-selector');
@@ -507,6 +507,118 @@ try {
         await runCommand('GitHawk: Resume Code Review');
         await page.waitForTimeout(2500);
         await capture('review-11-resumed');
+    }
+
+    if (scenes === 'review-buttons') {
+        /*
+         * Where the comment buttons are, ringed in red. A row's button shows
+         * only while the row is selected or hovered, so one is selected.
+         */
+        await runCommand('View: Toggle Maximized Panel');
+        await runCommand('View: Close Panel');
+        await runCommand('GitHawk: Show Uncommitted Changes');
+        await page.keyboard.press('Meta+K');
+        await page.keyboard.press('Shift+R');
+        await page.waitForTimeout(3000);
+
+        // Annotations are drawn into the workbench itself, so no image tool
+        // is needed; each is a ring and a label, and ignores the mouse.
+        const ring = (selectorScript, label, side = 'left', below = true) =>
+            page.evaluate(
+                ({ selectorScript, label, side, below }) => {
+                    const element = new Function(selectorScript)();
+                    if (!element) {
+                        return false;
+                    }
+                    const box = element.getBoundingClientRect();
+                    const mark = document.createElement('div');
+                    mark.className = 'shot-annotation';
+                    Object.assign(mark.style, {
+                        position: 'fixed', left: `${box.left - 5}px`, top: `${box.top - 5}px`,
+                        width: `${box.width + 10}px`, height: `${box.height + 10}px`,
+                        border: '3px solid #ff3b30', borderRadius: '6px', zIndex: 100000,
+                        pointerEvents: 'none',
+                    });
+                    const text = document.createElement('div');
+                    text.className = 'shot-annotation';
+                    text.textContent = label;
+                    Object.assign(text.style, {
+                        position: 'fixed',
+                        top: below ? `${box.bottom + 10}px` : `${box.top - 36}px`,
+                        background: '#ff3b30', color: 'white', font: '600 13px -apple-system, sans-serif',
+                        padding: '4px 8px', borderRadius: '4px', zIndex: 100000, pointerEvents: 'none',
+                        whiteSpace: 'nowrap',
+                        ...(side === 'right'
+                            ? { right: `${window.innerWidth - box.right - 5}px` }
+                            : { left: `${box.left - 5}px` }),
+                    });
+                    document.body.append(mark, text);
+                    return true;
+                },
+                { selectorScript, label, side, below }
+            );
+
+        // 1. A hunk's row, selected — which is when VS Code shows its button.
+        await page
+            .locator('#workbench\\.view\\.extension\\.gitHawkSidebar .monaco-list-row', { hasText: 'Line 35' })
+            .first()
+            .click();
+        await page.waitForTimeout(2000);
+        const found = {
+            row: await ring(
+                `return [...document.querySelectorAll('.monaco-list-row')].find((r) => r.textContent.includes('Line 35'))?.querySelector('.codicon-comment');`,
+                '① Comment on this change — the button on its row (selected or hovered)'
+            ),
+            title: await ring(
+                `return document.querySelector('.editor-group-container.active .editor-actions .codicon-comment');`,
+                '② Comment on the change at the cursor',
+                'right'
+            ),
+        };
+        console.log('buttons found:', JSON.stringify(found));
+        await page.waitForTimeout(400);
+        await capture('comment-buttons');
+    }
+
+    if (scenes === 'review-commits') {
+        /*
+         * Reviewing history rather than work in progress: the two commits of
+         * a feature branch, selected in the graph the way a pull request's
+         * commits would be. Wants `makeReviewSample.sh <dir> --committed`.
+         */
+        const chord = async (key) => {
+            await page.keyboard.press('Meta+K');
+            await page.keyboard.press(key);
+            await page.waitForTimeout(1800);
+        };
+        const row = (text) => rows.filter({ hasText: text }).first();
+        await click(row('List overdue'));
+        await page.waitForTimeout(800);
+        await click(row('Payment terms'), { modifiers: ['Shift'] });
+        await page.waitForTimeout(3000);
+        await capture('commits-01-selected');
+
+        await runCommand('View: Close Panel');
+        await chord('Shift+R');
+        await page.waitForTimeout(1500);
+        await capture('commits-02-review-started');
+
+        await chord('Shift+V');
+        await chord('Shift+V');
+        await chord('Shift+C');
+        await page.waitForTimeout(800);
+        await page.keyboard.type('Terms of 0 days mean due on receipt; ?? keeps that, but add a test so nobody turns it into ||.');
+        await page.keyboard.press('Meta+Enter');
+        await page.waitForTimeout(1500);
+        await capture('commits-03-commented');
+
+        await chord('Shift+S');
+        await page.waitForSelector('.quick-input-widget:visible');
+        await page.keyboard.type('demo-agent');
+        await page.waitForTimeout(600);
+        await page.keyboard.press('Enter');
+        await page.waitForTimeout(4000);
+        await capture('commits-04-sent');
     }
 
     console.log(JSON.stringify({ shots }, null, 2));

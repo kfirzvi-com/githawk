@@ -426,6 +426,14 @@
       {
         "command": "gitHawk.review.commentForTesting",
         "title": "GitHawk: Comment On Lines By Path"
+      },
+      {
+        "command": "gitHawk.review.commentOnHunk",
+        "title": "GitHawk: Comment On A Change"
+      },
+      {
+        "command": "gitHawk.review.toggleHunk",
+        "title": "GitHawk: Toggle A Change Viewed"
       }
     ],
     "keybindings": [
@@ -895,6 +903,14 @@
         {
           "command": "gitHawk.review.sendToAi",
           "when": "gitHawk.reviewing"
+        },
+        {
+          "command": "gitHawk.review.commentOnHunk",
+          "when": "false"
+        },
+        {
+          "command": "gitHawk.review.toggleHunk",
+          "when": "false"
         }
       ],
       "comments/commentThread/context": [

@@ -5,11 +5,16 @@
 # change to another, and a new file — so review mode has hunks to walk
 # through, tick off and comment on.
 #
-#   ./scripts/makeReviewSample.sh [target-dir]
+#   ./scripts/makeReviewSample.sh [target-dir] [--committed]
+#
+# With --committed the same work is committed instead, on a branch of its own
+# in two commits — a pull request's worth of history to review, and a clean
+# working tree.
 #
 set -euo pipefail
 
 TARGET="${1:-/tmp/githawk-review-sample}"
+MODE="${2:-}"
 rm -rf "$TARGET"
 mkdir -p "$TARGET/src/billing" "$TARGET/src/shared"
 cd "$TARGET"
@@ -122,5 +127,13 @@ export function overdueInvoices(invoices: Invoice[], today: Date): Invoice[] {
     return invoices.filter((invoice) => isOverdue(invoice, today));
 }
 TS
+
+if [ "$MODE" = "--committed" ]; then
+    git checkout --quiet -b feature/payment-terms
+    git add src/billing/invoice.ts src/shared/money.ts
+    git commit --quiet -m "Payment terms per customer, and currency-aware money"
+    git add src/billing/reminders.ts
+    git commit --quiet -m "List overdue invoices for reminders"
+fi
 
 echo "Built $TARGET"
