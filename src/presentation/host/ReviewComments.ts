@@ -39,6 +39,24 @@ class ShownComment implements vscode.Comment {
         this.label = sentAt ? 'sent' : 'not sent yet';
     }
 
+    /**
+     * A comment not written yet: blank, and already being edited, alone in
+     * a thread of its own. VS Code puts the keyboard in such a comment the
+     * moment its thread opens, and closing it is GitHawk's to do — see
+     * ReviewComments.openDraft.
+     */
+    static draft(thread: vscode.CommentThread): ShownComment {
+        const draft = new ShownComment('', '', undefined, thread);
+        draft.mode = vscode.CommentMode.Editing;
+        draft.contextValue = 'gitHawkReviewDraft';
+        draft.label = 'new comment';
+        return draft;
+    }
+
+    get isDraft(): boolean {
+        return this.reviewId === '';
+    }
+
     get text(): string {
         return this.body.value;
     }
@@ -166,6 +184,91 @@ export class ReviewComments implements vscode.Disposable {
     }
 
     /**
+     * Opens a new comment on the cursor's line, ready to type into.
+     *
+     * Not VS Code's Add Comment: the box it opens is VS Code's own, and in
+     * this VS Code Escape does not close it. This is a thread of GitHawk's
+     * holding one blank comment already being edited; VS Code focuses such a
+     * comment when its thread opens, so the keyboard is in it at once, and
+     * Escape closes it because GitHawk can.
+     */
+    async openDraft(editor: vscode.TextEditor): Promise<void> {
+        this.discardDrafts();
+        const line = editor.selection.active.line;
+        // In view first: VS Code will not focus a comment it has not drawn,
+        // and the keystrokes meant for the box would land in the code.
+        editor.revealRange(
+            new vscode.Range(line, 0, line, 0),
+            vscode.TextEditorRevealType.InCenterIfOutsideViewport
+        );
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        const thread = this.controller.createCommentThread(
+            editor.document.uri,
+            new vscode.Range(line, 0, line, 0),
+            []
+        );
+        thread.canReply = false;
+        thread.label = 'New review comment';
+        thread.contextValue = 'gitHawkReviewDraft';
+        thread.collapsibleState = vscode.CommentThreadCollapsibleState.Collapsed;
+        thread.comments = [ShownComment.draft(thread)];
+        this.drafts = [thread];
+        // Collapsed then expanded: the opening is what VS Code focuses on,
+        // and it has to have drawn the folded thread first to see one.
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        thread.collapsibleState = vscode.CommentThreadCollapsibleState.Expanded;
+    }
+
+    /** Add Review Comment on a draft. */
+    async saveDraft(comment: ShownComment): Promise<string | undefined> {
+        const thread = comment.thread;
+        const text = comment.text;
+        this.drafts = this.drafts.filter((draft) => draft !== thread);
+        if (!text.trim()) {
+            thread.dispose();
+            return undefined;
+        }
+        return this.save({ thread, text });
+    }
+
+    /**
+     * Escape in a review comment: a draft goes, an edit is abandoned, and an
+     * open thread folds away — then the keyboard is back in the code.
+     */
+    async escape(): Promise<void> {
+        if (this.drafts.length > 0) {
+            this.discardDrafts();
+        } else {
+            let cancelled = false;
+            for (const thread of this.threads) {
+                for (const comment of thread.comments) {
+                    if (comment instanceof ShownComment && comment.mode === vscode.CommentMode.Editing) {
+                        comment.cancelEditing();
+                        this.refresh(thread);
+                        cancelled = true;
+                    }
+                }
+            }
+            if (!cancelled) {
+                const uri = vscode.window.activeTextEditor?.document.uri.toString();
+                for (const thread of this.threads) {
+                    if (thread.uri.toString() === uri) {
+                        thread.collapsibleState = vscode.CommentThreadCollapsibleState.Collapsed;
+                    }
+                }
+            }
+        }
+        await vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup');
+    }
+
+    private discardDrafts(): void {
+        this.drafts.forEach((draft) => draft.dispose());
+        this.drafts = [];
+    }
+
+    private drafts: vscode.CommentThread[] = [];
+
+    /**
      * Makes room for a new comment on a change that may have some already.
      *
      * Its threads are unfolded, so what was said before is beside what is
@@ -274,6 +377,11 @@ export class ReviewComments implements vscode.Disposable {
     }
 
     cancelEdit(comment: ShownComment): void {
+        if (comment.isDraft) {
+            this.drafts = this.drafts.filter((draft) => draft !== comment.thread);
+            comment.thread.dispose();
+            return;
+        }
         comment.cancelEditing();
         this.refresh(comment.thread);
     }

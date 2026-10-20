@@ -49,6 +49,24 @@ await page.locator('.editor.modified .codelens-decoration a', { hasText: 'Commen
 await page.keyboard.type('Rename paymentTermsDays to termsDays.'); await page.keyboard.press('Meta+Enter'); await page.waitForTimeout(2000);
 results.added = await comments('Rename paymentTermsDays');
 
+// 1b. Escape: a new box goes without a trace; a saved thread folds away.
+await page.keyboard.press('Meta+K'); await page.keyboard.press(']'); await page.waitForTimeout(1500);
+await page.keyboard.press('Meta+K'); await page.keyboard.press('Shift+C'); await page.waitForTimeout(1500);
+await shot('1b-new-box');
+await page.keyboard.type('never mind'); await page.waitForTimeout(400);
+results.typedIntoNewBox = await page.locator('.review-widget .review-comment .monaco-editor', { hasText: 'never mind' }).count();
+await page.keyboard.press('Escape'); await page.waitForTimeout(1200);
+results.escClosesNewBox = (await page.locator('.review-widget:visible', { hasText: 'New review comment' }).count()) === 0 && (await comments('never mind')) === 0;
+// Back to the first change, from its row, to put the keyboard in its thread.
+await page.locator('.monaco-list-row', { hasText: /Lines 14/ }).first().click(); await page.waitForTimeout(1500);
+await page.locator('.review-widget .review-comment', { hasText: 'Rename paymentTermsDays' }).first().click({ force: true }); await page.waitForTimeout(400);
+await page.keyboard.press('Escape'); await page.waitForTimeout(1200);
+results.escFoldsThread = (await comments('Rename paymentTermsDays')) === 0;
+// Comment again on the same change: the folded thread opens, beside a new box.
+await page.locator('.editor.modified .codelens-decoration a', { hasText: 'Comment' }).first().click({ force: true }); await page.waitForTimeout(1500);
+results.earlierCommentShownAgain = await comments('Rename paymentTermsDays');
+await page.keyboard.press('Escape'); await page.waitForTimeout(1000);
+
 // 2. Edit it, through the comment's own menu.
 const comment = page.locator('.review-widget .review-comment', { hasText: 'Rename paymentTermsDays' }).first();
 await comment.hover(); await page.waitForTimeout(500);
@@ -78,6 +96,7 @@ await page.keyboard.press('ArrowDown'); await page.waitForTimeout(300); await pa
 await shot('4-space');
 results.spaceTicked = await page.locator('.pane-header', { hasText: 'Review' }).first().innerText();
 results.fileUntouched = !(await page.locator('.tab.dirty').count());
+// (Checked again at the end: nothing in the flow may type into the code.)
 // 5. Send to a session already running in a terminal.
 await run('Terminal: Create New Terminal');
 await page.waitForTimeout(2500);
@@ -101,6 +120,10 @@ console.log(JSON.stringify(results, null, 1));
 await app.close();
 const failed = [
     results.added !== 1 && 'comment from the button',
+    results.typedIntoNewBox !== 1 && 'a new comment box takes the keyboard',
+    !results.escClosesNewBox && 'Escape closes a new comment box',
+    !results.escFoldsThread && 'Escape folds a saved thread',
+    results.earlierCommentShownAgain !== 1 && 'commenting again shows the earlier comment',
     results.edited !== 1 && 'edit a comment',
     results.secondAdded !== 1 && 'comment by keyboard',
     !results.deleted && 'delete a comment',

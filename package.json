@@ -453,6 +453,14 @@
       {
         "command": "gitHawk.review.toggleSelected",
         "title": "GitHawk: Toggle The Selected Rows Viewed"
+      },
+      {
+        "command": "gitHawk.review.saveDraft",
+        "title": "Add Review Comment"
+      },
+      {
+        "command": "gitHawk.review.escape",
+        "title": "GitHawk: Close The Review Comment"
       }
     ],
     "keybindings": [
@@ -579,6 +587,11 @@
             "gitHawk.review.toggleSelected"
           ]
         }
+      },
+      {
+        "command": "gitHawk.review.escape",
+        "key": "escape",
+        "when": "(commentEditorFocused || commentFocused) && commentController =~ /^gitHawk\\.review/"
       }
     ],
     "viewsContainers": {
@@ -1009,6 +1022,14 @@
         {
           "command": "gitHawk.review.toggleSelected",
           "when": "false"
+        },
+        {
+          "command": "gitHawk.review.saveDraft",
+          "when": "false"
+        },
+        {
+          "command": "gitHawk.review.escape",
+          "when": "false"
         }
       ],
       "comments/commentThread/context": [
@@ -1040,13 +1061,18 @@
       "comments/comment/context": [
         {
           "command": "gitHawk.review.cancelEdit",
-          "group": "inline@1",
+          "group": "inline@2",
           "when": "commentController =~ /^gitHawk\\.review/"
         },
         {
           "command": "gitHawk.review.saveEdit",
-          "group": "inline@2",
-          "when": "commentController =~ /^gitHawk\\.review/"
+          "group": "inline@1",
+          "when": "commentController =~ /^gitHawk\\.review/ && comment == gitHawkReviewComment"
+        },
+        {
+          "command": "gitHawk.review.saveDraft",
+          "group": "inline@1",
+          "when": "commentController =~ /^gitHawk\\.review/ && comment == gitHawkReviewDraft"
         }
       ]
     },

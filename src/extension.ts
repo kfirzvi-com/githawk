@@ -284,7 +284,7 @@ export async function activate(
             return;
         }
         if (await reviewComments.readyForComments(editor.document.uri)) {
-            await vscode.commands.executeCommand('workbench.action.addComment');
+            await reviewComments.openDraft(editor);
             return;
         }
         log.warn(
@@ -773,6 +773,11 @@ export async function activate(
             'gitHawk.review.editComment',
             (comment: ShownComment) => reviewComments.edit(comment)
         ),
+        vscode.commands.registerCommand(
+            'gitHawk.review.saveDraft',
+            (comment: ShownComment) => reviewComments.saveDraft(comment)
+        ),
+        vscode.commands.registerCommand('gitHawk.review.escape', () => reviewComments.escape()),
         vscode.commands.registerCommand(
             'gitHawk.review.saveEdit',
             (comment: ShownComment) => reviewComments.saveEdit(comment)
