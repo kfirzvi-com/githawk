@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { realpathSync } from 'node:fs';
+import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path';
 import {
     DEFAULT_COMMIT_LIMIT,
     GitCliRepository,
@@ -27,6 +28,11 @@ import { RepositoryRegistry } from './presentation/host/RepositoryRegistry';
 import { RepositoryWatcher } from './presentation/host/RepositoryWatcher';
 import { GitCliDirectoryReader } from './infrastructure/git/GitCliDirectoryReader';
 import { GitCliTreeReader } from './infrastructure/git/GitCliTreeReader';
+import { GitCliHunkReader } from './infrastructure/git/GitCliHunkReader';
+import { ReviewController } from './presentation/host/ReviewController';
+import { ReviewComments, type ShownComment } from './presentation/host/ReviewComments';
+import { ReviewHandoff } from './presentation/host/ReviewHandoff';
+import type { Hunk } from './domain/models/Hunk';
 import {
     OPEN_FILE_AT_REVISION_COMMAND,
     REVISION_FILES_VIEW_ID,
@@ -132,6 +138,9 @@ export async function activate(
     const changesView = vscode.window.createTreeView(CHANGED_FILES_VIEW_ID, {
         treeDataProvider: changedFiles,
         showCollapseAll: true,
+        // A file's tick means "every hunk in it", which the review decides;
+        // VS Code's own propagation would tick a file whose hunks are not.
+        manageCheckboxStateManually: true,
     });
     changedFiles.attach(changesView);
 
@@ -194,6 +203,111 @@ export async function activate(
         createStashReader,
         createWorkingTreeReader,
         revisions
+    );
+
+    /*
+     * Review mode: the Changes view's files and hunks with viewed ticks, the
+     * markers in the diff, comments in VS Code's own commenting UI, and the
+     * handoff of those comments to an AI CLI.
+     */
+    const reviews = new ReviewController({
+        store: context.workspaceState,
+        tree: changedFiles,
+        hunkReader: () => new GitCliHunkReader(activeRepositoryRoot()),
+        resolveRevision: (rev) => createTreeReader().resolve(rev),
+        repositoryRoot: () => repositories.active?.root,
+        relativePath: (fsPath) => {
+            const root = repositories.active?.root;
+            if (!root) {
+                return undefined;
+            }
+            // The file's directory, not the file: a deleted file has no real path.
+            const real = (path: string) => {
+                try {
+                    return realpathSync.native(path);
+                } catch {
+                    return path;
+                }
+            };
+            const within = relative(
+                real(root),
+                join(real(dirname(fsPath)), basename(fsPath))
+            );
+            return within.startsWith('..') || isAbsolute(within)
+                ? undefined
+                : within.split(sep).join('/');
+        },
+        showComparison: (spec) => provider.showComparison(spec),
+        showWorkingTree: () => provider.compareWorkingTree('focus'),
+        openFile: (request) => comparisons.openFile(request),
+    });
+    const reviewComments = new ReviewComments(reviews, () => repositories.active?.root);
+    const handoff = new ReviewHandoff(reviews, {
+        repositoryRoot: () => repositories.active?.root,
+        gitDirectory: async () =>
+            (await new GitCliDirectoryReader(activeRepositoryRoot()).read()).gitDir,
+    });
+    context.subscriptions.push(reviews, reviewComments);
+
+    /*
+     * While the changeset under review includes the disk, the disk is
+     * watched. The usual refresh hangs off VS Code's own saves, and an agent
+     * acting on the review writes files from outside the editor — without
+     * this the hunks it rewrote would sit there ticked as though nothing had
+     * changed, which is the one thing a review must never do.
+     */
+    let reviewWatcher: vscode.FileSystemWatcher | undefined;
+    let watchedRoot: string | undefined;
+    const refreshReview = new Debouncer(
+        () => {
+            const review = reviews.current;
+            if (!reviews.isActive || !review) {
+                return;
+            }
+            if (changedFiles.showsWorkingTree) {
+                void provider.refreshWorkingTree();
+            } else {
+                void provider.showComparison(review.spec, 'none');
+            }
+        },
+        WORKING_TREE_REFRESH_MS * 2,
+        WORKING_TREE_REFRESH_MS * 8
+    );
+    const watchReviewedDisk = () => {
+        const review = reviews.current;
+        const onDisk =
+            reviews.isActive &&
+            review !== undefined &&
+            (review.spec.kind === 'workingTree' ||
+                (review.spec.kind === 'twoRefs' && review.spec.rightIsWorkingTree === true));
+        if (reviewWatcher && (!onDisk || watchedRoot !== review?.root)) {
+            reviewWatcher.dispose();
+            reviewWatcher = undefined;
+        }
+        if (onDisk && !reviewWatcher) {
+            watchedRoot = review.root;
+            reviewWatcher = vscode.workspace.createFileSystemWatcher(
+                new vscode.RelativePattern(vscode.Uri.file(review.root), '**/*')
+            );
+            const changed = (uri: vscode.Uri) => {
+                // git's own churn is the repository watcher's business.
+                if (!uri.path.includes('/.git/')) {
+                    refreshReview.schedule();
+                }
+            };
+            reviewWatcher.onDidChange(changed);
+            reviewWatcher.onDidCreate(changed);
+            reviewWatcher.onDidDelete(changed);
+        }
+    };
+    context.subscriptions.push(
+        reviews.onDidChange(watchReviewedDisk),
+        {
+            dispose: () => {
+                refreshReview.cancel();
+                reviewWatcher?.dispose();
+            },
+        }
     );
 
     /*
@@ -486,8 +600,14 @@ export async function activate(
          * against the disk, and a single pair for the whole tree would open
          * the wrong diff for one of them.
          */
-        vscode.commands.registerCommand(OPEN_DIFF_COMMAND, (node?: FileNode) => {
+        vscode.commands.registerCommand(OPEN_DIFF_COMMAND, (node?: FileNode, hunk?: Hunk) => {
             if (!changedFiles.current || !node) {
+                return;
+            }
+            // In a review a click is a step through it: the tree's selection
+            // and the "where am I" of next and previous follow it.
+            if (reviews.isActive) {
+                void reviews.openStop(node, hunk);
                 return;
             }
             void comparisons
@@ -505,6 +625,78 @@ export async function activate(
         }),
         vscode.commands.registerCommand('gitHawk.clearChanges', () =>
             changedFiles.clear()
+        ),
+        changesView.onDidChangeCheckboxState((event) =>
+            reviews.checkboxesChanged(event.items)
+        ),
+        vscode.commands.registerCommand('gitHawk.review.start', () => reviews.start()),
+        vscode.commands.registerCommand('gitHawk.review.resume', () => reviews.resume()),
+        // `true` from a test skips the question; the palette passes nothing.
+        vscode.commands.registerCommand('gitHawk.review.end', (confirmed?: boolean) =>
+            reviews.end({ confirmed: confirmed === true })
+        ),
+        vscode.commands.registerCommand('gitHawk.review.nextChange', () => reviews.next()),
+        vscode.commands.registerCommand('gitHawk.review.previousChange', () =>
+            reviews.previous()
+        ),
+        vscode.commands.registerCommand('gitHawk.review.nextUnviewed', () =>
+            reviews.next({ unviewedOnly: true })
+        ),
+        vscode.commands.registerCommand('gitHawk.review.markViewed', () =>
+            reviews.markCurrent()
+        ),
+        vscode.commands.registerCommand('gitHawk.review.markFileViewed', () =>
+            reviews.markCurrent({ wholeFile: true })
+        ),
+        // VS Code's own "comment on the selection", which opens our thread
+        // widget wherever the review offers a commenting range.
+        vscode.commands.registerCommand('gitHawk.review.comment', () =>
+            vscode.commands.executeCommand('workbench.action.addComment')
+        ),
+        vscode.commands.registerCommand(
+            'gitHawk.review.saveComment',
+            (reply: vscode.CommentReply) => reviewComments.save(reply)
+        ),
+        vscode.commands.registerCommand(
+            'gitHawk.review.deleteComment',
+            (comment: ShownComment) => reviewComments.remove(comment)
+        ),
+        vscode.commands.registerCommand(
+            'gitHawk.review.deleteThread',
+            (thread: vscode.CommentThread) => reviewComments.removeThread(thread)
+        ),
+        vscode.commands.registerCommand(
+            'gitHawk.review.editComment',
+            (comment: ShownComment) => reviewComments.edit(comment)
+        ),
+        vscode.commands.registerCommand(
+            'gitHawk.review.saveEdit',
+            (comment: ShownComment) => reviewComments.saveEdit(comment)
+        ),
+        vscode.commands.registerCommand(
+            'gitHawk.review.cancelEdit',
+            (comment: ShownComment) => reviewComments.cancelEdit(comment)
+        ),
+        // With a target the picker is skipped — a keybinding's args, or a test.
+        vscode.commands.registerCommand(
+            'gitHawk.review.sendToAi',
+            (target?: { tool?: string; terminal?: string; resend?: boolean }) =>
+                handoff.send(target)
+        ),
+        // The review as the extension holds it, after its hunks are read.
+        vscode.commands.registerCommand('gitHawk.review.state', async () => {
+            await reviews.whenLoaded();
+            return reviews.stateForTesting();
+        }),
+        vscode.commands.registerCommand(
+            'gitHawk.review.commentForTesting',
+            (uri: string, line: number, endLine: number, text: string) =>
+                reviewComments.commentForTesting(vscode.Uri.parse(uri), line, endLine, text)
+        ),
+        vscode.commands.registerCommand(
+            'gitHawk.review.markPath',
+            (path: string, viewed: boolean, hunkIndex?: number) =>
+                reviews.markPath(path, viewed, hunkIndex)
         ),
         vscode.commands.registerCommand('gitHawk.expandAllChanges', () =>
             changedFiles.expandAll()

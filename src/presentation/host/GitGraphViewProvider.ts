@@ -474,6 +474,14 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
         await this.runComparison({ kind: 'workingTree' }, reveal);
     }
 
+    /** Any comparison, by what it asks for — how a review returns to the changeset it pinned. */
+    async showComparison(
+        spec: Parameters<ComparisonController['compare']>[0],
+        reveal: RevealMode = 'focus'
+    ): Promise<void> {
+        await this.runComparison(spec, reveal);
+    }
+
     /**
      * Selects a commit from outside the graph — the link in a blame hover, or
      * the editor's own shortcut. Runs the same comparison a click in the graph

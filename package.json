@@ -73,27 +73,31 @@
         },
         "gitHawk.aiTools": {
           "type": "array",
-          "markdownDescription": "Coding agents GitHawk can start in a terminal, from a worktree or the current repository — and, with `commitMessageCommand`, ask to write a commit message.\n\n`command` is typed into a terminal already rooted in the chosen directory, so wrappers and aliases work — replace `claude` with `npx @anthropic-ai/claude-code`, or with your own script, as you like.\n\n`commitMessageCommand` is the same tool run once, non-interactively, through your default shell: the prompt and the diff arrive on its stdin, and whatever it prints becomes the message. The defaults are each tool's documented form for that (`claude -p`, `codex exec -`, and plain `gemini` or `opencode run`, which read stdin when it is not a terminal). Leave it out for a tool that has no such mode, and it stays out of the commit box's picker. An entry missing `name` or `command` is ignored.",
+          "markdownDescription": "Coding agents GitHawk can start in a terminal, from a worktree or the current repository — and, with `commitMessageCommand`, ask to write a commit message.\n\n`command` is typed into a terminal already rooted in the chosen directory, so wrappers and aliases work — replace `claude` with `npx @anthropic-ai/claude-code`, or with your own script, as you like.\n\n`commitMessageCommand` is the same tool run once, non-interactively, through your default shell: the prompt and the diff arrive on its stdin, and whatever it prints becomes the message. The defaults are each tool's documented form for that (`claude -p`, `codex exec -`, and plain `gemini` or `opencode run`, which read stdin when it is not a terminal). Leave it out for a tool that has no such mode, and it stays out of the commit box's picker. `promptCommand` starts the tool with a first message, which is how a code review's comments are handed over: `{prompt}` becomes a one-line instruction to read the review, single-quoted for the shell. Without it the tool is started with `command` and the line typed in after it.\n\nAn entry missing `name` or `command` is ignored.",
           "default": [
             {
               "name": "Claude Code",
               "command": "claude",
-              "commitMessageCommand": "claude -p"
+              "commitMessageCommand": "claude -p",
+              "promptCommand": "claude {prompt}"
             },
             {
               "name": "Codex",
               "command": "codex",
-              "commitMessageCommand": "codex exec -"
+              "commitMessageCommand": "codex exec -",
+              "promptCommand": "codex {prompt}"
             },
             {
               "name": "Gemini CLI",
               "command": "gemini",
-              "commitMessageCommand": "gemini"
+              "commitMessageCommand": "gemini",
+              "promptCommand": "gemini -i {prompt}"
             },
             {
               "name": "opencode",
               "command": "opencode",
-              "commitMessageCommand": "opencode run"
+              "commitMessageCommand": "opencode run",
+              "promptCommand": "opencode --prompt {prompt}"
             }
           ],
           "items": {
@@ -114,6 +118,10 @@
               "commitMessageCommand": {
                 "type": "string",
                 "description": "Run through your shell to write a commit message: the prompt and diff on stdin, the message on stdout. Omit for a tool with no non-interactive mode."
+              },
+              "promptCommand": {
+                "type": "string",
+                "description": "Starts the tool interactively with a first message — how a code review is handed over. `{prompt}` is replaced by the message, quoted. Omit it and the tool is started with `command` and the message typed in after."
               }
             }
           }
@@ -329,6 +337,95 @@
       {
         "command": "gitHawk.browsedRevision",
         "title": "GitHawk: Report The Browsed Revision"
+      },
+      {
+        "command": "gitHawk.review.start",
+        "title": "GitHawk: Start Code Review",
+        "icon": "$(checklist)"
+      },
+      {
+        "command": "gitHawk.review.resume",
+        "title": "GitHawk: Resume Code Review",
+        "icon": "$(checklist)"
+      },
+      {
+        "command": "gitHawk.review.end",
+        "title": "GitHawk: End Code Review",
+        "icon": "$(close)"
+      },
+      {
+        "command": "gitHawk.review.nextChange",
+        "title": "GitHawk: Next Change In Review",
+        "icon": "$(arrow-down)"
+      },
+      {
+        "command": "gitHawk.review.previousChange",
+        "title": "GitHawk: Previous Change In Review",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "gitHawk.review.nextUnviewed",
+        "title": "GitHawk: Next Unviewed Change",
+        "icon": "$(debug-step-over)"
+      },
+      {
+        "command": "gitHawk.review.markViewed",
+        "title": "GitHawk: Mark Change Viewed",
+        "icon": "$(check)"
+      },
+      {
+        "command": "gitHawk.review.markFileViewed",
+        "title": "GitHawk: Mark File Viewed",
+        "icon": "$(check-all)"
+      },
+      {
+        "command": "gitHawk.review.comment",
+        "title": "GitHawk: Comment On The Selected Lines",
+        "icon": "$(comment)"
+      },
+      {
+        "command": "gitHawk.review.sendToAi",
+        "title": "GitHawk: Send Review Comments To An AI CLI",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "gitHawk.review.saveComment",
+        "title": "Add Review Comment"
+      },
+      {
+        "command": "gitHawk.review.deleteComment",
+        "title": "Delete Comment",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "gitHawk.review.deleteThread",
+        "title": "Delete These Comments",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "gitHawk.review.editComment",
+        "title": "Edit Comment",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "gitHawk.review.saveEdit",
+        "title": "Save"
+      },
+      {
+        "command": "gitHawk.review.cancelEdit",
+        "title": "Cancel"
+      },
+      {
+        "command": "gitHawk.review.state",
+        "title": "GitHawk: Report The Review"
+      },
+      {
+        "command": "gitHawk.review.markPath",
+        "title": "GitHawk: Mark A File Viewed By Path"
+      },
+      {
+        "command": "gitHawk.review.commentForTesting",
+        "title": "GitHawk: Comment On Lines By Path"
       }
     ],
     "keybindings": [
@@ -367,6 +464,48 @@
         "key": "ctrl+k g",
         "mac": "cmd+k g",
         "when": "editorTextFocus"
+      },
+      {
+        "command": "gitHawk.review.start",
+        "key": "ctrl+k shift+r",
+        "mac": "cmd+k shift+r",
+        "when": "!terminalFocus"
+      },
+      {
+        "command": "gitHawk.review.nextChange",
+        "key": "ctrl+k ]",
+        "mac": "cmd+k ]",
+        "when": "gitHawk.reviewing && !terminalFocus"
+      },
+      {
+        "command": "gitHawk.review.previousChange",
+        "key": "ctrl+k [",
+        "mac": "cmd+k [",
+        "when": "gitHawk.reviewing && !terminalFocus"
+      },
+      {
+        "command": "gitHawk.review.markViewed",
+        "key": "ctrl+k shift+v",
+        "mac": "cmd+k shift+v",
+        "when": "gitHawk.reviewing && !terminalFocus"
+      },
+      {
+        "command": "gitHawk.review.markFileViewed",
+        "key": "ctrl+k shift+f",
+        "mac": "cmd+k shift+f",
+        "when": "gitHawk.reviewing && !terminalFocus"
+      },
+      {
+        "command": "gitHawk.review.comment",
+        "key": "ctrl+k shift+c",
+        "mac": "cmd+k shift+c",
+        "when": "gitHawk.reviewing && editorTextFocus"
+      },
+      {
+        "command": "gitHawk.review.sendToAi",
+        "key": "ctrl+k shift+s",
+        "mac": "cmd+k shift+s",
+        "when": "gitHawk.reviewing && !terminalFocus"
       }
     ],
     "viewsContainers": {
@@ -462,6 +601,21 @@
           "command": "gitHawk.revealInExplorer",
           "when": "resourceScheme == githawk-rev || isInDiffEditor && resourcePath in gitHawk.diffFiles",
           "group": "navigation@8"
+        },
+        {
+          "command": "gitHawk.review.previousChange",
+          "when": "gitHawk.reviewing && isInDiffEditor",
+          "group": "navigation@1"
+        },
+        {
+          "command": "gitHawk.review.nextChange",
+          "when": "gitHawk.reviewing && isInDiffEditor",
+          "group": "navigation@2"
+        },
+        {
+          "command": "gitHawk.review.markViewed",
+          "when": "gitHawk.reviewing && isInDiffEditor",
+          "group": "navigation@3"
         }
       ],
       "editor/title/context": [
@@ -473,13 +627,43 @@
       ],
       "view/title": [
         {
+          "command": "gitHawk.review.start",
+          "when": "view == gitHawkChanges && !gitHawk.reviewing && !gitHawk.reviewPaused",
+          "group": "navigation@0"
+        },
+        {
+          "command": "gitHawk.review.resume",
+          "when": "view == gitHawkChanges && gitHawk.reviewPaused",
+          "group": "navigation@0"
+        },
+        {
+          "command": "gitHawk.review.nextUnviewed",
+          "when": "view == gitHawkChanges && gitHawk.reviewing",
+          "group": "navigation@0"
+        },
+        {
+          "command": "gitHawk.review.sendToAi",
+          "when": "view == gitHawkChanges && gitHawk.reviewing",
+          "group": "navigation@0"
+        },
+        {
+          "command": "gitHawk.review.end",
+          "when": "view == gitHawkChanges && gitHawk.reviewing",
+          "group": "navigation@0"
+        },
+        {
+          "command": "gitHawk.review.end",
+          "when": "view == gitHawkChanges && gitHawk.reviewPaused",
+          "group": "9_review@1"
+        },
+        {
           "command": "gitHawk.showUncommittedChanges",
-          "when": "view == gitHawkChanges",
+          "when": "view == gitHawkChanges && !gitHawk.reviewing",
           "group": "navigation@1"
         },
         {
           "command": "gitHawk.clearChanges",
-          "when": "view == gitHawkChanges",
+          "when": "view == gitHawkChanges && !gitHawk.reviewing",
           "group": "navigation@2"
         },
         {
@@ -624,6 +808,116 @@
         {
           "command": "gitHawk.browsedRevision",
           "when": "false"
+        },
+        {
+          "command": "gitHawk.review.saveComment",
+          "when": "false"
+        },
+        {
+          "command": "gitHawk.review.deleteComment",
+          "when": "false"
+        },
+        {
+          "command": "gitHawk.review.deleteThread",
+          "when": "false"
+        },
+        {
+          "command": "gitHawk.review.editComment",
+          "when": "false"
+        },
+        {
+          "command": "gitHawk.review.saveEdit",
+          "when": "false"
+        },
+        {
+          "command": "gitHawk.review.cancelEdit",
+          "when": "false"
+        },
+        {
+          "command": "gitHawk.review.state",
+          "when": "false"
+        },
+        {
+          "command": "gitHawk.review.markPath",
+          "when": "false"
+        },
+        {
+          "command": "gitHawk.review.commentForTesting",
+          "when": "false"
+        },
+        {
+          "command": "gitHawk.review.resume",
+          "when": "gitHawk.reviewPaused"
+        },
+        {
+          "command": "gitHawk.review.end",
+          "when": "gitHawk.reviewing || gitHawk.reviewPaused"
+        },
+        {
+          "command": "gitHawk.review.nextChange",
+          "when": "gitHawk.reviewing"
+        },
+        {
+          "command": "gitHawk.review.previousChange",
+          "when": "gitHawk.reviewing"
+        },
+        {
+          "command": "gitHawk.review.nextUnviewed",
+          "when": "gitHawk.reviewing"
+        },
+        {
+          "command": "gitHawk.review.markViewed",
+          "when": "gitHawk.reviewing"
+        },
+        {
+          "command": "gitHawk.review.markFileViewed",
+          "when": "gitHawk.reviewing"
+        },
+        {
+          "command": "gitHawk.review.comment",
+          "when": "gitHawk.reviewing"
+        },
+        {
+          "command": "gitHawk.review.sendToAi",
+          "when": "gitHawk.reviewing"
+        }
+      ],
+      "comments/commentThread/context": [
+        {
+          "command": "gitHawk.review.saveComment",
+          "group": "inline",
+          "when": "commentController == gitHawk.review"
+        }
+      ],
+      "comments/commentThread/title": [
+        {
+          "command": "gitHawk.review.deleteThread",
+          "group": "navigation",
+          "when": "commentController == gitHawk.review && !commentThreadIsEmpty"
+        }
+      ],
+      "comments/comment/title": [
+        {
+          "command": "gitHawk.review.editComment",
+          "group": "group@1",
+          "when": "commentController == gitHawk.review && comment == gitHawkReviewComment"
+        },
+        {
+          "command": "gitHawk.review.deleteComment",
+          "group": "group@2",
+          "when": "commentController == gitHawk.review && comment == gitHawkReviewComment"
+        }
+      ],
+      "comments/comment/context": [
+        {
+          "command": "gitHawk.review.cancelEdit",
+          "group": "inline@1",
+          "when": "commentController == gitHawk.review"
+        },
+        {
+          "command": "gitHawk.review.saveEdit",
+          "group": "inline@2",
+          "when": "commentController == gitHawk.review"
         }
       ]
     }

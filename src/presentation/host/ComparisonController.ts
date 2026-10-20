@@ -12,6 +12,8 @@ export interface OpenFileRequest {
     baseRev: string;
     /** Undefined means the working tree, which opens the real editable file. */
     targetRev?: string;
+    /** A line of the newer side to put the cursor on, 1-based — a review's way to a hunk. */
+    line?: number;
 }
 
 /**
@@ -161,12 +163,23 @@ export class ComparisonController {
             : request.path;
 
         this.onOpened(right);
+        const at =
+            request.line === undefined
+                ? undefined
+                : new vscode.Range(request.line - 1, 0, request.line - 1, 0);
         await vscode.commands.executeCommand(
             'vscode.diff',
             left,
             right,
             title,
-            { preview: true } satisfies vscode.TextDocumentShowOptions
+            { preview: true, selection: at } satisfies vscode.TextDocumentShowOptions
         );
+        // The selection option moves the cursor; when the diff was already
+        // open it does not always scroll, and a hunk off screen is not "at" it.
+        const editor = vscode.window.activeTextEditor;
+        if (at && editor?.document.uri.toString() === right.toString()) {
+            editor.selection = new vscode.Selection(at.start, at.start);
+            editor.revealRange(at, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+        }
     }
 }

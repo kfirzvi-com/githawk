@@ -2,8 +2,16 @@ import * as vscode from 'vscode';
 import { ComparisonDto } from '../../application/dto/ComparisonDto';
 import type { ChangeGroupKind } from '../../domain/models/Comparison';
 import {
+    hunkDeletions,
+    hunkInsertions,
+    hunkNewRange,
+    type Hunk,
+} from '../../domain/models/Hunk';
+import type { FileReviewState } from '../../domain/models/Review';
+import {
     FileNode,
     GroupNode,
+    HunkNode,
     TreeNode,
     basename,
     buildComparisonTree,
@@ -42,6 +50,24 @@ export const GROUP_CONTEXT: Record<ChangeGroupKind, string> = {
     conflicted: 'gitHawkConflictedGroup',
 };
 
+export const HUNK_CONTEXT = 'gitHawkHunk';
+
+/**
+ * What a review adds to the tree: a checkbox on every file, and the file's
+ * hunks beneath it, each with a checkbox of its own. The tree asks; the
+ * review answers. Nothing about what "viewed" means lives here.
+ */
+export interface ReviewOverlay {
+    /** Undefined while the file is still being read. */
+    hunksOf(file: FileNode): readonly Hunk[] | undefined;
+    fileState(file: FileNode): FileReviewState;
+    isViewed(file: FileNode, hunk: Hunk): boolean;
+    /** "3 of 7 files · 12 of 30 changes", for the view's description. */
+    progress(): { text: string; unviewed: number };
+    /** The shortcuts, said where the reader is already looking. */
+    message(): string;
+}
+
 /**
  * Shows the changed files of the current comparison as a folder tree in the
  * primary sidebar.
@@ -73,6 +99,17 @@ export class ChangedFilesTree implements vscode.TreeDataProvider<TreeNode> {
      */
     private generation = 0;
     private view?: vscode.TreeView<TreeNode>;
+    private review?: ReviewOverlay;
+    /** Said under whatever is on screen while a review waits elsewhere. */
+    private reviewNote?: string;
+    /**
+     * One node per hunk per file row, kept so `reveal` is handed the same
+     * object `getChildren` returned — the view finds a row by identity.
+     */
+    private hunkNodes = new WeakMap<FileNode, Map<string, HunkNode>>();
+    private readonly shown = new vscode.EventEmitter<ComparisonDto | undefined>();
+    /** Fires after every show and clear, with what is now on screen. */
+    readonly onDidShow = this.shown.event;
 
     constructor(private readonly decorations: ChangeDecorationProvider) {}
 
@@ -107,6 +144,7 @@ export class ChangedFilesTree implements vscode.TreeDataProvider<TreeNode> {
         );
         this.changed.fire(undefined);
         this.describe();
+        this.shown.fire(comparison);
     }
 
     clear(): void {
@@ -116,9 +154,74 @@ export class ChangedFilesTree implements vscode.TreeDataProvider<TreeNode> {
         this.decorations.clear();
         this.changed.fire(undefined);
         this.describe();
+        this.shown.fire(undefined);
+    }
+
+    /** Every file row, in the order the tree shows them — the order a review walks. */
+    get files(): FileNode[] {
+        return this.roots.flatMap(filesBeneath);
+    }
+
+    /** Turns review mode on for what is on screen, or off. */
+    setReview(review: ReviewOverlay | undefined): void {
+        this.review = review;
+        this.refreshReview();
+    }
+
+    /** A line about a review in progress that is not what the view is showing. */
+    setReviewNote(note: string | undefined): void {
+        if (note !== this.reviewNote) {
+            this.reviewNote = note;
+            this.describe();
+        }
+    }
+
+    /** Redraws checkboxes and hunks after the review changed under them. */
+    refreshReview(): void {
+        this.changed.fire(undefined);
+        this.describe();
+    }
+
+    get reviewing(): boolean {
+        return this.review !== undefined;
+    }
+
+    /** The row the tree has selected, if any. */
+    get selection(): TreeNode | undefined {
+        return this.view?.selection[0];
+    }
+
+    /** The row for one hunk of a file, the same object every time. */
+    hunkNode(file: FileNode, hunk: Hunk): HunkNode {
+        let nodes = this.hunkNodes.get(file);
+        if (!nodes) {
+            nodes = new Map();
+            this.hunkNodes.set(file, nodes);
+        }
+        let node = nodes.get(hunk.id);
+        if (!node || node.hunk !== hunk) {
+            node = { kind: 'hunk', file, hunk };
+            nodes.set(hunk.id, node);
+        }
+        return node;
+    }
+
+    /** Puts the tree's selection on a row without taking the keyboard from the editor. */
+    async revealRow(node: TreeNode): Promise<void> {
+        if (!this.view?.visible) {
+            return;
+        }
+        try {
+            await this.view.reveal(node, { select: true, focus: false, expand: true });
+        } catch {
+            // The tree was replaced underneath the reveal; the next one lands.
+        }
     }
 
     getParent(element: TreeNode): TreeNode | undefined {
+        if (element.kind === 'hunk') {
+            return element.file;
+        }
         return this.parents.get(element);
     }
 
@@ -140,12 +243,24 @@ export class ChangedFilesTree implements vscode.TreeDataProvider<TreeNode> {
         if (!element) {
             return this.roots;
         }
-        return element.kind === 'file' ? [] : element.children;
+        if (element.kind === 'hunk') {
+            return [];
+        }
+        if (element.kind === 'file') {
+            return (this.review?.hunksOf(element) ?? []).map((hunk) =>
+                this.hunkNode(element, hunk)
+            );
+        }
+        return element.children;
     }
 
     getTreeItem(node: TreeNode): vscode.TreeItem {
         if (node.kind === 'group') {
             return this.groupItem(node);
+        }
+
+        if (node.kind === 'hunk') {
+            return this.hunkItem(node);
         }
 
         if (node.kind === 'directory') {
@@ -201,6 +316,80 @@ export class ChangedFilesTree implements vscode.TreeDataProvider<TreeNode> {
             title: 'Open Changes',
             arguments: [node],
         };
+
+        if (this.review) {
+            this.reviewFileItem(item, node);
+        }
+        return item;
+    }
+
+    /**
+     * A file under review: ticked when every hunk in it has been read, and
+     * open, so its hunks are a row each. The checkbox is VS Code's own, which
+     * is what makes Space tick the focused row with no binding of ours.
+     */
+    private reviewFileItem(item: vscode.TreeItem, node: FileNode): void {
+        const review = this.review!;
+        const state = review.fileState(node);
+        const hunks = review.hunksOf(node) ?? [];
+
+        item.checkboxState = {
+            state:
+                state === 'viewed'
+                    ? vscode.TreeItemCheckboxState.Checked
+                    : vscode.TreeItemCheckboxState.Unchecked,
+            tooltip: state === 'viewed' ? 'Viewed — untick to read it again' : 'Mark every change in this file viewed',
+        };
+        if (hunks.length > 0) {
+            const seen = hunks.filter((hunk) => review.isViewed(node, hunk)).length;
+            item.description = `${describeChange(node.change)}  ·  ${seen}/${hunks.length}`;
+            item.collapsibleState =
+                state === 'viewed'
+                    ? vscode.TreeItemCollapsibleState.Collapsed
+                    : vscode.TreeItemCollapsibleState.Expanded;
+        }
+        // An id makes VS Code remember the row's fold across a refresh. The
+        // state is in it so that finishing a file folds it away — GitHub's
+        // "viewed" does the same — and unticking opens it again.
+        item.id = `${this.generation}:${node.group ?? ''}:file:${node.change.path}:${state === 'viewed' ? 'v' : 'o'}`;
+    }
+
+    private hunkItem(node: HunkNode): vscode.TreeItem {
+        const { hunk, file } = node;
+        const range = hunkNewRange(hunk);
+        const label =
+            hunk.newLines === 0
+                ? `Removed at line ${range.start}`
+                : range.start === range.end
+                  ? `Line ${range.start}`
+                  : `Lines ${range.start}–${range.end}`;
+        const item = new vscode.TreeItem(label);
+        const counts = [
+            hunkInsertions(hunk) > 0 ? `+${hunkInsertions(hunk)}` : '',
+            hunkDeletions(hunk) > 0 ? `−${hunkDeletions(hunk)}` : '',
+        ]
+            .filter(Boolean)
+            .join(' ');
+        item.description = [hunk.context, counts].filter(Boolean).join('  ');
+        const viewed = this.review?.isViewed(file, hunk) ?? false;
+        item.checkboxState = {
+            state: viewed
+                ? vscode.TreeItemCheckboxState.Checked
+                : vscode.TreeItemCheckboxState.Unchecked,
+            tooltip: viewed ? 'Viewed' : 'Mark this change viewed',
+        };
+        const shown = hunk.lines.slice(0, 24);
+        if (hunk.lines.length > shown.length) {
+            shown.push('…');
+        }
+        item.tooltip = new vscode.MarkdownString(['```diff', ...shown, '```'].join('\n'));
+        item.contextValue = HUNK_CONTEXT;
+        item.id = `${this.generation}:${file.group ?? ''}:hunk:${file.change.path}:${hunk.id}`;
+        item.command = {
+            command: OPEN_DIFF_COMMAND,
+            title: 'Open This Change',
+            arguments: [file, hunk],
+        };
         return item;
     }
 
@@ -223,8 +412,12 @@ export class ChangedFilesTree implements vscode.TreeDataProvider<TreeNode> {
         if (!this.comparison) {
             this.view.title = 'Changes';
             this.view.description = undefined;
-            this.view.message =
-                'Select a commit in the Git Graph panel, or compare two branches, to see what changed.';
+            this.view.message = [
+                'Select a commit in the Git Graph panel, or compare two branches, to see what changed.',
+                this.reviewNote,
+            ]
+                .filter(Boolean)
+                .join('\n\n');
             this.view.badge = undefined;
             return;
         }
@@ -248,12 +441,26 @@ export class ChangedFilesTree implements vscode.TreeDataProvider<TreeNode> {
                     .join('; ')}`
             );
         }
+        if (this.reviewNote) {
+            notes.push(this.reviewNote);
+        }
         this.view.message = notes.join('\n\n');
 
         this.view.badge = {
             value: totals.files,
             tooltip: `${totals.files} changed files`,
         };
+
+        if (this.review) {
+            const progress = this.review.progress();
+            this.view.title = 'Review';
+            this.view.description = progress.text;
+            this.view.message = this.review.message();
+            this.view.badge =
+                progress.unviewed > 0
+                    ? { value: progress.unviewed, tooltip: `${progress.unviewed} changes not viewed yet` }
+                    : undefined;
+        }
     }
 }
 
@@ -273,7 +480,7 @@ function groupTooltip(kind: ChangeGroupKind): string {
 function parentsOf(roots: TreeNode[]): Map<TreeNode, TreeNode> {
     const parents = new Map<TreeNode, TreeNode>();
     const walk = (node: TreeNode) => {
-        if (node.kind === 'file') {
+        if (node.kind === 'file' || node.kind === 'hunk') {
             return;
         }
         for (const child of node.children) {
