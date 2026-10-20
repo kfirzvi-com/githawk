@@ -378,6 +378,7 @@ function fixtureWorkingTree(): ComparisonDto {
     const files = groups.flatMap((group) => group.files);
 
     return {
+        spec: { kind: 'workingTree' },
         label: 'Uncommitted changes',
         method: 'workingTree',
         methodExplanation:
@@ -423,6 +424,7 @@ function fixtureComparison(
               ];
 
     return {
+        spec: { kind: 'twoRefs', left: 'main', right: 'HEAD' },
         label,
         method,
         methodExplanation: explanations[method],

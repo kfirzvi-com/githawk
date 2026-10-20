@@ -17,6 +17,7 @@ export class CompareUseCase {
 
 export function toDto(comparison: Comparison): ComparisonDto {
     return {
+        spec: comparison.spec,
         label: comparison.label,
         method: comparison.method,
         methodExplanation: explain(comparison.method),

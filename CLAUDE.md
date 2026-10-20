@@ -33,6 +33,7 @@ npm test                    # Vitest — domain, application, and real-git adapt
 npm run test:visual         # Playwright against the standalone webview harness
 npm run test:integration    # two real VS Code sessions driving the real extension host
 npm run shot:vscode         # screenshot the real UI (also how README images are made)
+npm run e2e:review          # review mode walked end to end in a real VS Code, as a user would
 npm run package             # check + test + build + vsce package
 ```
 
@@ -41,6 +42,8 @@ Sample repositories to work against — purpose-built, so break them freely:
 ```bash
 ./scripts/makeSampleRepo.sh       # one repo: branches, merges, tags, worktrees, dirty files
 ./scripts/makeMultiRepoSample.sh  # a workspace of repos at several depths
+./scripts/makeReviewSample.sh     # uncommitted work with several hunks, for review mode
+                                  # screenshots: node scripts/shotVscode.mjs <out> /tmp/githawk-review-sample review
 ```
 
 ## Three test tiers, and why each exists

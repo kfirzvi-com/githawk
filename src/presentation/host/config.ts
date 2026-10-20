@@ -100,6 +100,13 @@ export interface AiTool {
      * commit box's picker without keeping it out of the terminal.
      */
     commitMessageCommand?: string;
+    /**
+     * The tool started interactively with a first message: `{prompt}` is
+     * replaced by the message, quoted. What a review is handed over with.
+     * Absent, the tool is started as `command` and the message typed in
+     * after it.
+     */
+    promptCommand?: string;
 }
 
 /**
@@ -116,10 +123,30 @@ export interface AiTool {
  * shapes, and the setting exists for the day one of them changes.
  */
 export const DEFAULT_AI_TOOLS: AiTool[] = [
-    { name: 'Claude Code', command: 'claude', commitMessageCommand: 'claude -p' },
-    { name: 'Codex', command: 'codex', commitMessageCommand: 'codex exec -' },
-    { name: 'Gemini CLI', command: 'gemini', commitMessageCommand: 'gemini' },
-    { name: 'opencode', command: 'opencode', commitMessageCommand: 'opencode run' },
+    {
+        name: 'Claude Code',
+        command: 'claude',
+        commitMessageCommand: 'claude -p',
+        promptCommand: 'claude {prompt}',
+    },
+    {
+        name: 'Codex',
+        command: 'codex',
+        commitMessageCommand: 'codex exec -',
+        promptCommand: 'codex {prompt}',
+    },
+    {
+        name: 'Gemini CLI',
+        command: 'gemini',
+        commitMessageCommand: 'gemini',
+        promptCommand: 'gemini -i {prompt}',
+    },
+    {
+        name: 'opencode',
+        command: 'opencode',
+        commitMessageCommand: 'opencode run',
+        promptCommand: 'opencode --prompt {prompt}',
+    },
 ];
 
 export const AI_TOOLS_SETTING = 'aiTools';
@@ -163,15 +190,18 @@ function isAiTool(value: unknown): value is AiTool {
     );
 }
 
-/** A blank or non-string generate command means "none", not "run nothing". */
+/** A blank or non-string optional command means "none", not "run nothing". */
 function normaliseAiTool(tool: AiTool): AiTool {
-    const generate =
-        typeof tool.commitMessageCommand === 'string'
-            ? tool.commitMessageCommand.trim()
-            : '';
-    return generate.length > 0
-        ? { name: tool.name, command: tool.command, commitMessageCommand: generate }
-        : { name: tool.name, command: tool.command };
+    const optional = (value: unknown) =>
+        typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+    const generate = optional(tool.commitMessageCommand);
+    const prompt = optional(tool.promptCommand);
+    return {
+        name: tool.name,
+        command: tool.command,
+        ...(generate ? { commitMessageCommand: generate } : {}),
+        ...(prompt ? { promptCommand: prompt } : {}),
+    };
 }
 
 export function repositoryScanDepth(): number {

@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { realpathSync } from 'node:fs';
+import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path';
 import {
     DEFAULT_COMMIT_LIMIT,
     GitCliRepository,
@@ -27,6 +28,23 @@ import { RepositoryRegistry } from './presentation/host/RepositoryRegistry';
 import { RepositoryWatcher } from './presentation/host/RepositoryWatcher';
 import { GitCliDirectoryReader } from './infrastructure/git/GitCliDirectoryReader';
 import { GitCliTreeReader } from './infrastructure/git/GitCliTreeReader';
+import { GitCliHunkReader } from './infrastructure/git/GitCliHunkReader';
+import { ExecFileGitRunner } from './infrastructure/git/GitRunner';
+import { ReviewController, keys } from './presentation/host/ReviewController';
+import {
+    ReviewComments,
+    setCommentAuthor,
+    type ShownComment,
+} from './presentation/host/ReviewComments';
+import { ReviewHandoff } from './presentation/host/ReviewHandoff';
+import { AgentRepliesWatcher } from './presentation/host/AgentRepliesWatcher';
+import {
+    REVIEWS_VIEW_ID,
+    ReviewsTree,
+    pickReview,
+    reviewsViewMessage,
+} from './presentation/host/ReviewsTree';
+import type { Hunk } from './domain/models/Hunk';
 import {
     OPEN_FILE_AT_REVISION_COMMAND,
     REVISION_FILES_VIEW_ID,
@@ -132,6 +150,9 @@ export async function activate(
     const changesView = vscode.window.createTreeView(CHANGED_FILES_VIEW_ID, {
         treeDataProvider: changedFiles,
         showCollapseAll: true,
+        // A file's tick means "every hunk in it", which the review decides;
+        // VS Code's own propagation would tick a file whose hunks are not.
+        manageCheckboxStateManually: true,
     });
     changedFiles.attach(changesView);
 
@@ -194,6 +215,241 @@ export async function activate(
         createStashReader,
         createWorkingTreeReader,
         revisions
+    );
+
+    /*
+     * Review mode: the Changes view's files and hunks with viewed ticks, the
+     * markers in the diff, comments in VS Code's own commenting UI, and the
+     * handoff of those comments to an AI CLI.
+     */
+    const reviews = new ReviewController({
+        store: context.workspaceState,
+        tree: changedFiles,
+        hunkReader: () => new GitCliHunkReader(activeRepositoryRoot()),
+        resolveRevision: (rev) => createTreeReader().resolve(rev),
+        repositoryRoot: () => repositories.active?.root,
+        relativePath: (fsPath) => {
+            const root = repositories.active?.root;
+            if (!root) {
+                return undefined;
+            }
+            // The file's directory, not the file: a deleted file has no real path.
+            const real = (path: string) => {
+                try {
+                    return realpathSync.native(path);
+                } catch {
+                    return path;
+                }
+            };
+            const within = relative(
+                real(root),
+                join(real(dirname(fsPath)), basename(fsPath))
+            );
+            return within.startsWith('..') || isAbsolute(within)
+                ? undefined
+                : within.split(sep).join('/');
+        },
+        showComparison: (spec) => provider.showComparison(spec),
+        switchRepository: (root) => provider.switchToRepository(root),
+        commitSubject: async (rev) =>
+            (
+                await new ExecFileGitRunner().run(
+                    ['log', '-1', '--format=%s', '--end-of-options', rev],
+                    activeRepositoryRoot()
+                )
+            ).trim() || undefined,
+        showWorkingTree: () => provider.compareWorkingTree('focus'),
+        openFile: (request) => comparisons.openFile(request),
+    });
+    /*
+     * Comments are signed with the repository's git user — the name a
+     * colleague reading over the review would see on the commits too.
+     */
+    const signComments = async () => {
+        const root = repositories.active?.root;
+        const name = root
+            ? await new ExecFileGitRunner()
+                  .run(['config', 'user.name'], root)
+                  .catch(() => '')
+            : '';
+        setCommentAuthor(name.trim() || undefined);
+    };
+    const reviewComments = new ReviewComments(reviews, () => repositories.active?.root);
+    context.subscriptions.push(repositories.onDidChange(() => void signComments()));
+    const gitDirectory = async (root: string) => (await new GitCliDirectoryReader(root).read()).gitDir;
+    /*
+     * The other half of the handoff: what the agent writes back lands under
+     * the comment it answers, and says so — with the way to it.
+     */
+    const agentReplies = new AgentRepliesWatcher(reviews, {
+        gitDirectory,
+        onAnswered: (review, answered) => {
+            const who =
+                review.comments.find((comment) => answered.includes(comment.id))?.replies?.filter((r) => r.from === 'agent').pop()?.author?.replace(/ — review$/, '') ??
+                'The agent';
+            void vscode.window
+                .showInformationMessage(
+                    `${who} replied to ${answered.length === 1 ? 'a comment' : `${answered.length} comments`} in “${review.label}”.`,
+                    'Show'
+                )
+                .then(async (choice) => {
+                    if (choice !== 'Show') {
+                        return;
+                    }
+                    if (reviews.current?.id !== review.id || !reviews.isActive) {
+                        await reviews.resume(review.id);
+                    }
+                    const target = reviews.orderedComments().find((entry) => entry.comment.id === answered[0]);
+                    if (target) {
+                        await reviews.openComment(target.file, target.comment);
+                        reviewComments.expandThreadOf(target.comment.id);
+                    }
+                });
+        },
+    });
+    const handoff = new ReviewHandoff(reviews, {
+        gitDirectory,
+        onSent: (root, repliesPath) => agentReplies.watch(root, repliesPath),
+    });
+    context.subscriptions.push(agentReplies, reviews.onDidChange(() => void agentReplies.sync()));
+    const reviewsList = new ReviewsTree(reviews);
+
+    /*
+     * From comment to comment across the whole review, in reading order:
+     * its change opens with the cursor on it and its thread unfolded, and
+     * the status bar says which of how many it is.
+     */
+    const stepComment = async (direction: 1 | -1) => {
+        const target = reviews.commentFrom(direction);
+        if (!target) {
+            vscode.window.setStatusBarMessage(
+                reviews.isActive
+                    ? `GitHawk: no comments in this review yet — ${keys('⇧C')} adds one`
+                    : 'GitHawk: no review is on screen',
+                3000
+            );
+            return;
+        }
+        await reviews.openComment(target.file, target.comment);
+        reviewComments.expandThreadOf(target.comment.id);
+        vscode.window.setStatusBarMessage(`GitHawk: comment ${target.position} of ${target.of}`, 3000);
+    };
+
+    /*
+     * Every way of commenting comes through here: the cursor is put on the
+     * change first, then VS Code's own comment box is opened on it.
+     */
+    const commentOn = async (target?: Parameters<ReviewController['prepareComment']>[0]) => {
+        const prepared = await reviews.prepareComment(target);
+        if (typeof prepared === 'string') {
+            log.warn(`comment: ${prepared}`);
+            vscode.window.showInformationMessage(prepared);
+            return;
+        }
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) {
+            return;
+        }
+        // VS Code's own box, on the change, beside any comments already
+        // there — unless this window's VS Code has not wired GitHawk's
+        // comments up, in which case Add Comment could only refuse.
+        if (!(await reviewComments.prepareChange(editor, prepared.range))) {
+            return;
+        }
+        if (await reviewComments.readyForComments(editor.document.uri)) {
+            await reviewComments.openDraft(editor);
+            return;
+        }
+        log.warn(
+            `comment: VS Code has not asked GitHawk which lines of ${editor.document.uri.toString()} take comments; asking in the input box instead`
+        );
+        await reviewComments.askForComment(editor, prepared);
+    };
+    const reviewsView = vscode.window.createTreeView(REVIEWS_VIEW_ID, {
+        treeDataProvider: reviewsList,
+    });
+    reviewsView.message = reviewsViewMessage(process.platform === 'darwin' ? '⌘' : 'Ctrl+');
+    /** The row a key in the Reviews view acts on: the one passed, else the one selected. */
+    const reviewRow = (arg?: unknown) =>
+        reviewIdOf(arg) ?? reviewIdOf(reviewsView.selection[0]);
+    context.subscriptions.push(
+        reviews,
+        reviewComments,
+        reviewsList,
+        reviewsView,
+        vscode.commands.registerCommand('gitHawk.review.list', () =>
+            pickReview(reviews, {
+                open: (id) => reviews.resume(id),
+                send: (id) => handoff.send({ review: id }),
+                end: (id) => reviews.end({ id }),
+            })
+        ),
+        // Comment and Mark viewed on each change, where the change is.
+        vscode.languages.registerCodeLensProvider(
+            [{ scheme: 'file' }, { scheme: REVISION_SCHEME }],
+            reviews
+        )
+    );
+
+    /*
+     * While the changeset under review includes the disk, the disk is
+     * watched. The usual refresh hangs off VS Code's own saves, and an agent
+     * acting on the review writes files from outside the editor — without
+     * this the hunks it rewrote would sit there ticked as though nothing had
+     * changed, which is the one thing a review must never do.
+     */
+    let reviewWatcher: vscode.FileSystemWatcher | undefined;
+    let watchedRoot: string | undefined;
+    const refreshReview = new Debouncer(
+        () => {
+            const review = reviews.current;
+            if (!reviews.isActive || !review) {
+                return;
+            }
+            if (changedFiles.showsWorkingTree) {
+                void provider.refreshWorkingTree();
+            } else {
+                void provider.showComparison(review.spec, 'none');
+            }
+        },
+        WORKING_TREE_REFRESH_MS * 2,
+        WORKING_TREE_REFRESH_MS * 8
+    );
+    const watchReviewedDisk = () => {
+        const review = reviews.current;
+        const onDisk =
+            reviews.isActive &&
+            review !== undefined &&
+            (review.spec.kind === 'workingTree' ||
+                (review.spec.kind === 'twoRefs' && review.spec.rightIsWorkingTree === true));
+        if (reviewWatcher && (!onDisk || watchedRoot !== review?.root)) {
+            reviewWatcher.dispose();
+            reviewWatcher = undefined;
+        }
+        if (onDisk && !reviewWatcher) {
+            watchedRoot = review.root;
+            reviewWatcher = vscode.workspace.createFileSystemWatcher(
+                new vscode.RelativePattern(vscode.Uri.file(review.root), '**/*')
+            );
+            const changed = (uri: vscode.Uri) => {
+                // git's own churn is the repository watcher's business.
+                if (!uri.path.includes('/.git/')) {
+                    refreshReview.schedule();
+                }
+            };
+            reviewWatcher.onDidChange(changed);
+            reviewWatcher.onDidCreate(changed);
+            reviewWatcher.onDidDelete(changed);
+        }
+    };
+    context.subscriptions.push(
+        reviews.onDidChange(watchReviewedDisk),
+        {
+            dispose: () => {
+                refreshReview.cancel();
+                reviewWatcher?.dispose();
+            },
+        }
     );
 
     /*
@@ -486,8 +742,14 @@ export async function activate(
          * against the disk, and a single pair for the whole tree would open
          * the wrong diff for one of them.
          */
-        vscode.commands.registerCommand(OPEN_DIFF_COMMAND, (node?: FileNode) => {
+        vscode.commands.registerCommand(OPEN_DIFF_COMMAND, (node?: FileNode, hunk?: Hunk) => {
             if (!changedFiles.current || !node) {
+                return;
+            }
+            // In a review a click is a step through it: the tree's selection
+            // and the "where am I" of next and previous follow it.
+            if (reviews.isActive) {
+                void reviews.openStop(node, hunk, { preserveFocus: true });
                 return;
             }
             void comparisons
@@ -505,6 +767,131 @@ export async function activate(
         }),
         vscode.commands.registerCommand('gitHawk.clearChanges', () =>
             changedFiles.clear()
+        ),
+        changesView.onDidChangeCheckboxState((event) =>
+            reviews.checkboxesChanged(event.items)
+        ),
+        vscode.commands.registerCommand('gitHawk.review.start', () => reviews.start()),
+        // With an id — a Reviews row — that review; otherwise the one there is, or a pick.
+        vscode.commands.registerCommand('gitHawk.review.resume', (id?: unknown) =>
+            reviews.resume(typeof id === 'string' ? id : undefined)
+        ),
+        /*
+         * `true` from a test skips the question; a Reviews row passes itself
+         * and ends that review; the palette passes nothing and ends the one
+         * on screen, or asks which.
+         */
+        vscode.commands.registerCommand('gitHawk.review.end', (arg?: unknown) =>
+            arg === true
+                ? reviews.end({ confirmed: true })
+                : reviews.end({ id: reviewIdOf(arg) })
+        ),
+        // A row's buttons, and the keys of a focused Reviews view.
+        vscode.commands.registerCommand('gitHawk.review.sendFromList', (row?: unknown) =>
+            handoff.send({ review: reviewRow(row) })
+        ),
+        vscode.commands.registerCommand('gitHawk.review.endFromList', (row?: unknown) => {
+            const id = reviewRow(row);
+            return id ? reviews.end({ id }) : undefined;
+        }),
+        vscode.commands.registerCommand('gitHawk.review.nextChange', () => reviews.next()),
+        vscode.commands.registerCommand('gitHawk.review.previousChange', () =>
+            reviews.previous()
+        ),
+        vscode.commands.registerCommand('gitHawk.review.nextUnviewed', () =>
+            reviews.next({ unviewedOnly: true })
+        ),
+        vscode.commands.registerCommand('gitHawk.review.toggleSelected', () =>
+            reviews.toggleSelected(changesView.selection)
+        ),
+        vscode.commands.registerCommand('gitHawk.review.markViewed', () =>
+            reviews.markCurrent()
+        ),
+        vscode.commands.registerCommand('gitHawk.review.markFileViewed', () =>
+            reviews.markCurrent({ wholeFile: true })
+        ),
+        /*
+         * VS Code's own "comment on the selection", which opens our thread
+         * widget wherever the review offers a commenting range. From a hunk's
+         * row in the tree it opens that change first, so the button on the
+         * row comments on the row.
+         */
+        vscode.commands.registerCommand('gitHawk.review.comment', (node?: TreeNode) =>
+            commentOn(node?.kind === 'hunk' ? { file: node.file, hunk: node.hunk } : undefined)
+        ),
+        // The Comment button above each change.
+        vscode.commands.registerCommand(
+            'gitHawk.review.commentOnHunk',
+            (path: string, group: string | null, hunkId: string) =>
+                commentOn(reviews.findHunk(path, group, hunkId))
+        ),
+        vscode.commands.registerCommand(
+            'gitHawk.review.toggleHunk',
+            (path: string, group: string | null, hunkId: string) =>
+                reviews.toggleHunk(path, group, hunkId)
+        ),
+        vscode.commands.registerCommand(
+            'gitHawk.review.saveComment',
+            (reply: vscode.CommentReply) => reviewComments.save(reply)
+        ),
+        vscode.commands.registerCommand(
+            'gitHawk.review.deleteComment',
+            (comment: ShownComment) => reviewComments.remove(comment)
+        ),
+        vscode.commands.registerCommand('gitHawk.review.resolve', (thread: vscode.CommentThread) =>
+            reviewComments.setResolved(thread, true)
+        ),
+        vscode.commands.registerCommand('gitHawk.review.reopen', (thread: vscode.CommentThread) =>
+            reviewComments.setResolved(thread, false)
+        ),
+        vscode.commands.registerCommand(
+            'gitHawk.review.deleteThread',
+            (thread: vscode.CommentThread) => reviewComments.removeThread(thread)
+        ),
+        vscode.commands.registerCommand(
+            'gitHawk.review.editComment',
+            (comment: ShownComment) => reviewComments.edit(comment)
+        ),
+        vscode.commands.registerCommand(
+            'gitHawk.review.saveDraft',
+            (comment: ShownComment) => reviewComments.saveDraft(comment)
+        ),
+        vscode.commands.registerCommand('gitHawk.review.escape', () => reviewComments.escape()),
+        vscode.commands.registerCommand('gitHawk.review.nextComment', () => stepComment(1)),
+        vscode.commands.registerCommand('gitHawk.review.previousComment', () => stepComment(-1)),
+        vscode.commands.registerCommand(
+            'gitHawk.review.saveEdit',
+            (comment: ShownComment) => reviewComments.saveEdit(comment)
+        ),
+        vscode.commands.registerCommand(
+            'gitHawk.review.cancelEdit',
+            (comment: ShownComment) => reviewComments.cancelEdit(comment)
+        ),
+        // With a target the picker is skipped — a keybinding's args, or a test.
+        vscode.commands.registerCommand(
+            'gitHawk.review.sendToAi',
+            (target?: { tool?: string; terminal?: string; resend?: boolean }) =>
+                handoff.send(target)
+        ),
+        // The review as the extension holds it, after its hunks are read.
+        vscode.commands.registerCommand('gitHawk.review.state', async () => {
+            await reviews.whenLoaded();
+            return reviews.stateForTesting();
+        }),
+        vscode.commands.registerCommand(
+            'gitHawk.review.commentForTesting',
+            (uri: string, line: number, endLine: number, text: string) =>
+                reviewComments.commentForTesting(vscode.Uri.parse(uri), line, endLine, text)
+        ),
+        vscode.commands.registerCommand(
+            'gitHawk.review.threadForTesting',
+            (commentId: string, action: 'reply' | 'resolve' | 'reopen', text?: string) =>
+                reviewComments.threadActionForTesting(commentId, action, text)
+        ),
+        vscode.commands.registerCommand(
+            'gitHawk.review.markPath',
+            (path: string, viewed: boolean, hunkIndex?: number) =>
+                reviews.markPath(path, viewed, hunkIndex)
         ),
         vscode.commands.registerCommand('gitHawk.expandAllChanges', () =>
             changedFiles.expandAll()
@@ -758,6 +1145,8 @@ export async function activate(
     // Everything above is registered; the graph can now wait for the scan that
     // tells it which repository to read.
     await repositories.refresh();
+    // Answers an agent wrote while the window was closed.
+    void agentReplies.sync();
     // A file is usually already open when the extension activates.
     void blame.decorateVisible();
 }
@@ -878,6 +1267,15 @@ async function updateAllBranches(
             log.show();
         }
     });
+}
+
+/** The review a Reviews row stands for, or a bare id. */
+function reviewIdOf(arg: unknown): string | undefined {
+    if (typeof arg === 'string') {
+        return arg;
+    }
+    const review = (arg as { review?: { id?: unknown } } | undefined)?.review;
+    return typeof review?.id === 'string' ? review.id : undefined;
 }
 
 /** The files a tree row stands for: itself, or everything beneath a folder or section. */

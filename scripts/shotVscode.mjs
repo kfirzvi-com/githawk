@@ -11,8 +11,10 @@
  * `scenes` is `all` (the default, and specific to the sample repository's
  * branches), `repositories`, which captures only what any workspace has,
  * `files`, which browses the whole project at an older commit in the Files
- * view, or `blame`, which wants a workspace with real history rather than the
- * sample — the annotate column has nothing to say about a file with two commits.
+ * view, `blame`, which wants a workspace with real history rather than the
+ * sample — the annotate column has nothing to say about a file with two commits —
+ * or `review`, which walks review mode end to end on the workspace
+ * `scripts/makeReviewSample.sh` builds.
  *
  * Doubles as the way to produce documentation screenshots, so the README shows the
  * real thing rather than a mock.
@@ -20,6 +22,7 @@
 import {
     existsSync,
     mkdirSync,
+    readFileSync,
     readdirSync,
     rmSync,
     writeFileSync,
@@ -83,6 +86,36 @@ mkdirSync(outDir, { recursive: true });
  * into the throwaway profile rather than toggled afterwards — a decoration
  * drawn during the screenshot is a decoration that might not be there yet.
  */
+/*
+ * The review scene hands its comments to an AI CLI, so it seeds one that only
+ * prints what it was given: the screenshot shows the handoff, and nothing
+ * acts on the sample repository behind the script's back.
+ */
+if (scenes.startsWith('review')) {
+    const agent = fileURLToPath(new URL('./fixtures/demoAgent.mjs', import.meta.url));
+    mkdirSync(join(userDataDir, 'User'), { recursive: true });
+    writeFileSync(
+        join(userDataDir, 'User', 'settings.json'),
+        JSON.stringify(
+            {
+                'editor.minimap.enabled': false,
+                'workbench.startupEditor': 'none',
+                'terminal.integrated.fontSize': 14,
+                'gitHawk.aiTools': [
+                    { name: 'Claude Code', command: 'claude', promptCommand: 'claude {prompt}' },
+                    {
+                        name: 'demo-agent',
+                        command: `node ${agent}`,
+                        promptCommand: `node ${agent} {prompt}`,
+                    },
+                ],
+            },
+            null,
+            2
+        )
+    );
+}
+
 if (scenes === 'blame') {
     mkdirSync(join(userDataDir, 'User'), { recursive: true });
     writeFileSync(
@@ -209,7 +242,7 @@ try {
      * The repository selector, and the picker behind it. Present in any
      * workspace, so this runs before the sample-specific scenes.
      */
-    if (scenes !== 'blame') {
+    if (scenes !== 'blame' && !scenes.startsWith('review')) {
         const repositoryPicker = inner.getByTestId('repository-picker');
         await repositoryPicker.waitFor();
         await capture('09-repository-selector');
@@ -368,6 +401,360 @@ try {
             .click();
         await page.waitForTimeout(2000);
         await capture('files-at-commit');
+    }
+
+    if (scenes === 'review') {
+        /*
+         * Review mode, driven from the keyboard the way it is meant to be
+         * used. Wants ./scripts/makeReviewSample.sh: uncommitted work with
+         * several hunks in one file, one in another, and a new file.
+         */
+        const chord = async (key) => {
+            await page.keyboard.press('Meta+K');
+            await page.keyboard.press(key);
+            await page.waitForTimeout(1800);
+        };
+        // The graph panel is not part of this story; the sidebar and the
+        // diff editor are.
+        await runCommand('View: Toggle Maximized Panel');
+        await runCommand('View: Close Panel');
+        await runCommand('GitHawk: Show Uncommitted Changes');
+        await page.waitForTimeout(2000);
+        await capture('review-01-changes');
+
+        await chord('Shift+R');
+        await page.waitForTimeout(1500);
+        await capture('review-02-started');
+
+        // Viewed, and on to the next: twice, to the due-date change.
+        await chord('Shift+V');
+        await capture('review-03-viewed-and-next');
+        await chord('Shift+V');
+
+        // A comment on the change the cursor is on, typed into VS Code's own
+        // comment widget and saved with Cmd+Enter.
+        await chord('Shift+C');
+        await page.waitForTimeout(800);
+        await page.keyboard.type(
+            'A paymentTermsDays of 0 is a real term (due on receipt). Make sure it is not treated as missing, and add a test for it.'
+        );
+        await page.waitForTimeout(600);
+        await capture('review-04-commenting');
+        await page.keyboard.press('Meta+Enter');
+        await page.waitForTimeout(1500);
+        await capture('review-05-commented');
+
+        // The rest of the file at once; it folds away, and the next file opens.
+        await chord('Shift+F');
+        await page.waitForTimeout(800);
+        await capture('review-06-file-viewed');
+
+        // Hand the comments over: the picker, then the session it started.
+        await chord('Shift+S');
+        await page.waitForSelector('.quick-input-widget:visible');
+        await page.waitForTimeout(1000);
+        await capture('review-07-send-picker');
+        await page.keyboard.type('demo-agent');
+        await page.waitForTimeout(600);
+        await page.keyboard.press('Enter');
+        await page.waitForTimeout(4000);
+        await capture('review-08-sent');
+
+        // The agent acts on it, from outside the editor: the hunk it rewrote
+        // comes back unviewed; everything it left alone stays ticked.
+        const invoice = join(repo, 'src/billing/invoice.ts');
+        writeFileSync(
+            invoice,
+            readFileSync(invoice, 'utf8').replace(
+                'due.setDate(due.getDate() + (invoice.paymentTermsDays ?? 30));',
+                'const terms = invoice.paymentTermsDays;\n    due.setDate(due.getDate() + (terms === undefined ? 30 : terms));'
+            )
+        );
+        await page.waitForTimeout(4000);
+        await runCommand('View: Close Panel');
+        // Straight to the rewritten hunk, from its row.
+        await page
+            .locator('#workbench\\.view\\.extension\\.gitHawkSidebar .monaco-list-row', {
+                hasText: 'Lines 35',
+            })
+            .first()
+            .click();
+        await page.waitForTimeout(2000);
+        await capture('review-09-after-agent');
+
+        // Leave it for a commit in the graph; the review waits, and resumes.
+        await runCommand('GitHawk: Open Git Graph');
+        await page.waitForTimeout(2500);
+        // The commit box is a webview too, so the graph is whichever one has rows.
+        const webviews = page.locator('iframe.webview');
+        let graphRows;
+        for (let index = 0; index < (await webviews.count()); index++) {
+            const candidate = webviews
+                .nth(index)
+                .contentFrame()
+                .locator('iframe#active-frame')
+                .contentFrame()
+                .getByTestId('git-graph')
+                .locator('button');
+            if ((await candidate.count()) > 0) {
+                graphRows = candidate;
+                break;
+            }
+        }
+        await click(graphRows.last());
+        await page.waitForTimeout(2500);
+        await capture('review-10-paused');
+        await runCommand('GitHawk: Resume Code Review');
+        await page.waitForTimeout(2500);
+        await capture('review-11-resumed');
+    }
+
+    if (scenes === 'review-buttons') {
+        /*
+         * Where the comment buttons are, ringed in red. A row's button shows
+         * only while the row is selected or hovered, so one is selected.
+         */
+        await runCommand('View: Toggle Maximized Panel');
+        await runCommand('View: Close Panel');
+        await runCommand('GitHawk: Show Uncommitted Changes');
+        await page.keyboard.press('Meta+K');
+        await page.keyboard.press('Shift+R');
+        await page.waitForTimeout(3000);
+
+        // Annotations are drawn into the workbench itself, so no image tool
+        // is needed; each is a ring and a label, and ignores the mouse.
+        const ring = (selectorScript, label, side = 'left', below = true) =>
+            page.evaluate(
+                ({ selectorScript, label, side, below }) => {
+                    const element = new Function(selectorScript)();
+                    if (!element) {
+                        return false;
+                    }
+                    const box = element.getBoundingClientRect();
+                    const mark = document.createElement('div');
+                    mark.className = 'shot-annotation';
+                    Object.assign(mark.style, {
+                        position: 'fixed', left: `${box.left - 5}px`, top: `${box.top - 5}px`,
+                        width: `${box.width + 10}px`, height: `${box.height + 10}px`,
+                        border: '3px solid #ff3b30', borderRadius: '6px', zIndex: 100000,
+                        pointerEvents: 'none',
+                    });
+                    const text = document.createElement('div');
+                    text.className = 'shot-annotation';
+                    text.textContent = label;
+                    Object.assign(text.style, {
+                        position: 'fixed',
+                        top: below ? `${box.bottom + 10}px` : `${box.top - 36}px`,
+                        background: '#ff3b30', color: 'white', font: '600 13px -apple-system, sans-serif',
+                        padding: '4px 8px', borderRadius: '4px', zIndex: 100000, pointerEvents: 'none',
+                        whiteSpace: 'nowrap',
+                        ...(side === 'right'
+                            ? { right: `${window.innerWidth - box.right - 5}px` }
+                            : { left: `${box.left - 5}px` }),
+                    });
+                    document.body.append(mark, text);
+                    return true;
+                },
+                { selectorScript, label, side, below }
+            );
+
+        // 1. A hunk's row, selected — which is when VS Code shows its button.
+        await page
+            .locator('#workbench\\.view\\.extension\\.gitHawkSidebar .monaco-list-row', { hasText: 'Line 35' })
+            .first()
+            .click();
+        await page.waitForTimeout(2000);
+        const found = {
+            row: await ring(
+                `return [...document.querySelectorAll('.monaco-list-row')].find((r) => r.textContent.includes('Line 35'))?.querySelector('.codicon-comment');`,
+                '① Comment on this change — the button on its row (selected or hovered)'
+            ),
+            title: await ring(
+                `return document.querySelector('.editor-group-container.active .editor-actions .codicon-comment');`,
+                '② Comment on the change at the cursor',
+                'right'
+            ),
+        };
+        console.log('buttons found:', JSON.stringify(found));
+        await page.waitForTimeout(400);
+        await capture('comment-buttons');
+    }
+
+    if (scenes === 'review-multi') {
+        /*
+         * Two reviews at once, on the committed sample: one commit, then
+         * another — the Reviews view lists both — with the buttons each
+         * change carries in the diff. Red rings mark what is new.
+         */
+        const annotate = (selectorScript, label, side = 'left') =>
+            page.evaluate(
+                ({ selectorScript, label, side }) => {
+                    const element = new Function(selectorScript)();
+                    if (!element) {
+                        return false;
+                    }
+                    const box = element.getBoundingClientRect();
+                    const mark = document.createElement('div');
+                    mark.className = 'shot-annotation';
+                    Object.assign(mark.style, {
+                        position: 'fixed', left: `${box.left - 4}px`, top: `${box.top - 4}px`,
+                        width: `${box.width + 8}px`, height: `${box.height + 8}px`,
+                        border: '3px solid #ff3b30', borderRadius: '6px', zIndex: 100000,
+                        pointerEvents: 'none',
+                    });
+                    const text = document.createElement('div');
+                    text.className = 'shot-annotation';
+                    text.textContent = label;
+                    Object.assign(text.style, {
+                        position: 'fixed', top: `${box.bottom + 8}px`, background: '#ff3b30',
+                        color: 'white', font: '600 13px -apple-system, sans-serif', padding: '4px 8px',
+                        borderRadius: '4px', zIndex: 100000, pointerEvents: 'none', whiteSpace: 'nowrap',
+                        ...(side === 'right'
+                            ? { right: `${window.innerWidth - box.right - 4}px` }
+                            : { left: `${box.left - 4}px` }),
+                    });
+                    document.body.append(mark, text);
+                    return true;
+                },
+                { selectorScript, label, side }
+            );
+        const clear = () =>
+            page.evaluate(() => document.querySelectorAll('.shot-annotation').forEach((el) => el.remove()));
+        const row = (text) => rows.filter({ hasText: text }).first();
+
+        await runCommand('View: Toggle Maximized Panel');
+        await click(row('Payment terms'));
+        await page.waitForTimeout(2500);
+        await page.keyboard.press('Meta+K');
+        await page.keyboard.press('Shift+R');
+        await page.waitForTimeout(3500);
+        await runCommand('View: Close Panel');
+        await page.waitForTimeout(1500);
+        console.log('codelens:', await annotate(
+            `return [...document.querySelectorAll('.editor.modified .codelens-decoration')].find((d) => d.textContent.includes('Comment') && d.getBoundingClientRect().height > 0);`,
+            'Buttons on each change: Comment · Mark viewed'
+        ));
+        await capture('multi-01-codelens');
+        await clear();
+
+        // Another commit: not under review, so its title bar offers to start one.
+        await runCommand('GitHawk: Open Git Graph');
+        await page.waitForTimeout(1500);
+        // On the hash, at the row's left: the branch badge on this row is a
+        // button of its own and opens the branch menu.
+        await click(row('List overdue'), { position: { x: 40, y: 10 } });
+        await page.waitForTimeout(2500);
+        console.log('start:', await annotate(
+            `return document.querySelector('#workbench\\\\.view\\\\.extension\\\\.gitHawkSidebar .pane-header .codicon-checklist');`,
+            'Start a review of this commit',
+            'right'
+        ));
+        await capture('multi-02-start-another');
+        await clear();
+
+        await page.keyboard.press('Meta+K');
+        await page.keyboard.press('Shift+R');
+        await page.waitForTimeout(3500);
+        console.log('list:', await annotate(
+            `return [...document.querySelectorAll('.pane')].find((p) => p.querySelector('.pane-header')?.textContent.includes('Reviews'));`,
+            'Every review in progress — click one to return to it'
+        ));
+        await capture('multi-03-reviews-list');
+    }
+
+    if (scenes === 'review-keyboard') {
+        /*
+         * The Reviews view from the keyboard alone, once two reviews exist:
+         * Cmd+Shift+9 twice to reach it, the arrows and Enter to go back to
+         * one, Cmd+K Shift+L to pick from anywhere, Cmd+Backspace to end one.
+         */
+        const chord = async (key) => {
+            await page.keyboard.press('Meta+K');
+            await page.keyboard.press(key);
+            await page.waitForTimeout(2500);
+        };
+        const row = (text) => rows.filter({ hasText: text }).first();
+        await runCommand('View: Toggle Maximized Panel');
+        await click(row('Payment terms'));
+        await page.waitForTimeout(2000);
+        await chord('Shift+R');
+        await runCommand('GitHawk: Open Git Graph');
+        await click(row('List overdue'), { position: { x: 40, y: 10 } });
+        await page.waitForTimeout(2000);
+        await chord('Shift+R');
+        await runCommand('View: Close Panel');
+
+        await page.keyboard.press('Meta+Shift+9');
+        await page.waitForTimeout(800);
+        await page.keyboard.press('Meta+Shift+9');
+        await page.waitForTimeout(800);
+        await page.keyboard.press('ArrowDown');
+        await page.keyboard.press('ArrowDown');
+        await page.waitForTimeout(800);
+        await capture('keys-01-reviews-focused');
+
+        await page.keyboard.press('Enter');
+        await page.waitForTimeout(3000);
+        await capture('keys-02-opened-with-enter');
+
+        await chord('Shift+L');
+        await page.waitForSelector('.quick-input-widget:visible');
+        await page.waitForTimeout(800);
+        await capture('keys-03-picker');
+        await page.keyboard.type('overdue');
+        await page.waitForTimeout(500);
+        await page.keyboard.press('Enter');
+        await page.waitForTimeout(3000);
+
+        // Going back to a review leaves the keyboard in Changes, one press away.
+        await page.keyboard.press('Meta+Shift+9');
+        await page.waitForTimeout(800);
+        await page.keyboard.press('ArrowDown');
+        await page.waitForTimeout(500);
+        await page.keyboard.press('Meta+Backspace');
+        await page.waitForTimeout(2000);
+        await capture('keys-04-ended-with-cmd-backspace');
+    }
+
+    if (scenes === 'review-commits') {
+        /*
+         * Reviewing history rather than work in progress: the two commits of
+         * a feature branch, selected in the graph the way a pull request's
+         * commits would be. Wants `makeReviewSample.sh <dir> --committed`.
+         */
+        const chord = async (key) => {
+            await page.keyboard.press('Meta+K');
+            await page.keyboard.press(key);
+            await page.waitForTimeout(1800);
+        };
+        const row = (text) => rows.filter({ hasText: text }).first();
+        await click(row('List overdue'));
+        await page.waitForTimeout(800);
+        await click(row('Payment terms'), { modifiers: ['Shift'] });
+        await page.waitForTimeout(3000);
+        await capture('commits-01-selected');
+
+        await runCommand('View: Close Panel');
+        await chord('Shift+R');
+        await page.waitForTimeout(1500);
+        await capture('commits-02-review-started');
+
+        await chord('Shift+V');
+        await chord('Shift+V');
+        await chord('Shift+C');
+        await page.waitForTimeout(800);
+        await page.keyboard.type('Terms of 0 days mean due on receipt; ?? keeps that, but add a test so nobody turns it into ||.');
+        await page.keyboard.press('Meta+Enter');
+        await page.waitForTimeout(1500);
+        await capture('commits-03-commented');
+
+        await chord('Shift+S');
+        await page.waitForSelector('.quick-input-widget:visible');
+        await page.keyboard.type('demo-agent');
+        await page.waitForTimeout(600);
+        await page.keyboard.press('Enter');
+        await page.waitForTimeout(4000);
+        await capture('commits-04-sent');
     }
 
     console.log(JSON.stringify({ shots }, null, 2));

@@ -98,3 +98,55 @@ export function commitsInRangeArgs(base: string, target: string): string[] {
 export function parentsOfArgs(hashes: string[]): string[] {
     return ['rev-list', '--no-walk', '--parents', ...hashes];
 }
+
+/**
+ * One file's diff as hunks, between the two sides its row in the Changes
+ * view compares. The index is not a revision `git diff` accepts as an
+ * argument, so each pairing involving it is spelled the way git spells it:
+ * HEAD against the index is `--cached`, the index against the disk is no
+ * revision at all.
+ *
+ * No lines of context (`-U0`): with git's usual three, two edits a few lines
+ * apart merge into one hunk, and a review that can only tick both or neither
+ * is not reviewing them separately. Without context each hunk is one run of
+ * changed lines — the same blocks the diff editor steps through.
+ *
+ * `--no-ext-diff` and `--no-textconv` because a configured external diff
+ * tool or text conversion would print something other than a unified diff,
+ * and the hunks would silently vanish.
+ */
+export function fileHunksArgs(request: {
+    path: string;
+    previousPath?: string;
+    baseRev: string;
+    targetRev?: string;
+}): string[] {
+    const revisions = hunkRevisions(request.baseRev, request.targetRev);
+    const paths = request.previousPath
+        ? [request.previousPath, request.path]
+        : [request.path];
+    return [
+        'diff',
+        '--no-color',
+        '--no-ext-diff',
+        '--no-textconv',
+        '--find-renames',
+        '-U0',
+        ...revisions,
+        '--',
+        ...paths,
+    ];
+}
+
+function hunkRevisions(baseRev: string, targetRev?: string): string[] {
+    const INDEX = ':0';
+    if (targetRev === INDEX) {
+        return ['--cached', baseRev];
+    }
+    if (baseRev === INDEX) {
+        // The index against the disk: the only pairing with the index on the
+        // older side that the Changes view produces.
+        return [];
+    }
+    return targetRev === undefined ? [baseRev] : [baseRev, targetRev];
+}

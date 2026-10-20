@@ -24,7 +24,13 @@ const file = (path: string, overrides: Partial<FileChangeDto> = {}): FileChangeD
 });
 
 const labels = (nodes: TreeNode[]) =>
-    nodes.map((node) => (node.kind === 'file' ? node.change.path : node.label));
+    nodes.map((node) =>
+        node.kind === 'file'
+            ? node.change.path
+            : node.kind === 'hunk'
+              ? node.hunk.id
+              : node.label
+    );
 
 const directory = (nodes: TreeNode[], label: string): DirectoryNode => {
     const found = nodes.find(
@@ -209,6 +215,7 @@ describe('buildComparisonTree', () => {
     const comparison = (
         overrides: Partial<ComparisonDto> = {}
     ): ComparisonDto => ({
+        spec: { kind: 'twoRefs', left: 'abc', right: 'def' },
         label: 'x',
         method: 'direct',
         methodExplanation: '',

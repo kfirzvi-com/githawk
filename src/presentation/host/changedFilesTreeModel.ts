@@ -4,9 +4,13 @@ import {
     FileChangeDto,
 } from '../../application/dto/ComparisonDto';
 import type { ChangeGroupKind } from '../../domain/models/Comparison';
+import type { Hunk } from '../../domain/models/Hunk';
 
-/** A group sections the working tree; a directory groups children; a file opens a diff. */
-export type TreeNode = GroupNode | DirectoryNode | FileNode;
+/**
+ * A group sections the working tree; a directory groups children; a file
+ * opens a diff; a hunk, shown only while reviewing, opens it at that change.
+ */
+export type TreeNode = GroupNode | DirectoryNode | FileNode | HunkNode;
 
 /**
  * One section of the uncommitted changeset — Staged, Changes, Untracked,
@@ -45,6 +49,17 @@ export interface FileNode {
     /** The diff editor's two sides; falls back to the comparison's own. */
     baseRev: string;
     targetRev?: string;
+}
+
+/**
+ * One block of changes in a file, beneath the file's row while a review is
+ * on. Not built with the rest of the tree: hunks are read per file, after
+ * the tree is already on screen, and only when something is reviewing them.
+ */
+export interface HunkNode {
+    kind: 'hunk';
+    file: FileNode;
+    hunk: Hunk;
 }
 
 /**
@@ -209,6 +224,8 @@ function nameOf(node: TreeNode): string {
             return node.label;
         case 'file':
             return basename(node.change.path);
+        case 'hunk':
+            return String(node.hunk.newStart).padStart(9, '0');
     }
 }
 
@@ -265,6 +282,9 @@ export function countFiles(node: TreeNode): number {
     if (node.kind === 'file') {
         return 1;
     }
+    if (node.kind === 'hunk') {
+        return 0;
+    }
     return node.children.reduce((total, child) => total + countFiles(child), 0);
 }
 
@@ -272,6 +292,9 @@ export function countFiles(node: TreeNode): number {
 export function filesBeneath(node: TreeNode): FileNode[] {
     if (node.kind === 'file') {
         return [node];
+    }
+    if (node.kind === 'hunk') {
+        return [node.file];
     }
     return node.children.flatMap(filesBeneath);
 }
