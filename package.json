@@ -434,6 +434,11 @@
       {
         "command": "gitHawk.review.toggleHunk",
         "title": "GitHawk: Toggle A Change Viewed"
+      },
+      {
+        "command": "gitHawk.review.sendFromList",
+        "title": "Send Comments To An AI CLI",
+        "icon": "$(sparkle)"
       }
     ],
     "keybindings": [
@@ -550,6 +555,13 @@
           "icon": "$(git-compare)"
         },
         {
+          "id": "gitHawkReviews",
+          "name": "Reviews",
+          "contextualTitle": "GitHawk",
+          "icon": "$(checklist)",
+          "when": "gitHawk.hasReviews"
+        },
+        {
           "id": "gitHawkFiles",
           "name": "Files",
           "contextualTitle": "GitHawk",
@@ -641,12 +653,7 @@
       "view/title": [
         {
           "command": "gitHawk.review.start",
-          "when": "view == gitHawkChanges && !gitHawk.reviewing && !gitHawk.reviewPaused",
-          "group": "navigation@0"
-        },
-        {
-          "command": "gitHawk.review.resume",
-          "when": "view == gitHawkChanges && gitHawk.reviewPaused",
+          "when": "view == gitHawkChanges && !gitHawk.reviewing",
           "group": "navigation@0"
         },
         {
@@ -663,11 +670,6 @@
           "command": "gitHawk.review.end",
           "when": "view == gitHawkChanges && gitHawk.reviewing",
           "group": "navigation@0"
-        },
-        {
-          "command": "gitHawk.review.end",
-          "when": "view == gitHawkChanges && gitHawk.reviewPaused",
-          "group": "9_review@1"
         },
         {
           "command": "gitHawk.showUncommittedChanges",
@@ -745,6 +747,26 @@
           "command": "gitHawk.review.comment",
           "when": "view == gitHawkChanges && viewItem == gitHawkHunk",
           "group": "1_review@1"
+        },
+        {
+          "command": "gitHawk.review.sendFromList",
+          "when": "view == gitHawkReviews && viewItem == gitHawkReview",
+          "group": "inline@1"
+        },
+        {
+          "command": "gitHawk.review.end",
+          "when": "view == gitHawkReviews && viewItem == gitHawkReview",
+          "group": "inline@2"
+        },
+        {
+          "command": "gitHawk.review.sendFromList",
+          "when": "view == gitHawkReviews && viewItem == gitHawkReview",
+          "group": "1_review@1"
+        },
+        {
+          "command": "gitHawk.review.end",
+          "when": "view == gitHawkReviews && viewItem == gitHawkReview",
+          "group": "1_review@2"
         }
       ],
       "commandPalette": [
@@ -870,11 +892,11 @@
         },
         {
           "command": "gitHawk.review.resume",
-          "when": "gitHawk.reviewPaused"
+          "when": "gitHawk.hasReviews"
         },
         {
           "command": "gitHawk.review.end",
-          "when": "gitHawk.reviewing || gitHawk.reviewPaused"
+          "when": "gitHawk.hasReviews"
         },
         {
           "command": "gitHawk.review.nextChange",
@@ -910,6 +932,10 @@
         },
         {
           "command": "gitHawk.review.toggleHunk",
+          "when": "false"
+        },
+        {
+          "command": "gitHawk.review.sendFromList",
           "when": "false"
         }
       ],
@@ -951,6 +977,9 @@
           "when": "commentController == gitHawk.review"
         }
       ]
+    },
+    "configurationDefaults": {
+      "diffEditor.codeLens": true
     }
   },
   "scripts": {

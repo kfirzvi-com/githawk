@@ -3,6 +3,7 @@ import { addComment, startReview } from '../../domain/models/Review';
 import { commandWithPrompt, reviewDocument, reviewPrompt } from './reviewHandoff';
 
 const base = startReview({
+    id: 'r1',
     root: '/repo',
     label: 'Uncommitted changes',
     spec: { kind: 'workingTree' },
@@ -30,6 +31,16 @@ describe('the review document', () => {
             document.indexOf('`src/b.ts`, lines 4–6')
         );
         expect(document).toContain('```\ncosnt x\n```');
+    });
+
+    test('a review of commits says the fixes go in the working tree', () => {
+        const committed = addComment(
+            { ...base, spec: { kind: 'singleCommit', hash: 'abcdef1234567890' } },
+            { id: '9', path: 'a.ts', side: 'new', line: 1, endLine: 1, body: 'x', excerpt: 'y', createdAt: '' }
+        );
+        expect(reviewDocument(committed)).toContain('commit abcdef123456');
+        expect(reviewDocument(committed)).toMatch(/working tree as it is now/);
+        expect(reviewDocument(review)).not.toMatch(/committed history/);
     });
 
     test('a quoted excerpt that has its own fence cannot close the quote', () => {

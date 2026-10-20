@@ -543,6 +543,11 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
         void this.sendWorkingTree();
     }
 
+    /** Points the panel at a repository and waits for its graph — a review of it is about to be shown. */
+    async switchToRepository(root: string): Promise<void> {
+        await this.switchToRepositoryContaining(root);
+    }
+
     /** See gitHawk.changesRevealed. */
     revealsForTesting(): number {
         return this.reveals;

@@ -35,17 +35,19 @@ export class ReviewHandoff {
     constructor(
         private readonly reviews: ReviewController,
         private readonly deps: {
-            repositoryRoot: () => string | undefined;
-            /** The repository's git directory, where the review document is written. */
-            gitDirectory: () => Promise<string>;
+            /** A repository's git directory, where the review document is written. */
+            gitDirectory: (root: string) => Promise<string>;
         }
     ) {}
 
+    /** The review on screen, or the one named — a Reviews row sends its own. */
     async send(
-        target?: { tool?: string; terminal?: string; resend?: boolean }
+        target?: { tool?: string; terminal?: string; resend?: boolean; review?: string }
     ): Promise<HandoffResult | undefined> {
-        const review = this.reviews.current;
-        const root = this.deps.repositoryRoot();
+        const review = target?.review
+            ? this.reviews.reviewById(target.review)
+            : this.reviews.current;
+        const root = review?.root;
         if (!review || !root) {
             vscode.window.showInformationMessage(
                 `No review in progress. Start one from the Changes view, or with ${keys('⇧R')}.`
@@ -63,7 +65,7 @@ export class ReviewHandoff {
             return undefined;
         }
 
-        const documentPath = join(await this.deps.gitDirectory(), 'githawk', 'review.md');
+        const documentPath = join(await this.deps.gitDirectory(root), 'githawk', 'review.md');
         await mkdir(dirname(documentPath), { recursive: true });
         await writeFile(documentPath, reviewDocument({ ...review, comments }), 'utf8');
         const prompt = reviewPrompt(documentPath, comments.length);
@@ -92,7 +94,7 @@ export class ReviewHandoff {
             terminal.sendText(prompt, true);
         }
 
-        await this.reviews.update((current) =>
+        await this.reviews.updateReview(review.id, (current) =>
             markSent(
                 current,
                 comments.map((comment) => comment.id),

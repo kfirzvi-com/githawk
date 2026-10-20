@@ -262,10 +262,12 @@ against its base — press <kbd>⌘K</kbd> <kbd>⇧R</kbd> (<kbd>Ctrl+K</kbd>
   its own. A file is ticked exactly when every hunk in it is; ticking the file
   ticks them all. Finished files fold away. <kbd>Space</kbd> ticks the selected
   row.
-- The first change opens in the diff editor, and each hunk carries a marker on
-  its first changed line — `✓ viewed`, or `○ not viewed`.
-- **Comments** use VS Code's own commenting UI: the comment button on a hunk's
-  row or in the diff's title bar, the **+** in the gutter of a changed line, or
+- The first change opens in the diff editor, and every change in it carries
+  its own buttons above it — **Comment** and **Mark viewed** — as a CodeLens.
+  GitHawk turns `diffEditor.codeLens` on by default for this; set it back to
+  `false` to hide them.
+- **Comments** use VS Code's own commenting UI: the **Comment** button on the
+  change, the comment button on a hunk's row or in the diff's title bar, or
   <kbd>⌘K</kbd> <kbd>⇧C</kbd> on the selection. They are listed
   in the **Comments** panel and stay on your machine.
 - **Send to an AI CLI** — <kbd>⌘K</kbd> <kbd>⇧S</kbd> — writes the comments,
@@ -274,10 +276,17 @@ against its base — press <kbd>⌘K</kbd> <kbd>⇧R</kbd> (<kbd>Ctrl+K</kbd>
   that wrote the change, or a new session of any tool in `gitHawk.aiTools`.
   Comments already sent are not sent twice.
 
-The review is pinned: a branch or tag is resolved to its commit when the review
+Commits are what it is for — a pull request's commits selected in the graph, a
+branch against its base — and your own uncommitted work is reviewed the same
+way. Several reviews can be under way at once: the **Reviews** view below
+**Changes** lists every one, with how far through it you are, and a click
+returns to it; each row sends its comments to an AI CLI or ends it.
+
+A review is pinned: a branch or tag is resolved to its commit when the review
 starts, so it shows the same changes however far the branch moves on. Click
-another commit and the review waits — the view says so, and <kbd>⌘K</kbd>
-<kbd>⇧R</kbd> brings it back; it survives a window reload too, until you end it.
+another commit and the review waits; its title bar offers to start a review of
+what is now on screen, without ending the first. Reviews survive a window
+reload, until you end them.
 
 Hunks are known by what they say, not where they are. An edit above a reviewed
 hunk moves it without unticking it; an edit *to* it — say, the agent acting on

@@ -580,6 +580,88 @@ try {
         await capture('comment-buttons');
     }
 
+    if (scenes === 'review-multi') {
+        /*
+         * Two reviews at once, on the committed sample: one commit, then
+         * another — the Reviews view lists both — with the buttons each
+         * change carries in the diff. Red rings mark what is new.
+         */
+        const annotate = (selectorScript, label, side = 'left') =>
+            page.evaluate(
+                ({ selectorScript, label, side }) => {
+                    const element = new Function(selectorScript)();
+                    if (!element) {
+                        return false;
+                    }
+                    const box = element.getBoundingClientRect();
+                    const mark = document.createElement('div');
+                    mark.className = 'shot-annotation';
+                    Object.assign(mark.style, {
+                        position: 'fixed', left: `${box.left - 4}px`, top: `${box.top - 4}px`,
+                        width: `${box.width + 8}px`, height: `${box.height + 8}px`,
+                        border: '3px solid #ff3b30', borderRadius: '6px', zIndex: 100000,
+                        pointerEvents: 'none',
+                    });
+                    const text = document.createElement('div');
+                    text.className = 'shot-annotation';
+                    text.textContent = label;
+                    Object.assign(text.style, {
+                        position: 'fixed', top: `${box.bottom + 8}px`, background: '#ff3b30',
+                        color: 'white', font: '600 13px -apple-system, sans-serif', padding: '4px 8px',
+                        borderRadius: '4px', zIndex: 100000, pointerEvents: 'none', whiteSpace: 'nowrap',
+                        ...(side === 'right'
+                            ? { right: `${window.innerWidth - box.right - 4}px` }
+                            : { left: `${box.left - 4}px` }),
+                    });
+                    document.body.append(mark, text);
+                    return true;
+                },
+                { selectorScript, label, side }
+            );
+        const clear = () =>
+            page.evaluate(() => document.querySelectorAll('.shot-annotation').forEach((el) => el.remove()));
+        const row = (text) => rows.filter({ hasText: text }).first();
+
+        await runCommand('View: Toggle Maximized Panel');
+        await click(row('Payment terms'));
+        await page.waitForTimeout(2500);
+        await page.keyboard.press('Meta+K');
+        await page.keyboard.press('Shift+R');
+        await page.waitForTimeout(3500);
+        await runCommand('View: Close Panel');
+        await page.waitForTimeout(1500);
+        console.log('codelens:', await annotate(
+            `return [...document.querySelectorAll('.editor.modified .codelens-decoration')].find((d) => d.textContent.includes('Comment') && d.getBoundingClientRect().height > 0);`,
+            'Buttons on each change: Comment · Mark viewed'
+        ));
+        await capture('multi-01-codelens');
+        await clear();
+
+        // Another commit: not under review, so its title bar offers to start one.
+        await runCommand('GitHawk: Open Git Graph');
+        await page.waitForTimeout(1500);
+        // On the hash, at the row's left: the branch badge on this row is a
+        // button of its own and opens the branch menu.
+        await click(row('List overdue'), { position: { x: 40, y: 10 } });
+        await page.waitForTimeout(2500);
+        console.log('start:', await annotate(
+            `return document.querySelector('#workbench\\\\.view\\\\.extension\\\\.gitHawkSidebar .pane-header .codicon-checklist');`,
+            'Start a review of this commit',
+            'right'
+        ));
+        await capture('multi-02-start-another');
+        await clear();
+
+        await page.keyboard.press('Meta+K');
+        await page.keyboard.press('Shift+R');
+        await page.waitForTimeout(3500);
+        console.log('list:', await annotate(
+            `return [...document.querySelectorAll('.pane')].find((p) => p.querySelector('.pane-header')?.textContent.includes('Reviews'));`,
+            'Every review in progress — click one to return to it'
+        ));
+        await capture('multi-03-reviews-list');
+    }
+
     if (scenes === 'review-commits') {
         /*
          * Reviewing history rather than work in progress: the two commits of

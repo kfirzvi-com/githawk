@@ -21,10 +21,36 @@ export function reviewDocument(review: Review): string {
         '',
         `${comments.length === 1 ? 'One comment' : `${comments.length} comments`} left while reviewing this change in GitHawk.`,
         'Address each one in the code. Where a comment asks a question rather than for a change, answer it in your reply instead of editing anything.',
+        ...(review.spec.kind === 'workingTree'
+            ? []
+            : [
+                  `What was reviewed is committed history (${describeSpec(review)}). Make the changes in the working tree as it is now, where the code may have moved on since those commits.`,
+              ]),
         'Line numbers are as they were when the comment was written; if they have moved, find the place by the quoted lines.',
         '',
         ...sections,
     ].join('\n');
+}
+
+/** The revisions a review covers, in git's own words. */
+function describeSpec(review: Review): string {
+    const { spec } = review;
+    switch (spec.kind) {
+        case 'singleCommit':
+            return `commit ${spec.hash.slice(0, 12)}`;
+        case 'commitRange':
+            return `commits ${spec.oldest.slice(0, 12)} to ${spec.newest.slice(0, 12)}`;
+        case 'commitSet':
+            return `commits ${spec.hashes.map((hash) => hash.slice(0, 12)).join(', ')}`;
+        case 'twoRefs':
+            return spec.rightIsWorkingTree
+                ? `${spec.left.slice(0, 12)} against the working tree`
+                : `${spec.left.slice(0, 12)}..${spec.right.slice(0, 12)}`;
+        case 'branchAgainstBase':
+            return `the branch against ${spec.base}`;
+        case 'workingTree':
+            return 'uncommitted changes';
+    }
 }
 
 function commentSection(comment: ReviewComment, number: number): string {

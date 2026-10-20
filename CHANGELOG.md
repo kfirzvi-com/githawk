@@ -18,7 +18,10 @@ All notable changes to GitHawk are documented here, following
   something else, and survives a reload until you end it. Hunks are known by
   their content, so a change moved down the file stays viewed and a change
   rewritten — by you or by an agent writing from outside the editor — comes
-  back unviewed.
+  back unviewed. Every change carries **Comment** and **Mark viewed** buttons
+  as a CodeLens (GitHawk turns on `diffEditor.codeLens` by default for it).
+  Several reviews can be under way at once — a pull request's commits, a
+  branch, your own work — listed in a new **Reviews** view.
 - **Review comments, handed to an AI CLI.** Comment on changed lines with VS
   Code's own commenting UI (`Cmd+K Shift+C`); the comments stay local and are
   listed in the Comments panel. `Cmd+K Shift+S` writes them, with the lines

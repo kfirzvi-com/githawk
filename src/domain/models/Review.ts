@@ -9,6 +9,8 @@ import { ComparisonSpec } from './Comparison';
  * than in whichever view happens to be asking.
  */
 export interface Review {
+    /** Several reviews can be under way in one repository; this tells them apart. */
+    id: string;
     /** The repository it belongs to; a review never follows a switch of repository. */
     root: string;
     /** What the Changes view called the changeset when the review began. */
@@ -23,6 +25,13 @@ export interface Review {
      */
     viewed: Record<string, string[]>;
     comments: ReviewComment[];
+    /**
+     * How far through it the reader was when last on screen. A snapshot,
+     * because the real count needs every file's hunks, which are read only
+     * while the review is showing — and a list of reviews in progress needs
+     * the count for all of them.
+     */
+    progress?: ReviewProgress;
 }
 
 /** A note left on some lines, kept locally until it is handed to someone to act on. */
@@ -83,12 +92,14 @@ export function wholeFileHunkId(path: string, signature = ''): string {
 }
 
 export function startReview(input: {
+    id: string;
     root: string;
     label: string;
     spec: ComparisonSpec;
     now: Date;
 }): Review {
     return {
+        id: input.id,
         root: input.root,
         label: input.label,
         spec: input.spec,

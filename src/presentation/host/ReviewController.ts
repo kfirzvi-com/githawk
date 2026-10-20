@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { randomUUID } from 'node:crypto';
 import type { ComparisonDto } from '../../application/dto/ComparisonDto';
 import type { ComparisonSpec } from '../../domain/models/Comparison';
 import { hunkFocusLine, hunkNewRange, hunkOldRange, type Hunk } from '../../domain/models/Hunk';
@@ -22,13 +23,20 @@ import type { OpenFileRequest } from './ComparisonController';
 import { REVISION_SCHEME, decodeRevisionUri } from './RevisionContentProvider';
 import { log } from './log';
 
-/** Workspace state: every repository's review in progress, by root. */
+/** Workspace state: every repository's reviews in progress, by root. */
 const STORE_KEY = 'gitHawk.reviews';
 
-/** Set while the Changes view is showing the changeset under review. */
+/** Set while the Changes view is showing a changeset under review. */
 export const REVIEWING_CONTEXT = 'gitHawk.reviewing';
-/** Set while a review exists for this repository but something else is on screen. */
-export const REVIEW_PAUSED_CONTEXT = 'gitHawk.reviewPaused';
+/** Set while any review is in progress, which is when the Reviews view is worth its room. */
+export const HAS_REVIEWS_CONTEXT = 'gitHawk.hasReviews';
+
+/** A review as the Reviews view lists it: which repository, and whether it is on screen. */
+export interface ReviewEntry {
+    root: string;
+    review: Review;
+    onScreen: boolean;
+}
 
 /**
  * Enough to read a large changeset quickly without starting a hundred git
@@ -61,6 +69,10 @@ export interface ReviewControllerDeps {
      */
     relativePath: (fsPath: string) => string | undefined;
     showComparison: (spec: ComparisonSpec) => Promise<void>;
+    /** A commit's subject line, so a review of it is named by more than a hash. */
+    commitSubject: (rev: string) => Promise<string | undefined>;
+    /** Points GitHawk at another repository, for a review that belongs to it. */
+    switchRepository: (root: string) => Promise<void>;
     showWorkingTree: () => Promise<void>;
     openFile: (request: OpenFileRequest) => Promise<void>;
 }
@@ -68,16 +80,21 @@ export interface ReviewControllerDeps {
 /**
  * Review mode for the Changes view.
  *
- * Owns the review of the active repository and keeps three things in step
- * with it: the tree's checkboxes and hunk rows, the markers in the diff
- * editor, and the review's copy in workspace state — which is what lets a
- * review be left for another commit, or a window reload, and picked up where
- * it stopped.
+ * Keeps every review in progress, several per repository — a pull request's
+ * commits, a colleague's branch, your own uncommitted work — and shows
+ * whichever one matches what the Changes view is showing. For that one it
+ * keeps three things in step: the tree's checkboxes and hunk rows, the
+ * buttons and markers in the diff editor, and the review's copy in workspace
+ * state, which is what lets a review be left for another, or for a window
+ * reload, and picked up where it stopped.
  *
  * Everything that decides what "viewed" means is in the domain's Review; this
  * class only asks it and draws the answer.
  */
-export class ReviewController implements vscode.Disposable, ReviewOverlay {
+export class ReviewController
+    implements vscode.Disposable, ReviewOverlay, vscode.CodeLensProvider
+{
+    /** The review whose changeset the Changes view is showing, if any. */
     private review?: Review;
     /** True while the tree is showing the review's own changeset. */
     private active = false;
@@ -91,24 +108,21 @@ export class ReviewController implements vscode.Disposable, ReviewOverlay {
     readonly onDidChange = this.changed.event;
     private readonly disposables: vscode.Disposable[] = [];
 
+    /*
+     * The buttons on each change are a CodeLens, above; these only mark the
+     * scrollbar, so what is left to read can be seen at a glance down the
+     * whole file.
+     */
     private readonly viewedMarker = vscode.window.createTextEditorDecorationType({
-        after: {
-            contentText: '  ✓ viewed',
-            color: new vscode.ThemeColor('descriptionForeground'),
-            fontStyle: 'italic',
-        },
         overviewRulerColor: new vscode.ThemeColor('editorOverviewRuler.addedForeground'),
         overviewRulerLane: vscode.OverviewRulerLane.Left,
     });
     private readonly unviewedMarker = vscode.window.createTextEditorDecorationType({
-        after: {
-            contentText: `  ○ not viewed — ${keys('⇧V')} marks it`,
-            color: new vscode.ThemeColor('editorCodeLens.foreground'),
-            fontStyle: 'italic',
-        },
         overviewRulerColor: new vscode.ThemeColor('editorOverviewRuler.warningForeground'),
         overviewRulerLane: vscode.OverviewRulerLane.Left,
     });
+    /** Tells VS Code to ask for the CodeLenses again. */
+    readonly onDidChangeCodeLenses = this.changed.event;
 
     constructor(private readonly deps: ReviewControllerDeps) {
         this.disposables.push(
@@ -181,13 +195,84 @@ export class ReviewController implements vscode.Disposable, ReviewOverlay {
         ].join('\n');
     }
 
+    // ---- CodeLens: the buttons on each change ------------------------------
+
+    /**
+     * Comment and Mark viewed, on the line above each change — the button is
+     * where the change is, not in a tree or a title bar the reader has to
+     * connect to it. The diff editor hides CodeLenses unless
+     * `diffEditor.codeLens` is on, which package.json makes the default.
+     */
+    provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
+        const located = this.locate(document.uri);
+        if (!located || (located.side === 'old' && located.file.change.status !== 'deleted')) {
+            return [];
+        }
+        const { file } = located;
+        return (this.hunksOf(file) ?? []).flatMap((hunk) => {
+            const line = Math.min(
+                Math.max(
+                    (located.side === 'new' ? hunkNewRange(hunk) : hunkOldRange(hunk)).start - 1,
+                    0
+                ),
+                Math.max(document.lineCount - 1, 0)
+            );
+            const range = new vscode.Range(line, 0, line, 0);
+            const args = [file.change.path, file.group ?? null, hunk.id];
+            const viewed = this.isViewed(file, hunk);
+            return [
+                new vscode.CodeLens(range, {
+                    title: '$(comment) Comment',
+                    tooltip: `Comment on this change (${keys('⇧C')})`,
+                    command: 'gitHawk.review.commentOnHunk',
+                    arguments: args,
+                }),
+                new vscode.CodeLens(range, {
+                    title: viewed ? '$(pass-filled) Viewed' : '$(circle-large-outline) Mark viewed',
+                    tooltip: viewed
+                        ? 'Viewed. Click to read it again'
+                        : `Mark this change viewed (${keys('⇧V')})`,
+                    command: 'gitHawk.review.toggleHunk',
+                    arguments: args,
+                }),
+            ];
+        });
+    }
+
+    // ---- Every review in progress ------------------------------------------
+
+    /** Every review, in every repository, most recently started first. */
+    entries(): ReviewEntry[] {
+        return Object.entries(this.stored())
+            .flatMap(([root, reviews]) =>
+                reviews.map((review) => ({
+                    root,
+                    review: review.id === this.review?.id ? this.review : review,
+                    onScreen: this.active && review.id === this.review?.id,
+                }))
+            )
+            .sort((a, b) => b.review.startedAt.localeCompare(a.review.startedAt));
+    }
+
+    private reviewsOf(root: string): Review[] {
+        return this.stored()[root] ?? [];
+    }
+
+    private find(id: string): ReviewEntry | undefined {
+        return this.entries().find((entry) => entry.review.id === id);
+    }
+
     // ---- Starting, resuming, ending --------------------------------------
 
     /**
      * Starts reviewing what the Changes view shows — or, with nothing shown,
-     * the uncommitted changes — or returns to the review already under way.
+     * returns to a review in progress, or reviews the uncommitted changes.
      * Pressed again mid-review it goes to the next change not yet viewed,
      * so the one key both opens a review and moves through it.
+     *
+     * Starting one never ends another: a pull request, a colleague's branch
+     * and your own work in progress can all be under review at once, and the
+     * Reviews view lists them.
      */
     async start(): Promise<void> {
         const root = this.deps.repositoryRoot();
@@ -201,7 +286,7 @@ export class ReviewController implements vscode.Disposable, ReviewOverlay {
         }
 
         let comparison = this.deps.tree.current;
-        if (this.review && (!comparison || sameSpec(comparison.spec, this.review.spec))) {
+        if (!comparison && this.entries().length > 0) {
             await this.resume();
             return;
         }
@@ -216,25 +301,6 @@ export class ReviewController implements vscode.Disposable, ReviewOverlay {
             return;
         }
 
-        if (this.review) {
-            const choice = await vscode.window.showWarningMessage(
-                `A review of “${this.review.label}” is in progress.`,
-                {
-                    modal: true,
-                    detail: `Reviewing “${comparison.label}” instead discards it: ${this.describeLoss(this.review)}.`,
-                },
-                'Resume That Review',
-                'Review This Instead'
-            );
-            if (choice === 'Resume That Review') {
-                await this.resume();
-                return;
-            }
-            if (choice !== 'Review This Instead') {
-                return;
-            }
-        }
-
         const spec = pinSpec(comparison.spec, {
             baseRev: await this.resolve(comparison.baseRev),
             targetRev:
@@ -242,7 +308,17 @@ export class ReviewController implements vscode.Disposable, ReviewOverlay {
                     ? undefined
                     : await this.resolve(comparison.targetRev),
         });
-        this.review = startReview({ root, label: comparison.label, spec, now: new Date() });
+        // Pinned, the comparison may turn out to be one already under review.
+        const existing = this.reviewsOf(root).find((review) => sameSpec(review.spec, spec));
+        this.review =
+            existing ??
+            startReview({
+                id: randomUUID(),
+                root,
+                label: await this.labelFor(comparison),
+                spec,
+                now: new Date(),
+            });
         this.lastStop = undefined;
         await this.save();
         log.info(`review started: ${comparison.label} ${JSON.stringify(spec)}`);
@@ -260,24 +336,56 @@ export class ReviewController implements vscode.Disposable, ReviewOverlay {
         await this.next({ unviewedOnly: true, quiet: true });
     }
 
-    /** Puts the review's changeset back in the Changes view. */
-    async resume(): Promise<void> {
-        if (!this.review) {
+    /**
+     * Puts a review's changeset back in the Changes view — the one named, or
+     * the only one, or whichever the reader picks. A review of another
+     * repository switches to that repository first.
+     */
+    async resume(id?: string): Promise<void> {
+        const entry = id ? this.find(id) : await this.pick('Resume which review?');
+        if (!entry) {
             return;
         }
-        await this.deps.showComparison(this.review.spec);
+        if (entry.root !== this.deps.repositoryRoot()) {
+            await this.deps.switchRepository(entry.root);
+        }
+        await this.deps.showComparison(entry.review.spec);
         await this.whenLoaded();
+        await vscode.commands.executeCommand('gitHawkChanges.focus');
+    }
+
+    private async pick(title: string): Promise<ReviewEntry | undefined> {
+        const entries = this.entries();
+        if (entries.length <= 1) {
+            return entries[0];
+        }
+        const chosen = await vscode.window.showQuickPick(
+            entries.map((entry) => ({
+                label: `$(checklist) ${entry.review.label}`,
+                description: describeProgress(entry.review),
+                detail: entry.root,
+                entry,
+            })),
+            { title }
+        );
+        return chosen?.entry;
     }
 
     /**
-     * Ends the review and forgets it. Says what goes with it first: viewed
-     * marks and unsent comments are work, and neither is anywhere else.
+     * Ends a review — the one on screen, or the one named — and forgets it.
+     * Says what goes with it first: viewed marks and unsent comments are
+     * work, and neither is anywhere else.
      */
-    async end(options: { confirmed?: boolean } = {}): Promise<boolean> {
-        const review = this.review;
-        if (!review) {
+    async end(options: { confirmed?: boolean; id?: string } = {}): Promise<boolean> {
+        const entry = options.id
+            ? this.find(options.id)
+            : this.review
+              ? { root: this.review.root, review: this.review, onScreen: this.active }
+              : await this.pick('End which review?');
+        if (!entry) {
             return false;
         }
+        const { review } = entry;
         const loss = this.describeLoss(review);
         if (!options.confirmed && loss !== 'nothing yet') {
             const choice = await vscode.window.showWarningMessage(
@@ -289,12 +397,16 @@ export class ReviewController implements vscode.Disposable, ReviewOverlay {
                 return false;
             }
         }
-        this.review = undefined;
-        this.active = false;
-        this.hunks.clear();
-        await this.save();
-        this.deps.tree.setReview(undefined);
-        this.deps.tree.setReviewNote(undefined);
+        await this.store(review.root, (reviews) =>
+            reviews.filter((candidate) => candidate.id !== review.id)
+        );
+        if (this.review?.id === review.id) {
+            this.review = undefined;
+            this.active = false;
+            this.hunks.clear();
+            this.deps.tree.setReview(undefined);
+        }
+        this.noteOthers();
         this.decorate();
         await this.setContexts();
         this.changed.fire();
@@ -584,35 +696,36 @@ export class ReviewController implements vscode.Disposable, ReviewOverlay {
 
     // ---- What is on screen -----------------------------------------------
 
-    /** The Changes view changed what it shows: is it the review's changeset? */
+    /** The Changes view changed what it shows: is it a changeset under review? */
     private shown(comparison: ComparisonDto | undefined): void {
         const root = this.deps.repositoryRoot();
-        if (this.review?.root !== root) {
-            this.review = root ? this.stored()[root] : undefined;
+        const match =
+            root && comparison
+                ? this.reviewsOf(root).find((review) => sameSpec(comparison.spec, review.spec))
+                : undefined;
+        if (match?.id !== this.review?.id) {
             this.hunks.clear();
+            this.lastStop = undefined;
         }
 
-        const active =
-            this.review !== undefined &&
-            comparison !== undefined &&
-            sameSpec(comparison.spec, this.review.spec);
-
-        this.active = active;
-        if (active) {
-            this.loading = this.loadHunks();
-        } else {
-            this.hunks.clear();
-            this.loading = Promise.resolve();
-        }
-        this.deps.tree.setReview(active ? this : undefined);
-        this.deps.tree.setReviewNote(
-            this.review && !active
-                ? `Your review of ${this.review.label} is waiting — ${keys('⇧R')} returns to it.`
-                : undefined
-        );
+        this.review = match;
+        this.active = match !== undefined;
+        this.loading = this.active ? this.loadHunks() : Promise.resolve();
+        this.deps.tree.setReview(this.active ? this : undefined);
+        this.noteOthers();
         this.decorate();
         void this.setContexts();
         this.changed.fire();
+    }
+
+    /** Under a changeset not being reviewed: the ones that are, and how to start this one. */
+    private noteOthers(): void {
+        const waiting = this.entries().filter((entry) => !entry.onScreen).length;
+        this.deps.tree.setReviewNote(
+            !this.active && waiting > 0
+                ? `${waiting === 1 ? 'A review is' : `${waiting} reviews are`} in progress — see Reviews below. ${keys('⇧R')} starts one of this.`
+                : undefined
+        );
     }
 
     /**
@@ -704,10 +817,8 @@ export class ReviewController implements vscode.Disposable, ReviewOverlay {
                 if (line >= editor.document.lineCount) {
                     continue;
                 }
-                const isViewed = this.isViewed(located!.file, hunk);
-                (isViewed ? viewed : unviewed).push({
-                    range: new vscode.Range(line, 0, line, editor.document.lineAt(line).text.length),
-                    hoverMessage: this.hunkActions(located!.file, hunk, isViewed),
+                (this.isViewed(located!.file, hunk) ? viewed : unviewed).push({
+                    range: new vscode.Range(line, 0, line, 0),
                 });
             }
             editor.setDecorations(this.viewedMarker, viewed);
@@ -715,33 +826,7 @@ export class ReviewController implements vscode.Disposable, ReviewOverlay {
         }
     }
 
-    /**
-     * The marker's hover: the change's own buttons, where the change is.
-     * Command links rather than a CodeLens, which the diff editor hides by
-     * default (`diffEditor.codeLens`).
-     */
-    private hunkActions(file: FileNode, hunk: Hunk, viewed: boolean): vscode.MarkdownString {
-        const link = (command: string, label: string) =>
-            `[${label}](command:${command}?${encodeURIComponent(
-                JSON.stringify([file.change.path, file.group ?? null, hunk.id])
-            )})`;
-        const actions = new vscode.MarkdownString(
-            [
-                link('gitHawk.review.commentOnHunk', '$(comment) Comment on this change'),
-                link(
-                    'gitHawk.review.toggleHunk',
-                    viewed ? '$(circle-large-outline) Mark not viewed' : '$(check) Mark viewed'
-                ),
-            ].join('&nbsp;&nbsp;·&nbsp;&nbsp;'),
-            true
-        );
-        actions.isTrusted = {
-            enabledCommands: ['gitHawk.review.commentOnHunk', 'gitHawk.review.toggleHunk'],
-        };
-        return actions;
-    }
-
-    /** A hunk named the way a hover link names it: path, section, id. */
+    /** A hunk named the way a CodeLens names it: path, section, id. */
     findHunk(path: string, group: string | null, hunkId: string): Stop | undefined {
         const file = this.deps.tree.files.find(
             (node) => node.change.path === path && (node.group ?? null) === group
@@ -767,6 +852,27 @@ export class ReviewController implements vscode.Disposable, ReviewOverlay {
         await this.saveAndRedraw();
     }
 
+    /** The same, for any review — the Reviews view acts on ones not on screen. */
+    async updateReview(id: string, change: (review: Review) => Review): Promise<void> {
+        if (this.review?.id === id) {
+            await this.update(change);
+            return;
+        }
+        const entry = this.find(id);
+        if (!entry) {
+            return;
+        }
+        await this.store(entry.root, (reviews) =>
+            reviews.map((review) => (review.id === id ? change(review) : review))
+        );
+        this.changed.fire();
+    }
+
+    /** A review by id, wherever it is. */
+    reviewById(id: string): Review | undefined {
+        return this.find(id)?.review;
+    }
+
     private async saveAndRedraw(): Promise<void> {
         await this.save();
         this.deps.tree.refreshReview();
@@ -774,31 +880,81 @@ export class ReviewController implements vscode.Disposable, ReviewOverlay {
         this.changed.fire();
     }
 
-    private stored(): Record<string, Review> {
-        return this.deps.store.get<Record<string, Review>>(STORE_KEY, {});
+    private stored(): Record<string, Review[]> {
+        const stored = this.deps.store.get<Record<string, Review[] | Review>>(STORE_KEY, {});
+        // Reviews were one per repository before there could be several;
+        // a review left over from then is still a review in progress.
+        return Object.fromEntries(
+            Object.entries(stored).map(([root, value]) => [
+                root,
+                (Array.isArray(value) ? value : [value]).map((review) => ({
+                    ...review,
+                    id: review.id ?? `${root}:${review.startedAt}`,
+                })),
+            ])
+        );
     }
 
-    private async save(): Promise<void> {
-        const root = this.deps.repositoryRoot();
-        if (!root) {
-            return;
-        }
+    private async store(root: string, change: (reviews: Review[]) => Review[]): Promise<void> {
         const all = { ...this.stored() };
-        if (this.review) {
-            all[root] = this.review;
+        const next = change(all[root] ?? []);
+        if (next.length > 0) {
+            all[root] = next;
         } else {
             delete all[root];
         }
         await this.deps.store.update(STORE_KEY, all);
     }
 
+    /** Writes the review on screen back, with how far through it the reader now is. */
+    private async save(): Promise<void> {
+        const review = this.review;
+        if (!review) {
+            return;
+        }
+        const files = this.deps.tree.files
+            .map((file) => this.reviewedFile(file))
+            .filter((file): file is ReviewedFile => file !== undefined);
+        const snapshot =
+            this.active && files.length > 0
+                ? { ...review, progress: reviewProgress(review, files) }
+                : review;
+        this.review = snapshot;
+        await this.store(review.root, (reviews) =>
+            reviews.some((candidate) => candidate.id === review.id)
+                ? reviews.map((candidate) => (candidate.id === review.id ? snapshot : candidate))
+                : [...reviews, snapshot]
+        );
+    }
+
     private async setContexts(): Promise<void> {
         await vscode.commands.executeCommand('setContext', REVIEWING_CONTEXT, this.active);
         await vscode.commands.executeCommand(
             'setContext',
-            REVIEW_PAUSED_CONTEXT,
-            this.review !== undefined && !this.active
+            HAS_REVIEWS_CONTEXT,
+            this.entries().length > 0
         );
+    }
+
+    /**
+     * What the Reviews view calls a review. A hash says nothing to someone
+     * picking among three reviews; the commit's subject does.
+     */
+    private async labelFor(comparison: ComparisonDto): Promise<string> {
+        const { spec, label } = comparison;
+        const newest =
+            spec.kind === 'singleCommit'
+                ? spec.hash
+                : spec.kind === 'commitRange'
+                  ? spec.newest
+                  : undefined;
+        const subject = newest ? await this.deps.commitSubject(newest).catch(() => undefined) : undefined;
+        if (!subject) {
+            return label;
+        }
+        return spec.kind === 'singleCommit'
+            ? `${label} ${subject}`
+            : `${label} — up to “${subject}”`;
     }
 
     /** A branch or tag resolved to its commit; anything git cannot resolve stays as it is. */
@@ -818,6 +974,12 @@ export class ReviewController implements vscode.Disposable, ReviewOverlay {
         return {
             active: this.active,
             review: this.review,
+            reviews: this.entries().map((entry) => ({
+                id: entry.review.id,
+                label: entry.review.label,
+                root: entry.root,
+                onScreen: entry.onScreen,
+            })),
             progress: this.progress(),
             files: this.deps.tree.files.map((file) => ({
                 path: file.change.path,
@@ -831,6 +993,19 @@ export class ReviewController implements vscode.Disposable, ReviewOverlay {
             })),
         };
     }
+}
+
+/** "2/3 files · 1 comment", from the review's last snapshot. */
+export function describeProgress(review: Review): string {
+    const comments = review.comments.length;
+    return [
+        review.progress
+            ? `${review.progress.filesViewed}/${review.progress.files} files`
+            : 'not opened yet',
+        comments > 0 ? `${comments} ${comments === 1 ? 'comment' : 'comments'}` : '',
+    ]
+        .filter(Boolean)
+        .join(' · ');
 }
 
 /** One row's diff, as a key: the same path in two sections is two diffs. */

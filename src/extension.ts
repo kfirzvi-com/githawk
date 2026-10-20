@@ -29,9 +29,11 @@ import { RepositoryWatcher } from './presentation/host/RepositoryWatcher';
 import { GitCliDirectoryReader } from './infrastructure/git/GitCliDirectoryReader';
 import { GitCliTreeReader } from './infrastructure/git/GitCliTreeReader';
 import { GitCliHunkReader } from './infrastructure/git/GitCliHunkReader';
+import { ExecFileGitRunner } from './infrastructure/git/GitRunner';
 import { ReviewController } from './presentation/host/ReviewController';
 import { ReviewComments, type ShownComment } from './presentation/host/ReviewComments';
 import { ReviewHandoff } from './presentation/host/ReviewHandoff';
+import { REVIEWS_VIEW_ID, ReviewsTree } from './presentation/host/ReviewsTree';
 import type { Hunk } from './domain/models/Hunk';
 import {
     OPEN_FILE_AT_REVISION_COMMAND,
@@ -238,16 +240,33 @@ export async function activate(
                 : within.split(sep).join('/');
         },
         showComparison: (spec) => provider.showComparison(spec),
+        switchRepository: (root) => provider.switchToRepository(root),
+        commitSubject: async (rev) =>
+            (
+                await new ExecFileGitRunner().run(
+                    ['log', '-1', '--format=%s', '--end-of-options', rev],
+                    activeRepositoryRoot()
+                )
+            ).trim() || undefined,
         showWorkingTree: () => provider.compareWorkingTree('focus'),
         openFile: (request) => comparisons.openFile(request),
     });
     const reviewComments = new ReviewComments(reviews, () => repositories.active?.root);
     const handoff = new ReviewHandoff(reviews, {
-        repositoryRoot: () => repositories.active?.root,
-        gitDirectory: async () =>
-            (await new GitCliDirectoryReader(activeRepositoryRoot()).read()).gitDir,
+        gitDirectory: async (root) => (await new GitCliDirectoryReader(root).read()).gitDir,
     });
-    context.subscriptions.push(reviews, reviewComments);
+    const reviewsList = new ReviewsTree(reviews);
+    context.subscriptions.push(
+        reviews,
+        reviewComments,
+        reviewsList,
+        vscode.window.createTreeView(REVIEWS_VIEW_ID, { treeDataProvider: reviewsList }),
+        // Comment and Mark viewed on each change, where the change is.
+        vscode.languages.registerCodeLensProvider(
+            [{ scheme: 'file' }, { scheme: REVISION_SCHEME }],
+            reviews
+        )
+    );
 
     /*
      * While the changeset under review includes the disk, the disk is
@@ -630,10 +649,22 @@ export async function activate(
             reviews.checkboxesChanged(event.items)
         ),
         vscode.commands.registerCommand('gitHawk.review.start', () => reviews.start()),
-        vscode.commands.registerCommand('gitHawk.review.resume', () => reviews.resume()),
-        // `true` from a test skips the question; the palette passes nothing.
-        vscode.commands.registerCommand('gitHawk.review.end', (confirmed?: boolean) =>
-            reviews.end({ confirmed: confirmed === true })
+        // With an id — a Reviews row — that review; otherwise the one there is, or a pick.
+        vscode.commands.registerCommand('gitHawk.review.resume', (id?: unknown) =>
+            reviews.resume(typeof id === 'string' ? id : undefined)
+        ),
+        /*
+         * `true` from a test skips the question; a Reviews row passes itself
+         * and ends that review; the palette passes nothing and ends the one
+         * on screen, or asks which.
+         */
+        vscode.commands.registerCommand('gitHawk.review.end', (arg?: unknown) =>
+            arg === true
+                ? reviews.end({ confirmed: true })
+                : reviews.end({ id: reviewIdOf(arg) })
+        ),
+        vscode.commands.registerCommand('gitHawk.review.sendFromList', (row?: unknown) =>
+            handoff.send({ review: reviewIdOf(row) })
         ),
         vscode.commands.registerCommand('gitHawk.review.nextChange', () => reviews.next()),
         vscode.commands.registerCommand('gitHawk.review.previousChange', () =>
@@ -1093,6 +1124,15 @@ async function updateAllBranches(
             log.show();
         }
     });
+}
+
+/** The review a Reviews row stands for, or a bare id. */
+function reviewIdOf(arg: unknown): string | undefined {
+    if (typeof arg === 'string') {
+        return arg;
+    }
+    const review = (arg as { review?: { id?: unknown } } | undefined)?.review;
+    return typeof review?.id === 'string' ? review.id : undefined;
 }
 
 /** The files a tree row stands for: itself, or everything beneath a folder or section. */

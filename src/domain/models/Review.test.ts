@@ -22,6 +22,7 @@ const now = new Date('2026-10-20T09:00:00Z');
 
 function review(): Review {
     return startReview({
+        id: 'r1',
         root: '/repo',
         label: 'Uncommitted changes',
         spec: { kind: 'workingTree' },

@@ -150,18 +150,51 @@ suite('code review', () => {
     });
 
     test('leaving it for a commit keeps it, and resuming brings it back as it was', async () => {
-        const viewedBefore = (await state()).review.viewed;
+        const { review } = await state();
 
         await run('gitHawk.compareCommits', [git(['rev-parse', 'HEAD'])]);
         const away = await state();
         assert.equal(away.active, false, 'a commit was shown as though it were the review');
-        assert.ok(away.review, 'showing a commit discarded the review');
+        assert.ok(
+            away.reviews.some((entry) => entry.id === review.id),
+            'showing a commit discarded the review'
+        );
 
-        await run('gitHawk.review.resume');
+        await run('gitHawk.review.resume', review.id);
         const back = await state();
         assert.equal(back.active, true);
-        assert.deepEqual(back.review.viewed, viewedBefore);
+        assert.equal(back.review.id, review.id);
+        assert.deepEqual(back.review.viewed, review.viewed);
         assert.equal(back.review.comments.length, 1);
+    });
+
+    /**
+     * A pull request's commits and your own work in progress are two
+     * reviews, both kept: starting the second must not end the first.
+     */
+    test('reviewing a commit as well keeps both, each with its own marks', async () => {
+        const first = (await state()).review;
+
+        await run('gitHawk.compareCommits', [git(['rev-parse', 'HEAD'])]);
+        await run('gitHawk.review.start');
+        const second = await state();
+
+        assert.equal(second.active, true);
+        assert.notEqual(second.review.id, first.id);
+        assert.equal(second.review.spec.kind, 'singleCommit');
+        assert.deepEqual(second.review.viewed, {});
+        assert.deepEqual(
+            second.reviews.map((entry) => entry.id).sort(),
+            [first.id, second.review.id].sort()
+        );
+        assert.ok(second.files.every((file) => file.hunks.length > 0 || file.state === 'unviewed'));
+
+        // Ended from its row, which passes the row; the first is untouched.
+        await run('gitHawk.review.end', { review: { id: second.review.id } });
+        await run('gitHawk.review.resume', first.id);
+        const after = await state();
+        assert.equal(after.review.id, first.id);
+        assert.equal(after.reviews.length, 1);
     });
 
     test('ending it forgets it', async () => {
@@ -169,5 +202,6 @@ suite('code review', () => {
         const after = await state();
         assert.equal(after.review, undefined);
         assert.equal(after.active, false);
+        assert.deepEqual(after.reviews, []);
     });
 });
