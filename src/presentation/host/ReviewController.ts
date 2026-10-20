@@ -566,7 +566,9 @@ export class ReviewController
      * cannot put a cursor on, is moved onto the change itself. Returns why
      * not, when it cannot.
      */
-    async prepareComment(target?: { file: FileNode; hunk?: Hunk }): Promise<string | undefined> {
+    async prepareComment(
+        target?: { file: FileNode; hunk?: Hunk }
+    ): Promise<string | { path: string; line: number; range: { start: number; end: number } }> {
         if (!this.review || !this.active) {
             return `No review is on screen. Start one with ${keys('⇧R')}.`;
         }
@@ -604,10 +606,12 @@ export class ReviewController
             editor.selection = new vscode.Selection(at, at);
             editor.revealRange(new vscode.Range(at, at), vscode.TextEditorRevealType.InCenterIfOutsideViewport);
         }
+        // Next and previous carry on from the change just commented on.
+        this.lastStop = { path: stop.file.change.path, hunkId: hunk.id };
         log.info(
             `comment: ${stop.file.change.path} line ${line} (${located.side} side, change at ${range.start}–${range.end}) in ${editor.document.uri.toString()}`
         );
-        return undefined;
+        return { path: stop.file.change.path, line, range };
     }
 
     /** Opens one hunk of a file, or the file, and selects its row. */

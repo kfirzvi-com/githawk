@@ -264,20 +264,20 @@ export async function activate(
 
     /*
      * Every way of commenting comes through here: the cursor is put on the
-     * change first, the ranges are offered afresh, and VS Code is given a
-     * moment to ask for them — its Add Comment checks a cache, and a diff
-     * opened a moment ago may not be in it yet.
+     * change first, then the comment box is opened there by GitHawk itself
+     * — see ReviewComments.openDraft for why not VS Code's Add Comment.
      */
     const commentOn = async (target?: Parameters<ReviewController['prepareComment']>[0]) => {
-        const problem = await reviews.prepareComment(target);
-        if (problem) {
-            log.warn(`comment: ${problem}`);
-            vscode.window.showInformationMessage(problem);
+        const prepared = await reviews.prepareComment(target);
+        if (typeof prepared === 'string') {
+            log.warn(`comment: ${prepared}`);
+            vscode.window.showInformationMessage(prepared);
             return;
         }
-        reviewComments.offerRanges();
-        await new Promise((resolve) => setTimeout(resolve, 200));
-        await vscode.commands.executeCommand('workbench.action.addComment');
+        const editor = vscode.window.activeTextEditor;
+        if (editor) {
+            await reviewComments.askForComment(editor, prepared);
+        }
     };
     const reviewsView = vscode.window.createTreeView(REVIEWS_VIEW_ID, {
         treeDataProvider: reviewsList,

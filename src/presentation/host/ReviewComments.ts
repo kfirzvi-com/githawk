@@ -10,6 +10,7 @@ import {
 } from '../../domain/models/Review';
 import type { ReviewController } from './ReviewController';
 import { encodeRevisionUri } from './RevisionContentProvider';
+import { log } from './log';
 
 export const REVIEW_COMMENT_CONTROLLER_ID = 'gitHawk.review';
 
@@ -131,6 +132,41 @@ export class ReviewComments implements vscode.Disposable {
     }
 
     /**
+     * Asks for the comment in VS Code's input box, then pins it to the whole
+     * change — the box every comment button and key opens.
+     *
+     * Not VS Code's Add Comment: that checks the cursor against commenting
+     * ranges it has cached, and in a busy window the cache stays empty long
+     * enough that every attempt failed with "the cursor must be within a
+     * commenting range". Nor an empty thread of our own, which VS Code shows
+     * folded, needing a click before it can be typed in. The input box takes
+     * the keyboard at once and cannot be refused. The gutter's + still opens
+     * VS Code's own box, for a comment that wants several lines.
+     */
+    async askForComment(
+        editor: vscode.TextEditor,
+        at: { path: string; line: number; range: { start: number; end: number } }
+    ): Promise<string | undefined> {
+        const { start, end } = at.range;
+        const where = start === end ? `line ${start}` : `lines ${start}–${end}`;
+        const text = await vscode.window.showInputBox({
+            title: `Comment on ${at.path}, ${where}`,
+            prompt: editor.document.lineAt(Math.min(at.line, editor.document.lineCount) - 1).text.trim() || undefined,
+            placeHolder: 'What should change here? Enter saves it; it stays on this machine until you send the review.',
+            ignoreFocusOut: true,
+        });
+        if (!text?.trim()) {
+            return undefined;
+        }
+        const thread = this.controller.createCommentThread(
+            editor.document.uri,
+            new vscode.Range(start - 1, 0, end - 1, 0),
+            []
+        );
+        return this.save({ thread, text });
+    }
+
+    /**
      * See gitHawk.review.commentForTesting: a thread opened on the lines and
      * submitted, through the same save the thread widget's button calls.
      */
@@ -201,6 +237,21 @@ export class ReviewComments implements vscode.Disposable {
      * the change and nowhere else — a review comments on what changed.
      */
     private commentingRanges(document: vscode.TextDocument): vscode.Range[] {
+        const ranges = this.rangesFor(document);
+        // Said in the log whenever the answer changes: when Add Comment
+        // refuses, this is what tells whether VS Code asked, and what it heard.
+        const answer = ranges.map((range) => `${range.start.line + 1}–${range.end.line + 1}`).join(', ') || 'none';
+        const key = document.uri.toString();
+        if (this.answered.get(key) !== answer) {
+            this.answered.set(key, answer);
+            log.info(`commenting ranges for ${key}: ${answer}`);
+        }
+        return ranges;
+    }
+
+    private readonly answered = new Map<string, string>();
+
+    private rangesFor(document: vscode.TextDocument): vscode.Range[] {
         const located = this.reviews.locate(document.uri);
         if (!located) {
             return [];
