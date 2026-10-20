@@ -33,7 +33,12 @@ import { ExecFileGitRunner } from './infrastructure/git/GitRunner';
 import { ReviewController } from './presentation/host/ReviewController';
 import { ReviewComments, type ShownComment } from './presentation/host/ReviewComments';
 import { ReviewHandoff } from './presentation/host/ReviewHandoff';
-import { REVIEWS_VIEW_ID, ReviewsTree } from './presentation/host/ReviewsTree';
+import {
+    REVIEWS_VIEW_ID,
+    ReviewsTree,
+    pickReview,
+    reviewsViewMessage,
+} from './presentation/host/ReviewsTree';
 import type { Hunk } from './domain/models/Hunk';
 import {
     OPEN_FILE_AT_REVISION_COMMAND,
@@ -274,11 +279,25 @@ export async function activate(
         await new Promise((resolve) => setTimeout(resolve, 200));
         await vscode.commands.executeCommand('workbench.action.addComment');
     };
+    const reviewsView = vscode.window.createTreeView(REVIEWS_VIEW_ID, {
+        treeDataProvider: reviewsList,
+    });
+    reviewsView.message = reviewsViewMessage(process.platform === 'darwin' ? '⌘' : 'Ctrl+');
+    /** The row a key in the Reviews view acts on: the one passed, else the one selected. */
+    const reviewRow = (arg?: unknown) =>
+        reviewIdOf(arg) ?? reviewIdOf(reviewsView.selection[0]);
     context.subscriptions.push(
         reviews,
         reviewComments,
         reviewsList,
-        vscode.window.createTreeView(REVIEWS_VIEW_ID, { treeDataProvider: reviewsList }),
+        reviewsView,
+        vscode.commands.registerCommand('gitHawk.review.list', () =>
+            pickReview(reviews, {
+                open: (id) => reviews.resume(id),
+                send: (id) => handoff.send({ review: id }),
+                end: (id) => reviews.end({ id }),
+            })
+        ),
         // Comment and Mark viewed on each change, where the change is.
         vscode.languages.registerCodeLensProvider(
             [{ scheme: 'file' }, { scheme: REVISION_SCHEME }],
@@ -681,9 +700,14 @@ export async function activate(
                 ? reviews.end({ confirmed: true })
                 : reviews.end({ id: reviewIdOf(arg) })
         ),
+        // A row's buttons, and the keys of a focused Reviews view.
         vscode.commands.registerCommand('gitHawk.review.sendFromList', (row?: unknown) =>
-            handoff.send({ review: reviewIdOf(row) })
+            handoff.send({ review: reviewRow(row) })
         ),
+        vscode.commands.registerCommand('gitHawk.review.endFromList', (row?: unknown) => {
+            const id = reviewRow(row);
+            return id ? reviews.end({ id }) : undefined;
+        }),
         vscode.commands.registerCommand('gitHawk.review.nextChange', () => reviews.next()),
         vscode.commands.registerCommand('gitHawk.review.previousChange', () =>
             reviews.previous()

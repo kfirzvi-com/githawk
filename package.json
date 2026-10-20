@@ -439,6 +439,16 @@
         "command": "gitHawk.review.sendFromList",
         "title": "Send Comments To An AI CLI",
         "icon": "$(sparkle)"
+      },
+      {
+        "command": "gitHawk.review.list",
+        "title": "GitHawk: Go To A Review",
+        "icon": "$(list-selection)"
+      },
+      {
+        "command": "gitHawk.review.endFromList",
+        "title": "End Review",
+        "icon": "$(close)"
       }
     ],
     "keybindings": [
@@ -518,7 +528,42 @@
         "command": "gitHawk.review.sendToAi",
         "key": "ctrl+k shift+s",
         "mac": "cmd+k shift+s",
-        "when": "gitHawk.reviewing && !terminalFocus"
+        "when": "gitHawk.reviewing && !terminalFocus && focusedView != gitHawkReviews"
+      },
+      {
+        "command": "gitHawk.review.list",
+        "key": "ctrl+k shift+l",
+        "mac": "cmd+k shift+l",
+        "when": "!terminalFocus"
+      },
+      {
+        "command": "gitHawk.review.endFromList",
+        "key": "ctrl+backspace",
+        "mac": "cmd+backspace",
+        "when": "focusedView == gitHawkReviews"
+      },
+      {
+        "command": "gitHawk.review.endFromList",
+        "key": "delete",
+        "when": "focusedView == gitHawkReviews"
+      },
+      {
+        "command": "gitHawk.review.sendFromList",
+        "key": "ctrl+k shift+s",
+        "mac": "cmd+k shift+s",
+        "when": "focusedView == gitHawkReviews"
+      },
+      {
+        "command": "gitHawkReviews.focus",
+        "key": "ctrl+shift+9",
+        "mac": "cmd+shift+9",
+        "when": "focusedView == gitHawkChanges && gitHawk.hasReviews"
+      },
+      {
+        "command": "gitHawk.openSidebar",
+        "key": "ctrl+shift+9",
+        "mac": "cmd+shift+9",
+        "when": "focusedView == gitHawkReviews"
       }
     ],
     "viewsContainers": {
@@ -754,7 +799,7 @@
           "group": "inline@1"
         },
         {
-          "command": "gitHawk.review.end",
+          "command": "gitHawk.review.endFromList",
           "when": "view == gitHawkReviews && viewItem == gitHawkReview",
           "group": "inline@2"
         },
@@ -764,7 +809,7 @@
           "group": "1_review@1"
         },
         {
-          "command": "gitHawk.review.end",
+          "command": "gitHawk.review.endFromList",
           "when": "view == gitHawkReviews && viewItem == gitHawkReview",
           "group": "1_review@2"
         }
@@ -936,6 +981,14 @@
         },
         {
           "command": "gitHawk.review.sendFromList",
+          "when": "false"
+        },
+        {
+          "command": "gitHawk.review.list",
+          "when": "gitHawk.hasReviews"
+        },
+        {
+          "command": "gitHawk.review.endFromList",
           "when": "false"
         }
       ],

@@ -303,6 +303,12 @@ you have not seen.
 | <kbd>⌘K</kbd> <kbd>⇧F</kbd> | The same for the whole file |
 | <kbd>⌘K</kbd> <kbd>⇧C</kbd> | Comment on the selected lines |
 | <kbd>⌘K</kbd> <kbd>⇧S</kbd> | Send the comments to an AI CLI |
+| <kbd>⌘K</kbd> <kbd>⇧L</kbd> | Pick a review in progress, from anywhere — type to filter, <kbd>Enter</kbd> to go back to it |
+| <kbd>⌘⇧9</kbd>, then again | Focus Changes, then Reviews, then Changes again |
+| <kbd>Enter</kbd> / <kbd>⌘⌫</kbd> | In the Reviews view: go back to the selected review / end it |
+
+The sidebar's views are VS Code's own, which an extension cannot draw over, so
+the Reviews view states its keys at its top rather than on <kbd>Shift</kbd>.
 
 <kbd>Ctrl</kbd> for <kbd>⌘</kbd> off a Mac.
 

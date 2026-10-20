@@ -662,6 +662,60 @@ try {
         await capture('multi-03-reviews-list');
     }
 
+    if (scenes === 'review-keyboard') {
+        /*
+         * The Reviews view from the keyboard alone, once two reviews exist:
+         * Cmd+Shift+9 twice to reach it, the arrows and Enter to go back to
+         * one, Cmd+K Shift+L to pick from anywhere, Cmd+Backspace to end one.
+         */
+        const chord = async (key) => {
+            await page.keyboard.press('Meta+K');
+            await page.keyboard.press(key);
+            await page.waitForTimeout(2500);
+        };
+        const row = (text) => rows.filter({ hasText: text }).first();
+        await runCommand('View: Toggle Maximized Panel');
+        await click(row('Payment terms'));
+        await page.waitForTimeout(2000);
+        await chord('Shift+R');
+        await runCommand('GitHawk: Open Git Graph');
+        await click(row('List overdue'), { position: { x: 40, y: 10 } });
+        await page.waitForTimeout(2000);
+        await chord('Shift+R');
+        await runCommand('View: Close Panel');
+
+        await page.keyboard.press('Meta+Shift+9');
+        await page.waitForTimeout(800);
+        await page.keyboard.press('Meta+Shift+9');
+        await page.waitForTimeout(800);
+        await page.keyboard.press('ArrowDown');
+        await page.keyboard.press('ArrowDown');
+        await page.waitForTimeout(800);
+        await capture('keys-01-reviews-focused');
+
+        await page.keyboard.press('Enter');
+        await page.waitForTimeout(3000);
+        await capture('keys-02-opened-with-enter');
+
+        await chord('Shift+L');
+        await page.waitForSelector('.quick-input-widget:visible');
+        await page.waitForTimeout(800);
+        await capture('keys-03-picker');
+        await page.keyboard.type('overdue');
+        await page.waitForTimeout(500);
+        await page.keyboard.press('Enter');
+        await page.waitForTimeout(3000);
+
+        // Going back to a review leaves the keyboard in Changes, one press away.
+        await page.keyboard.press('Meta+Shift+9');
+        await page.waitForTimeout(800);
+        await page.keyboard.press('ArrowDown');
+        await page.waitForTimeout(500);
+        await page.keyboard.press('Meta+Backspace');
+        await page.waitForTimeout(2000);
+        await capture('keys-04-ended-with-cmd-backspace');
+    }
+
     if (scenes === 'review-commits') {
         /*
          * Reviewing history rather than work in progress: the two commits of
