@@ -380,7 +380,7 @@
       },
       {
         "command": "gitHawk.review.comment",
-        "title": "GitHawk: Comment On The Selected Lines",
+        "title": "GitHawk: Comment On This Change",
         "icon": "$(comment)"
       },
       {
@@ -616,6 +616,11 @@
           "command": "gitHawk.review.markViewed",
           "when": "gitHawk.reviewing && isInDiffEditor",
           "group": "navigation@3"
+        },
+        {
+          "command": "gitHawk.review.comment",
+          "when": "gitHawk.reviewing && isInDiffEditor",
+          "group": "navigation@4"
         }
       ],
       "editor/title/context": [
@@ -722,6 +727,16 @@
           "command": "gitHawk.revealRevisionFileInExplorer",
           "when": "view == gitHawkFiles && viewItem == gitHawkRevisionFile",
           "group": "2_reveal@1"
+        },
+        {
+          "command": "gitHawk.review.comment",
+          "when": "view == gitHawkChanges && viewItem == gitHawkHunk",
+          "group": "inline@1"
+        },
+        {
+          "command": "gitHawk.review.comment",
+          "when": "view == gitHawkChanges && viewItem == gitHawkHunk",
+          "group": "1_review@1"
         }
       ],
       "commandPalette": [

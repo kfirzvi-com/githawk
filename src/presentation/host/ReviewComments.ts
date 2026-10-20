@@ -77,10 +77,13 @@ export class ReviewComments implements vscode.Disposable {
             placeHolder:
                 'A note for whoever fixes this — kept on this machine until you send the review to an AI CLI',
         };
-        this.controller.commentingRangeProvider = {
-            provideCommentingRanges: (document) => this.commentingRanges(document),
-        };
-        this.disposables.push(reviews.onDidChange(() => this.draw()));
+        this.offerRanges();
+        this.disposables.push(
+            reviews.onDidChange(() => {
+                this.offerRanges();
+                this.draw();
+            })
+        );
     }
 
     dispose(): void {
@@ -178,6 +181,19 @@ export class ReviewComments implements vscode.Disposable {
     private refresh(thread: vscode.CommentThread): void {
         // Reassigning is what makes VS Code redraw a thread's comments.
         thread.comments = [...thread.comments];
+    }
+
+    /**
+     * VS Code asks for a document's commenting ranges when it opens and
+     * caches the answer. A diff opened before the review started — or before
+     * its hunks were read, or before a save moved them — was told "none", and
+     * kept that answer, so the + never appeared and Add Comment refused.
+     * Handing it a provider again is the API's one way to make it ask again.
+     */
+    private offerRanges(): void {
+        this.controller.commentingRangeProvider = {
+            provideCommentingRanges: (document) => this.commentingRanges(document),
+        };
     }
 
     /**

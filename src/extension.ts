@@ -648,11 +648,18 @@ export async function activate(
         vscode.commands.registerCommand('gitHawk.review.markFileViewed', () =>
             reviews.markCurrent({ wholeFile: true })
         ),
-        // VS Code's own "comment on the selection", which opens our thread
-        // widget wherever the review offers a commenting range.
-        vscode.commands.registerCommand('gitHawk.review.comment', () =>
-            vscode.commands.executeCommand('workbench.action.addComment')
-        ),
+        /*
+         * VS Code's own "comment on the selection", which opens our thread
+         * widget wherever the review offers a commenting range. From a hunk's
+         * row in the tree it opens that change first, so the button on the
+         * row comments on the row.
+         */
+        vscode.commands.registerCommand('gitHawk.review.comment', async (node?: TreeNode) => {
+            if (node?.kind === 'hunk') {
+                await reviews.openStop(node.file, node.hunk);
+            }
+            await vscode.commands.executeCommand('workbench.action.addComment');
+        }),
         vscode.commands.registerCommand(
             'gitHawk.review.saveComment',
             (reply: vscode.CommentReply) => reviewComments.save(reply)

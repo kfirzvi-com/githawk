@@ -264,8 +264,9 @@ against its base — press <kbd>⌘K</kbd> <kbd>⇧R</kbd> (<kbd>Ctrl+K</kbd>
   row.
 - The first change opens in the diff editor, and each hunk carries a marker on
   its first changed line — `✓ viewed`, or `○ not viewed`.
-- **Comments** use VS Code's own commenting UI: the **+** in the gutter of a
-  changed line, or <kbd>⌘K</kbd> <kbd>⇧C</kbd> on the selection. They are listed
+- **Comments** use VS Code's own commenting UI: the comment button on a hunk's
+  row or in the diff's title bar, the **+** in the gutter of a changed line, or
+  <kbd>⌘K</kbd> <kbd>⇧C</kbd> on the selection. They are listed
   in the **Comments** panel and stay on your machine.
 - **Send to an AI CLI** — <kbd>⌘K</kbd> <kbd>⇧S</kbd> — writes the comments,
   each with the lines it was made on, to `.git/githawk/review.md` and types one
