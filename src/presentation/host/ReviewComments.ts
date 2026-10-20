@@ -451,7 +451,12 @@ export class ReviewComments implements vscode.Disposable {
             return this.save({ thread, text });
         }
         await this.setResolved(thread, action === 'resolve');
-        return { collapsed: thread.collapsibleState === vscode.CommentThreadCollapsibleState.Collapsed, canReply: thread.canReply };
+        // Resolving can redraw the thread as a new one; report on what is on screen.
+        const now = this.threads.find((candidate) => this.rootsOf(candidate).includes(commentId));
+        return {
+            collapsed: now?.collapsibleState === vscode.CommentThreadCollapsibleState.Collapsed,
+            canReply: now?.canReply,
+        };
     }
 
     async remove(comment: ShownComment): Promise<void> {
