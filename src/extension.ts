@@ -256,6 +256,24 @@ export async function activate(
         gitDirectory: async (root) => (await new GitCliDirectoryReader(root).read()).gitDir,
     });
     const reviewsList = new ReviewsTree(reviews);
+
+    /*
+     * Every way of commenting comes through here: the cursor is put on the
+     * change first, the ranges are offered afresh, and VS Code is given a
+     * moment to ask for them — its Add Comment checks a cache, and a diff
+     * opened a moment ago may not be in it yet.
+     */
+    const commentOn = async (target?: Parameters<ReviewController['prepareComment']>[0]) => {
+        const problem = await reviews.prepareComment(target);
+        if (problem) {
+            log.warn(`comment: ${problem}`);
+            vscode.window.showInformationMessage(problem);
+            return;
+        }
+        reviewComments.offerRanges();
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        await vscode.commands.executeCommand('workbench.action.addComment');
+    };
     context.subscriptions.push(
         reviews,
         reviewComments,
@@ -685,22 +703,14 @@ export async function activate(
          * row in the tree it opens that change first, so the button on the
          * row comments on the row.
          */
-        vscode.commands.registerCommand('gitHawk.review.comment', async (node?: TreeNode) => {
-            if (node?.kind === 'hunk') {
-                await reviews.openStop(node.file, node.hunk);
-            }
-            await vscode.commands.executeCommand('workbench.action.addComment');
-        }),
-        // The links in a diff marker's hover.
+        vscode.commands.registerCommand('gitHawk.review.comment', (node?: TreeNode) =>
+            commentOn(node?.kind === 'hunk' ? { file: node.file, hunk: node.hunk } : undefined)
+        ),
+        // The Comment button above each change.
         vscode.commands.registerCommand(
             'gitHawk.review.commentOnHunk',
-            async (path: string, group: string | null, hunkId: string) => {
-                const stop = reviews.findHunk(path, group, hunkId);
-                if (stop?.hunk) {
-                    await reviews.openStop(stop.file, stop.hunk);
-                    await vscode.commands.executeCommand('workbench.action.addComment');
-                }
-            }
+            (path: string, group: string | null, hunkId: string) =>
+                commentOn(reviews.findHunk(path, group, hunkId))
         ),
         vscode.commands.registerCommand(
             'gitHawk.review.toggleHunk',

@@ -555,6 +555,61 @@ export class ReviewController
         return false;
     }
 
+    /**
+     * Puts the cursor on a change, in its diff, ready for VS Code's own Add
+     * Comment — which refuses unless the cursor is inside one of the ranges
+     * the review offers, and says so in words that do not say why.
+     *
+     * The change is the one given (a CodeLens, a tree row), else the one the
+     * reader is on. Its diff is opened if it is not the editor in front, and
+     * a cursor on a line of context, or on a deleted line the inline diff
+     * cannot put a cursor on, is moved onto the change itself. Returns why
+     * not, when it cannot.
+     */
+    async prepareComment(target?: { file: FileNode; hunk?: Hunk }): Promise<string | undefined> {
+        if (!this.review || !this.active) {
+            return `No review is on screen. Start one with ${keys('⇧R')}.`;
+        }
+        const stop = target ?? this.currentStop();
+        if (!stop) {
+            return `Open a change first: click one in the Changes view, or press ${keys(']')}.`;
+        }
+        const hunk = stop.hunk ?? this.hunksOf(stop.file)?.[0];
+        if (!hunk) {
+            return `${stop.file.change.path} has no lines to comment on — a binary file, or a rename with no edits.`;
+        }
+
+        let editor = vscode.window.activeTextEditor;
+        let located = editor ? this.locate(editor.document.uri) : undefined;
+        if (located?.file !== stop.file) {
+            await this.open({ file: stop.file, hunk });
+            editor = vscode.window.activeTextEditor;
+            located = editor ? this.locate(editor.document.uri) : undefined;
+        }
+        if (!editor || located?.file !== stop.file) {
+            log.warn(
+                `comment: the editor in front is ${editor?.document.uri.toString() ?? 'none'}, not a side of ${stop.file.change.path}'s diff`
+            );
+            return `GitHawk could not find the diff of ${stop.file.change.path} to comment in.`;
+        }
+
+        const range = located.side === 'new' ? hunkNewRange(hunk) : hunkOldRange(hunk);
+        const cursor = editor.selection.active.line + 1;
+        const line =
+            cursor >= range.start && cursor <= range.end
+                ? cursor
+                : Math.min(hunkFocusLine(hunk, located.side), editor.document.lineCount);
+        if (line !== cursor) {
+            const at = new vscode.Position(line - 1, 0);
+            editor.selection = new vscode.Selection(at, at);
+            editor.revealRange(new vscode.Range(at, at), vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+        }
+        log.info(
+            `comment: ${stop.file.change.path} line ${line} (${located.side} side, change at ${range.start}–${range.end}) in ${editor.document.uri.toString()}`
+        );
+        return undefined;
+    }
+
     /** Opens one hunk of a file, or the file, and selects its row. */
     async openStop(file: FileNode, hunk?: Hunk): Promise<void> {
         await this.open({ file, hunk });

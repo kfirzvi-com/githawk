@@ -190,7 +190,7 @@ export class ReviewComments implements vscode.Disposable {
      * kept that answer, so the + never appeared and Add Comment refused.
      * Handing it a provider again is the API's one way to make it ask again.
      */
-    private offerRanges(): void {
+    offerRanges(): void {
         this.controller.commentingRangeProvider = {
             provideCommentingRanges: (document) => this.commentingRanges(document),
         };
