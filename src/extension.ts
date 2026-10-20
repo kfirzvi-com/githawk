@@ -264,8 +264,7 @@ export async function activate(
 
     /*
      * Every way of commenting comes through here: the cursor is put on the
-     * change first, then the comment box is opened there by GitHawk itself
-     * — see ReviewComments.openDraft for why not VS Code's Add Comment.
+     * change first, then VS Code's own comment box is opened on it.
      */
     const commentOn = async (target?: Parameters<ReviewController['prepareComment']>[0]) => {
         const prepared = await reviews.prepareComment(target);
@@ -275,9 +274,23 @@ export async function activate(
             return;
         }
         const editor = vscode.window.activeTextEditor;
-        if (editor) {
-            await reviewComments.askForComment(editor, prepared);
+        if (!editor) {
+            return;
         }
+        // VS Code's own box, on the change, beside any comments already
+        // there — unless this window's VS Code has not wired GitHawk's
+        // comments up, in which case Add Comment could only refuse.
+        if (!(await reviewComments.prepareChange(editor, prepared.range))) {
+            return;
+        }
+        if (await reviewComments.readyForComments(editor.document.uri)) {
+            await vscode.commands.executeCommand('workbench.action.addComment');
+            return;
+        }
+        log.warn(
+            `comment: VS Code has not asked GitHawk which lines of ${editor.document.uri.toString()} take comments; asking in the input box instead`
+        );
+        await reviewComments.askForComment(editor, prepared);
     };
     const reviewsView = vscode.window.createTreeView(REVIEWS_VIEW_ID, {
         treeDataProvider: reviewsList,

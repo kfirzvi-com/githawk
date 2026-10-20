@@ -88,7 +88,7 @@ export class ReviewComments implements vscode.Disposable {
     }
 
     dispose(): void {
-        this.threads.forEach((thread) => thread.dispose());
+        this.drawnThreads.forEach(({ thread }) => thread.dispose());
         this.disposables.forEach((disposable) => disposable.dispose());
     }
 
@@ -132,16 +132,52 @@ export class ReviewComments implements vscode.Disposable {
     }
 
     /**
-     * Asks for the comment in VS Code's input box, then pins it to the whole
-     * change — the box every comment button and key opens.
+     * Makes room for a new comment on a change that may have some already.
      *
-     * Not VS Code's Add Comment: that checks the cursor against commenting
-     * ranges it has cached, and in a busy window the cache stays empty long
-     * enough that every attempt failed with "the cursor must be within a
-     * commenting range". Nor an empty thread of our own, which VS Code shows
-     * folded, needing a click before it can be typed in. The input box takes
-     * the keyboard at once and cannot be refused. The gutter's + still opens
-     * VS Code's own box, for a comment that wants several lines.
+     * Its threads are unfolded, so what was said before is beside what is
+     * about to be written. Then the cursor goes to a line of the change with
+     * no thread on it: VS Code's Add Comment on a thread's own line folds
+     * that thread away rather than opening a box, which would make the
+     * Comment button hide the comments it was pressed beside.
+     *
+     * Returns false when every line of the change already carries a thread;
+     * the last one is then opened, its reply box a click away.
+     */
+    async prepareChange(editor: vscode.TextEditor, range: { start: number; end: number }): Promise<boolean> {
+        const uri = editor.document.uri.toString();
+        const here = this.threads.filter(
+            (thread) =>
+                thread.uri.toString() === uri &&
+                thread.range !== undefined &&
+                thread.range.start.line + 1 <= range.end &&
+                range.start <= thread.range.end.line + 1
+        );
+        here.forEach((thread) => {
+            thread.collapsibleState = vscode.CommentThreadCollapsibleState.Expanded;
+        });
+        // VS Code places a thread on its last line; those lines are taken.
+        const taken = new Set(here.map((thread) => thread.range!.end.line + 1));
+        const cursor = editor.selection.active.line + 1;
+        const free = [cursor, ...Array.from({ length: range.end - range.start + 1 }, (_, i) => range.start + i)]
+            .find((line) => line >= range.start && line <= range.end && !taken.has(line));
+        if (free !== undefined) {
+            const at = new vscode.Position(free - 1, 0);
+            editor.selection = new vscode.Selection(at, at);
+            return true;
+        }
+        const last = here[here.length - 1];
+        const above = new vscode.Position(Math.max(last.range!.start.line - 1, 0), 0);
+        editor.selection = new vscode.Selection(above, above);
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        await vscode.commands.executeCommand('editor.action.nextCommentThreadAction');
+        return false;
+    }
+
+    /**
+     * Asks for the comment in VS Code's input box, then pins it to the whole
+     * change. The fallback for a window where VS Code's own comment box
+     * cannot open — it has not asked GitHawk which lines take comments, so
+     * Add Comment would only refuse.
      */
     async askForComment(
         editor: vscode.TextEditor,
@@ -251,6 +287,27 @@ export class ReviewComments implements vscode.Disposable {
 
     private readonly answered = new Map<string, string>();
 
+    /**
+     * Whether VS Code will accept Add Comment on this document: it has asked
+     * for the lines that can take one, and been given some. Waits a moment
+     * for the asking when it has not happened yet — a diff opened just now,
+     * or one opened before its hunks were read.
+     */
+    async readyForComments(uri: vscode.Uri, waitMs = 1500): Promise<boolean> {
+        const ready = () => {
+            const answer = this.answered.get(uri.toString());
+            return answer !== undefined && answer !== 'none';
+        };
+        if (ready()) {
+            return true;
+        }
+        this.offerRanges();
+        for (let waited = 0; waited < waitMs && !ready(); waited += 50) {
+            await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+        return ready();
+    }
+
     private rangesFor(document: vscode.TextDocument): vscode.Range[] {
         const located = this.reviews.locate(document.uri);
         if (!located) {
@@ -280,19 +337,42 @@ export class ReviewComments implements vscode.Disposable {
         }
         this.drawn = signature;
 
-        this.threads.forEach((thread) => thread.dispose());
-        this.threads = [];
         if (!review || !root) {
+            this.drawnThreads.forEach(({ thread }) => thread.dispose());
+            this.drawnThreads.clear();
+            this.threads = [];
             return;
         }
 
         const groups = new Map<string, ReviewComment[]>();
         for (const comment of review.comments) {
-            const key = `${comment.side}\0${comment.rev ?? ''}\0${comment.documentPath ?? comment.path}\0${comment.line}\0${comment.endLine}`;
+            const key = `${root}\0${comment.side}\0${comment.rev ?? ''}\0${comment.documentPath ?? comment.path}\0${comment.line}\0${comment.endLine}`;
             groups.set(key, [...(groups.get(key) ?? []), comment]);
         }
 
-        for (const comments of groups.values()) {
+        /*
+         * Changed in place, not torn down and rebuilt: a thread disposed and
+         * recreated at the same lines vanished from the Comments panel, and
+         * lost whether the reader had it open or folded.
+         */
+        for (const [key, drawn] of this.drawnThreads) {
+            if (!groups.has(key)) {
+                drawn.thread.dispose();
+                this.drawnThreads.delete(key);
+            }
+        }
+        for (const [key, comments] of groups) {
+            const signature = JSON.stringify(comments.map((c) => [c.id, c.sentAt, c.body]));
+            const drawn = this.drawnThreads.get(key);
+            if (drawn) {
+                if (drawn.signature !== signature) {
+                    drawn.thread.comments = comments.map(
+                        (comment) => new ShownComment(comment.id, comment.body, comment.sentAt, drawn.thread)
+                    );
+                    drawn.signature = signature;
+                }
+                continue;
+            }
             const first = comments[0];
             const path = first.documentPath ?? first.path;
             const uri =
@@ -308,9 +388,13 @@ export class ReviewComments implements vscode.Disposable {
                 (comment) => new ShownComment(comment.id, comment.body, comment.sentAt, thread)
             );
             this.decorateThread(thread, first);
-            this.threads.push(thread);
+            this.drawnThreads.set(key, { thread, signature });
         }
+        this.threads = [...this.drawnThreads.values()].map(({ thread }) => thread);
     }
+
+    /** Threads on screen, by the lines they are on, with what they were drawn from. */
+    private readonly drawnThreads = new Map<string, { thread: vscode.CommentThread; signature: string }>();
 
     private decorateThread(thread: vscode.CommentThread, comment: ReviewComment): void {
         thread.label = `${comment.path}:${comment.line}`;

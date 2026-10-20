@@ -266,12 +266,11 @@ against its base — press <kbd>⌘K</kbd> <kbd>⇧R</kbd> (<kbd>Ctrl+K</kbd>
   its own buttons above it — **Comment** and **Mark viewed** — as a CodeLens.
   GitHawk turns `diffEditor.codeLens` on by default for this; set it back to
   `false` to hide them.
-- **Comments**: the **Comment** button on the change, the comment button on a
-  hunk's row or in the diff's title bar, or <kbd>⌘K</kbd> <kbd>⇧C</kbd>, asks
-  for the comment at the top of the window — type, <kbd>Enter</kbd> — and pins
-  it to the change in VS Code's own comment threads, where it can be edited or
-  replied to. The gutter's **+** opens VS Code's own box, for a comment that
-  wants several lines. They are listed
+- **Comments** use VS Code's own comment box, on the change: the **Comment**
+  button above it, the comment button on a hunk's row or in the diff's title
+  bar, <kbd>⌘K</kbd> <kbd>⇧C</kbd>, or the gutter's **+**. Earlier comments on
+  the same lines are shown with it, and all of them are in the **Comments**
+  panel. They stay on your machine. They are listed
   in the **Comments** panel and stay on your machine.
 - **Send to an AI CLI** — <kbd>⌘K</kbd> <kbd>⇧S</kbd> — writes the comments,
   each with the lines it was made on, to `.git/githawk/review.md` and types one
