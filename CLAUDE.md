@@ -33,6 +33,7 @@ npm test                    # Vitest — domain, application, and real-git adapt
 npm run test:visual         # Playwright against the standalone webview harness
 npm run test:integration    # two real VS Code sessions driving the real extension host
 npm run shot:vscode         # screenshot the real UI (also how README images are made)
+npm run e2e:review          # review mode walked end to end in a real VS Code, as a user would
 npm run package             # check + test + build + vsce package
 ```
 

@@ -676,7 +676,7 @@ export async function activate(
             // In a review a click is a step through it: the tree's selection
             // and the "where am I" of next and previous follow it.
             if (reviews.isActive) {
-                void reviews.openStop(node, hunk);
+                void reviews.openStop(node, hunk, { preserveFocus: true });
                 return;
             }
             void comparisons
@@ -727,6 +727,9 @@ export async function activate(
         ),
         vscode.commands.registerCommand('gitHawk.review.nextUnviewed', () =>
             reviews.next({ unviewedOnly: true })
+        ),
+        vscode.commands.registerCommand('gitHawk.review.toggleSelected', () =>
+            reviews.toggleSelected(changesView.selection)
         ),
         vscode.commands.registerCommand('gitHawk.review.markViewed', () =>
             reviews.markCurrent()

@@ -260,8 +260,9 @@ against its base — press <kbd>⌘K</kbd> <kbd>⇧R</kbd> (<kbd>Ctrl+K</kbd>
 
 - Every file gets a checkbox, and every **hunk** in it a row and a checkbox of
   its own. A file is ticked exactly when every hunk in it is; ticking the file
-  ticks them all. Finished files fold away. <kbd>Space</kbd> ticks the selected
-  row.
+  ticks them all. Finished files fold away. Clicking a row shows its change and
+  leaves the keyboard in the tree, so <kbd>↓</kbd> and <kbd>Space</kbd> tick
+  your way down it.
 - The first change opens in the diff editor, and every change in it carries
   its own buttons above it — **Comment** and **Mark viewed** — as a CodeLens.
   GitHawk turns `diffEditor.codeLens` on by default for this; set it back to

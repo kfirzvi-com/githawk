@@ -449,6 +449,10 @@
         "command": "gitHawk.review.endFromList",
         "title": "End Review",
         "icon": "$(close)"
+      },
+      {
+        "command": "gitHawk.review.toggleSelected",
+        "title": "GitHawk: Toggle The Selected Rows Viewed"
       }
     ],
     "keybindings": [
@@ -564,6 +568,17 @@
         "key": "ctrl+shift+9",
         "mac": "cmd+shift+9",
         "when": "focusedView == gitHawkReviews"
+      },
+      {
+        "command": "runCommands",
+        "key": "space",
+        "when": "focusedView == gitHawkChanges && gitHawk.reviewing && !inputFocus",
+        "args": {
+          "commands": [
+            "list.select",
+            "gitHawk.review.toggleSelected"
+          ]
+        }
       }
     ],
     "viewsContainers": {
@@ -990,6 +1005,10 @@
         {
           "command": "gitHawk.review.endFromList",
           "when": "false"
+        },
+        {
+          "command": "gitHawk.review.toggleSelected",
+          "when": "false"
         }
       ],
       "comments/commentThread/context": [
@@ -1009,12 +1028,12 @@
       "comments/comment/title": [
         {
           "command": "gitHawk.review.editComment",
-          "group": "group@1",
+          "group": "inline@1",
           "when": "commentController == gitHawk.review && comment == gitHawkReviewComment"
         },
         {
           "command": "gitHawk.review.deleteComment",
-          "group": "group@2",
+          "group": "inline@2",
           "when": "commentController == gitHawk.review && comment == gitHawkReviewComment"
         }
       ],
@@ -1057,7 +1076,8 @@
     "vscode:prepublish": "npm run build",
     "test:integration": "npm run build && vite-node tests/integration/runTest.ts",
     "shot:vscode": "npm run build && node scripts/shotVscode.mjs",
-    "shot:vscode:multi": "npm run build && ./scripts/makeMultiRepoSample.sh /tmp/githawk-multi-sample && node scripts/shotVscode.mjs artifacts/vscode-multi /tmp/githawk-multi-sample repositories"
+    "shot:vscode:multi": "npm run build && ./scripts/makeMultiRepoSample.sh /tmp/githawk-multi-sample && node scripts/shotVscode.mjs artifacts/vscode-multi /tmp/githawk-multi-sample repositories",
+    "e2e:review": "npm run build && node scripts/e2eReview.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.0",

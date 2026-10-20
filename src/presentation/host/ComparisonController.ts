@@ -14,6 +14,8 @@ export interface OpenFileRequest {
     targetRev?: string;
     /** A line of the newer side to put the cursor on, 1-based — a review's way to a hunk. */
     line?: number;
+    /** Leave the keyboard where it is: a tree being walked keeps it. */
+    preserveFocus?: boolean;
 }
 
 /**
@@ -172,12 +174,18 @@ export class ComparisonController {
             left,
             right,
             title,
-            { preview: true, selection: at } satisfies vscode.TextDocumentShowOptions
+            {
+                preview: true,
+                selection: at,
+                preserveFocus: request.preserveFocus,
+            } satisfies vscode.TextDocumentShowOptions
         );
         // The selection option moves the cursor; when the diff was already
         // open it does not always scroll, and a hunk off screen is not "at" it.
-        const editor = vscode.window.activeTextEditor;
-        if (at && editor?.document.uri.toString() === right.toString()) {
+        const editor = vscode.window.visibleTextEditors.find(
+            (candidate) => candidate.document.uri.toString() === right.toString()
+        );
+        if (at && editor) {
             editor.selection = new vscode.Selection(at.start, at.start);
             editor.revealRange(at, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
         }

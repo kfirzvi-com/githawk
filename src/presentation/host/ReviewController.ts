@@ -471,6 +471,34 @@ export class ReviewController
         }
     }
 
+    /**
+     * Space in the Changes tree: ticks the selected rows, or unticks them
+     * when they are all ticked already. VS Code's trees do not do this for
+     * checkboxes by themselves.
+     */
+    async toggleSelected(rows: readonly TreeNode[]): Promise<void> {
+        const targets = rows.filter(
+            (row): row is Extract<TreeNode, { kind: 'file' | 'hunk' }> =>
+                row.kind === 'file' || row.kind === 'hunk'
+        );
+        if (targets.length === 0) {
+            return;
+        }
+        const viewed = (row: (typeof targets)[number]) =>
+            row.kind === 'hunk'
+                ? this.isViewed(row.file, row.hunk)
+                : this.fileState(row) === 'viewed';
+        const tick = !targets.every(viewed);
+        for (const row of targets) {
+            if (row.kind === 'hunk') {
+                this.mark(row.file, row.hunk, tick);
+            } else {
+                this.mark(row, undefined, tick);
+            }
+        }
+        await this.saveAndRedraw();
+    }
+
     /** For tests and the palette: mark one file or hunk by path, as the tree does. */
     async markPath(path: string, viewed: boolean, hunkIndex?: number): Promise<void> {
         const file = this.deps.tree.files.find((node) => node.change.path === path);
@@ -630,12 +658,16 @@ export class ReviewController
         return { path: stop.file.change.path, line, range, summary: summarise(hunk, located.side) };
     }
 
-    /** Opens one hunk of a file, or the file, and selects its row. */
-    async openStop(file: FileNode, hunk?: Hunk): Promise<void> {
-        await this.open({ file, hunk });
+    /**
+     * Opens one hunk of a file, or the file, and selects its row. From the
+     * tree the keyboard stays in the tree, so arrows, Enter and Space carry
+     * on there — the way the Source Control view behaves.
+     */
+    async openStop(file: FileNode, hunk?: Hunk, options: { preserveFocus?: boolean } = {}): Promise<void> {
+        await this.open({ file, hunk }, options);
     }
 
-    private async open(stop: Stop): Promise<void> {
+    private async open(stop: Stop, options: { preserveFocus?: boolean } = {}): Promise<void> {
         const { file, hunk } = stop;
         this.lastStop = { path: file.change.path, hunkId: hunk?.id };
         await this.deps.openFile({
@@ -644,6 +676,7 @@ export class ReviewController
             baseRev: file.baseRev,
             targetRev: file.targetRev,
             line: hunk ? hunkFocusLine(hunk) : undefined,
+            preserveFocus: options.preserveFocus,
         });
         void this.deps.tree.revealRow(hunk ? this.deps.tree.hunkNode(file, hunk) : file);
         this.decorate();
