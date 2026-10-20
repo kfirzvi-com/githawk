@@ -3,6 +3,30 @@
 All notable changes to GitHawk are documented here, following
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- **Code review mode.** Press `Cmd+K Shift+R` — or the checklist in the
+  Changes view's title bar — to review whatever the view shows. Every file and
+  every hunk gets a checkbox; a file is viewed exactly when all its hunks are,
+  and finished files fold away. The diff editor marks each hunk `✓ viewed` or
+  `○ not viewed`, and the keyboard walks the review: `Cmd+K ]` / `Cmd+K [`
+  for the next and previous change across files, `Cmd+K Shift+V` to mark one
+  viewed and go on to the next unviewed, `Cmd+K Shift+F` for a whole file.
+  The review is pinned to the commits it resolved, waits while you look at
+  something else, and survives a reload until you end it. Hunks are known by
+  their content, so a change moved down the file stays viewed and a change
+  rewritten — by you or by an agent writing from outside the editor — comes
+  back unviewed.
+- **Review comments, handed to an AI CLI.** Comment on changed lines with VS
+  Code's own commenting UI (`Cmd+K Shift+C`); the comments stay local and are
+  listed in the Comments panel. `Cmd+K Shift+S` writes them, with the lines
+  each was made on, to `.git/githawk/review.md` and types a one-line
+  instruction into the session you pick — one already running, or a new one
+  of any tool in `gitHawk.aiTools`, which gains `promptCommand` for starting a
+  tool with a first message. Sent comments are not sent again.
+
 ## [0.8.0] — 2026-09-21
 
 ### Added

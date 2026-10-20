@@ -250,6 +250,52 @@ so it gets a control where you are already looking.
 The tree always states how the comparison was made, because a merge-base diff, a
 direct diff, and a reconstruction answer different questions.
 
+### Review it, change by change — and hand the fixes to an agent
+
+![Review mode: hunks ticked as viewed, one rewritten by an agent and back to unviewed, with a comment](media/screenshots/review-mode.png)
+
+Whatever the Changes view shows — your uncommitted work, a commit, a branch
+against its base — press <kbd>⌘K</kbd> <kbd>⇧R</kbd> (<kbd>Ctrl+K</kbd>
+<kbd>Shift+R</kbd>), or the checklist button in its title bar, to review it:
+
+- Every file gets a checkbox, and every **hunk** in it a row and a checkbox of
+  its own. A file is ticked exactly when every hunk in it is; ticking the file
+  ticks them all. Finished files fold away. <kbd>Space</kbd> ticks the selected
+  row.
+- The first change opens in the diff editor, and each hunk carries a marker on
+  its first changed line — `✓ viewed`, or `○ not viewed`.
+- **Comments** use VS Code's own commenting UI: the **+** in the gutter of a
+  changed line, or <kbd>⌘K</kbd> <kbd>⇧C</kbd> on the selection. They are listed
+  in the **Comments** panel and stay on your machine.
+- **Send to an AI CLI** — <kbd>⌘K</kbd> <kbd>⇧S</kbd> — writes the comments,
+  each with the lines it was made on, to `.git/githawk/review.md` and types one
+  line into the session you pick: a terminal already running, usually the one
+  that wrote the change, or a new session of any tool in `gitHawk.aiTools`.
+  Comments already sent are not sent twice.
+
+The review is pinned: a branch or tag is resolved to its commit when the review
+starts, so it shows the same changes however far the branch moves on. Click
+another commit and the review waits — the view says so, and <kbd>⌘K</kbd>
+<kbd>⇧R</kbd> brings it back; it survives a window reload too, until you end it.
+
+Hunks are known by what they say, not where they are. An edit above a reviewed
+hunk moves it without unticking it; an edit *to* it — say, the agent acting on
+your comment, writing the file from outside the editor — puts it back to
+unviewed while everything it left alone stays ticked. Review the second round
+by pressing <kbd>⌘K</kbd> <kbd>⇧R</kbd> again, which goes to the next change
+you have not seen.
+
+| Key | In a review |
+| --- | --- |
+| <kbd>⌘K</kbd> <kbd>⇧R</kbd> | Start, resume, or go to the next unviewed change |
+| <kbd>⌘K</kbd> <kbd>]</kbd> / <kbd>⌘K</kbd> <kbd>[</kbd> | Next / previous change, across files |
+| <kbd>⌘K</kbd> <kbd>⇧V</kbd> | Mark the change viewed and go to the next unviewed one |
+| <kbd>⌘K</kbd> <kbd>⇧F</kbd> | The same for the whole file |
+| <kbd>⌘K</kbd> <kbd>⇧C</kbd> | Comment on the selected lines |
+| <kbd>⌘K</kbd> <kbd>⇧S</kbd> | Send the comments to an AI CLI |
+
+<kbd>Ctrl</kbd> for <kbd>⌘</kbd> off a Mac.
+
 ### Act on branches and commits
 
 ![The grouped branch menu](media/screenshots/branch-menu.png)
@@ -399,7 +445,7 @@ different one, GitHawk switches to it and then shows the commit.
 | `gitHawk.blame.style` | `off` | Blame in the editor: `column` for IntelliJ's annotate, `endOfLine` for one label per block. |
 | `gitHawk.autoRefresh` | `true` | Reload the graph when the repository changes outside GitHawk. Watches git's metadata, never your working tree. |
 | `gitHawk.repositoryScanDepth` | `2` | Directory levels below each opened folder to search for repositories. `0` searches the folders only; `2` covers a folder of projects, or a folder of buckets each holding projects. |
-| `gitHawk.aiTools` | Claude Code, Codex, Gemini CLI, opencode | The AI CLIs GitHawk knows: `command` for "Start an AI CLI here", and `commitMessageCommand` — the same tool run once, non-interactively, prompt on stdin — for **Generate** in the commit box. Leave the latter out to keep a tool out of the picker. |
+| `gitHawk.aiTools` | Claude Code, Codex, Gemini CLI, opencode | The AI CLIs GitHawk knows: `command` for "Start an AI CLI here", `commitMessageCommand` — the same tool run once, non-interactively, prompt on stdin — for **Generate** in the commit box, and `promptCommand` — the tool started with a first message, `{prompt}` replaced by it — for handing a review over. Leave the optional ones out to keep a tool out of those pickers or, for `promptCommand`, to have the message typed in after `command`. |
 
 ## Commands
 
@@ -419,6 +465,9 @@ different one, GitHawk switches to it and then shows the commit.
 | `GitHawk: Manage Stashes` | List, show, apply, pop, drop; stash the working tree |
 | `GitHawk: Show Uncommitted Changes` | Staged, changed and untracked files, with the commit box |
 | `GitHawk: Browse Files At A Commit` | Every file at a branch, tag, or commit, in the **Files** tree — read-only, nothing checked out |
+| `GitHawk: Start Code Review` | `Cmd+K Shift+R` / `Ctrl+K Shift+R` — see [Review it, change by change](#review-it-change-by-change--and-hand-the-fixes-to-an-agent) |
+| `GitHawk: Send Review Comments To An AI CLI` | `Cmd+K Shift+S` / `Ctrl+K Shift+S` |
+| `GitHawk: End Code Review` | Says what it discards first |
 | `GitHawk: Commit` | The same, with the caret in the message |
 | `GitHawk: Write The Commit Message With An AI CLI` | Generate, from the palette |
 | `GitHawk: Stage All Changes` | |

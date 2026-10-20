@@ -41,6 +41,8 @@ Sample repositories to work against — purpose-built, so break them freely:
 ```bash
 ./scripts/makeSampleRepo.sh       # one repo: branches, merges, tags, worktrees, dirty files
 ./scripts/makeMultiRepoSample.sh  # a workspace of repos at several depths
+./scripts/makeReviewSample.sh     # uncommitted work with several hunks, for review mode
+                                  # screenshots: node scripts/shotVscode.mjs <out> /tmp/githawk-review-sample review
 ```
 
 ## Three test tiers, and why each exists

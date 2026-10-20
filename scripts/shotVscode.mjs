@@ -11,8 +11,10 @@
  * `scenes` is `all` (the default, and specific to the sample repository's
  * branches), `repositories`, which captures only what any workspace has,
  * `files`, which browses the whole project at an older commit in the Files
- * view, or `blame`, which wants a workspace with real history rather than the
- * sample — the annotate column has nothing to say about a file with two commits.
+ * view, `blame`, which wants a workspace with real history rather than the
+ * sample — the annotate column has nothing to say about a file with two commits —
+ * or `review`, which walks review mode end to end on the workspace
+ * `scripts/makeReviewSample.sh` builds.
  *
  * Doubles as the way to produce documentation screenshots, so the README shows the
  * real thing rather than a mock.
@@ -20,6 +22,7 @@
 import {
     existsSync,
     mkdirSync,
+    readFileSync,
     readdirSync,
     rmSync,
     writeFileSync,
@@ -83,6 +86,36 @@ mkdirSync(outDir, { recursive: true });
  * into the throwaway profile rather than toggled afterwards — a decoration
  * drawn during the screenshot is a decoration that might not be there yet.
  */
+/*
+ * The review scene hands its comments to an AI CLI, so it seeds one that only
+ * prints what it was given: the screenshot shows the handoff, and nothing
+ * acts on the sample repository behind the script's back.
+ */
+if (scenes === 'review') {
+    const agent = fileURLToPath(new URL('./fixtures/demoAgent.mjs', import.meta.url));
+    mkdirSync(join(userDataDir, 'User'), { recursive: true });
+    writeFileSync(
+        join(userDataDir, 'User', 'settings.json'),
+        JSON.stringify(
+            {
+                'editor.minimap.enabled': false,
+                'workbench.startupEditor': 'none',
+                'terminal.integrated.fontSize': 14,
+                'gitHawk.aiTools': [
+                    { name: 'Claude Code', command: 'claude', promptCommand: 'claude {prompt}' },
+                    {
+                        name: 'demo-agent',
+                        command: `node ${agent}`,
+                        promptCommand: `node ${agent} {prompt}`,
+                    },
+                ],
+            },
+            null,
+            2
+        )
+    );
+}
+
 if (scenes === 'blame') {
     mkdirSync(join(userDataDir, 'User'), { recursive: true });
     writeFileSync(
@@ -209,7 +242,7 @@ try {
      * The repository selector, and the picker behind it. Present in any
      * workspace, so this runs before the sample-specific scenes.
      */
-    if (scenes !== 'blame') {
+    if (scenes !== 'blame' && scenes !== 'review') {
         const repositoryPicker = inner.getByTestId('repository-picker');
         await repositoryPicker.waitFor();
         await capture('09-repository-selector');
@@ -368,6 +401,112 @@ try {
             .click();
         await page.waitForTimeout(2000);
         await capture('files-at-commit');
+    }
+
+    if (scenes === 'review') {
+        /*
+         * Review mode, driven from the keyboard the way it is meant to be
+         * used. Wants ./scripts/makeReviewSample.sh: uncommitted work with
+         * several hunks in one file, one in another, and a new file.
+         */
+        const chord = async (key) => {
+            await page.keyboard.press('Meta+K');
+            await page.keyboard.press(key);
+            await page.waitForTimeout(1800);
+        };
+        // The graph panel is not part of this story; the sidebar and the
+        // diff editor are.
+        await runCommand('View: Toggle Maximized Panel');
+        await runCommand('View: Close Panel');
+        await runCommand('GitHawk: Show Uncommitted Changes');
+        await page.waitForTimeout(2000);
+        await capture('review-01-changes');
+
+        await chord('Shift+R');
+        await page.waitForTimeout(1500);
+        await capture('review-02-started');
+
+        // Viewed, and on to the next: twice, to the due-date change.
+        await chord('Shift+V');
+        await capture('review-03-viewed-and-next');
+        await chord('Shift+V');
+
+        // A comment on the change the cursor is on, typed into VS Code's own
+        // comment widget and saved with Cmd+Enter.
+        await chord('Shift+C');
+        await page.waitForTimeout(800);
+        await page.keyboard.type(
+            'A paymentTermsDays of 0 is a real term (due on receipt). Make sure it is not treated as missing, and add a test for it.'
+        );
+        await page.waitForTimeout(600);
+        await capture('review-04-commenting');
+        await page.keyboard.press('Meta+Enter');
+        await page.waitForTimeout(1500);
+        await capture('review-05-commented');
+
+        // The rest of the file at once; it folds away, and the next file opens.
+        await chord('Shift+F');
+        await page.waitForTimeout(800);
+        await capture('review-06-file-viewed');
+
+        // Hand the comments over: the picker, then the session it started.
+        await chord('Shift+S');
+        await page.waitForSelector('.quick-input-widget:visible');
+        await page.waitForTimeout(1000);
+        await capture('review-07-send-picker');
+        await page.keyboard.type('demo-agent');
+        await page.waitForTimeout(600);
+        await page.keyboard.press('Enter');
+        await page.waitForTimeout(4000);
+        await capture('review-08-sent');
+
+        // The agent acts on it, from outside the editor: the hunk it rewrote
+        // comes back unviewed; everything it left alone stays ticked.
+        const invoice = join(repo, 'src/billing/invoice.ts');
+        writeFileSync(
+            invoice,
+            readFileSync(invoice, 'utf8').replace(
+                'due.setDate(due.getDate() + (invoice.paymentTermsDays ?? 30));',
+                'const terms = invoice.paymentTermsDays;\n    due.setDate(due.getDate() + (terms === undefined ? 30 : terms));'
+            )
+        );
+        await page.waitForTimeout(4000);
+        await runCommand('View: Close Panel');
+        // Straight to the rewritten hunk, from its row.
+        await page
+            .locator('#workbench\\.view\\.extension\\.gitHawkSidebar .monaco-list-row', {
+                hasText: 'Lines 35',
+            })
+            .first()
+            .click();
+        await page.waitForTimeout(2000);
+        await capture('review-09-after-agent');
+
+        // Leave it for a commit in the graph; the review waits, and resumes.
+        await runCommand('GitHawk: Open Git Graph');
+        await page.waitForTimeout(2500);
+        // The commit box is a webview too, so the graph is whichever one has rows.
+        const webviews = page.locator('iframe.webview');
+        let graphRows;
+        for (let index = 0; index < (await webviews.count()); index++) {
+            const candidate = webviews
+                .nth(index)
+                .contentFrame()
+                .locator('iframe#active-frame')
+                .contentFrame()
+                .getByTestId('git-graph')
+                .locator('button');
+            if ((await candidate.count()) > 0) {
+                graphRows = candidate;
+                break;
+            }
+        }
+        await click(graphRows.last());
+        await page.waitForTimeout(2500);
+        await capture('review-10-paused');
+        await runCommand('GitHawk: Resume Code Review');
+        await page.waitForTimeout(2500);
+        await capture('review-11-resumed');
     }
 
     console.log(JSON.stringify({ shots }, null, 2));
