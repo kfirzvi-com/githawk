@@ -8,6 +8,8 @@ import {
     isHunkViewed,
     markFile,
     markHunk,
+    markSent,
+    unsentComments,
     pinSpec,
     reviewProgress,
     sameSpec,
@@ -183,6 +185,13 @@ describe('comments', () => {
     test('emptying a comment deletes it', () => {
         const state = editComment(addComment(review(), comment()), 'c1', '');
         expect(state.comments).toEqual([]);
+    });
+
+    test('once handed over, are not handed over again', () => {
+        let state = addComment(review(), comment({ id: 'a' }));
+        state = markSent(state, ['a'], now);
+        state = addComment(state, comment({ id: 'b' }));
+        expect(unsentComments(state).map((c) => c.id)).toEqual(['b']);
     });
 
     test('are read back by file, then by line', () => {

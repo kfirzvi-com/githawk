@@ -39,7 +39,7 @@ describe('arguments', () => {
 
     test('the index against the disk names no revision', () => {
         const args = fileHunksArgs({ path: 'a', baseRev: ':0' });
-        expect(args.slice(args.indexOf('-U3') + 1)).toEqual(['--', 'a']);
+        expect(args.slice(args.indexOf('-U0') + 1)).toEqual(['--', 'a']);
     });
 
     test('a rename reads both names', () => {
@@ -66,9 +66,25 @@ describe('GitCliHunkReader', () => {
         });
 
         expect(hunks).toHaveLength(2);
-        expect(hunks.map(hunkFocusLine)).toEqual([5, 30]);
+        expect(hunks.map((hunk) => hunkFocusLine(hunk))).toEqual([5, 30]);
         expect(hunks[0].lines).toContain('+changed 5');
         expect(new Set(hunks.map((hunk) => hunk.id)).size).toBe(2);
+    });
+
+    test('two edits a few lines apart are two hunks, not one', async () => {
+        const repo = newRepo();
+        commitFile(repo, 'list.txt', numbered(40));
+        writeFileSync(
+            join(repo.path, 'list.txt'),
+            numbered(40, (line) => (line === 10 || line === 13 ? 'changed' : String(line)))
+        );
+
+        const hunks = await new GitCliHunkReader(repo.path).hunks({
+            path: 'list.txt',
+            baseRev: ':0',
+        });
+
+        expect(hunks.map((hunk) => hunk.newStart)).toEqual([10, 13]);
     });
 
     test('a hunk keeps its id when an edit above it moves it down', async () => {

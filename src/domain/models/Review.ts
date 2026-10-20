@@ -28,7 +28,10 @@ export interface Review {
 /** A note left on some lines, kept locally until it is handed to someone to act on. */
 export interface ReviewComment {
     id: string;
+    /** The file, as the change left it named. */
     path: string;
+    /** The commented document's own path, when that differs: the older side of a rename. */
+    documentPath?: string;
     /**
      * Which side of the diff the lines are on. Almost always the newer one;
      * a comment on a deleted line is on the older.
@@ -47,6 +50,8 @@ export interface ReviewComment {
      */
     excerpt: string;
     createdAt: string;
+    /** Set once the comment has been handed to an agent, so the next handoff sends only what is new. */
+    sentAt?: string;
 }
 
 /** What a file in the review is made of, as the caller has just read it. */
@@ -263,6 +268,21 @@ export function removeComment(review: Review, id: string): Review {
     return {
         ...review,
         comments: review.comments.filter((comment) => comment.id !== id),
+    };
+}
+
+/** What the next handoff would send: everything not handed over before. */
+export function unsentComments(review: Review): ReviewComment[] {
+    return commentsInOrder(review).filter((comment) => comment.sentAt === undefined);
+}
+
+export function markSent(review: Review, ids: readonly string[], now: Date): Review {
+    const sent = new Set(ids);
+    return {
+        ...review,
+        comments: review.comments.map((comment) =>
+            sent.has(comment.id) ? { ...comment, sentAt: now.toISOString() } : comment
+        ),
     };
 }
 

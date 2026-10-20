@@ -29,19 +29,14 @@ export function hunkDeletions(hunk: Hunk): number {
 }
 
 /**
- * The line on the newer side a reader should be put on: the first changed
- * line, not the first line of context above it. A hunk that only deletes
- * lands where the deleted lines used to be.
+ * The line a reader should be put on: the first changed line, not the first
+ * line of context above it. On the newer side a hunk that only deletes lands
+ * where the deleted lines used to be.
  */
-export function hunkFocusLine(hunk: Hunk): number {
-    let line = hunk.newStart;
-    for (const body of hunk.lines) {
-        if (body.startsWith('+') || body.startsWith('-')) {
-            return Math.max(line, 1);
-        }
-        line += 1;
-    }
-    return Math.max(hunk.newStart, 1);
+export function hunkFocusLine(hunk: Hunk, side: 'new' | 'old' = 'new'): number {
+    const leadingContext = hunk.lines.findIndex((line) => !line.startsWith(' '));
+    const start = side === 'new' ? hunk.newStart : hunk.oldStart;
+    return Math.max(start + Math.max(leadingContext, 0), 1);
 }
 
 /** The newer side's lines, inclusive, as the editor numbers them (1-based). */

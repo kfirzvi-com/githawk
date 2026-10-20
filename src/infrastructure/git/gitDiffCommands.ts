@@ -106,6 +106,11 @@ export function parentsOfArgs(hashes: string[]): string[] {
  * HEAD against the index is `--cached`, the index against the disk is no
  * revision at all.
  *
+ * No lines of context (`-U0`): with git's usual three, two edits a few lines
+ * apart merge into one hunk, and a review that can only tick both or neither
+ * is not reviewing them separately. Without context each hunk is one run of
+ * changed lines — the same blocks the diff editor steps through.
+ *
  * `--no-ext-diff` and `--no-textconv` because a configured external diff
  * tool or text conversion would print something other than a unified diff,
  * and the hunks would silently vanish.
@@ -126,7 +131,7 @@ export function fileHunksArgs(request: {
         '--no-ext-diff',
         '--no-textconv',
         '--find-renames',
-        '-U3',
+        '-U0',
         ...revisions,
         '--',
         ...paths,
