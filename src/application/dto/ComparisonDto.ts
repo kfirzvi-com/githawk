@@ -1,6 +1,7 @@
 import {
     ChangeGroupKind,
     ComparisonMethod,
+    ComparisonSpec,
 } from '../../domain/models/Comparison';
 import { ChangeStatus, ComparisonTotals } from '../../domain/models/FileChange';
 
@@ -22,6 +23,8 @@ export interface ChangeGroupDto {
 }
 
 export interface ComparisonDto {
+    /** What was asked for, so the same changeset can be asked for again — see Review.spec. */
+    spec: ComparisonSpec;
     label: string;
     method: ComparisonMethod;
     /** Stated in the UI, because how the "before" side was derived changes what the numbers mean. */
