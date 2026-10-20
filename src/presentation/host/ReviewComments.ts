@@ -12,6 +12,10 @@ import type { ReviewController } from './ReviewController';
 import { encodeRevisionUri } from './RevisionContentProvider';
 import { log } from './log';
 
+/**
+ * The start of every review comment controller's id; package.json's menus
+ * match on it. The rest is unique per registration — see createController.
+ */
 export const REVIEW_COMMENT_CONTROLLER_ID = 'gitHawk.review';
 
 /** A comment on screen, knowing which comment of the review it shows. */
@@ -60,12 +64,9 @@ class ShownComment implements vscode.Comment {
  * the reader is looking at — and writes back what is typed.
  */
 export class ReviewComments implements vscode.Disposable {
-    private readonly controller = vscode.comments.createCommentController(
-        REVIEW_COMMENT_CONTROLLER_ID,
-        'GitHawk Review'
-    );
+    private controller = this.createController();
     private threads: vscode.CommentThread[] = [];
-    private readonly disposables: vscode.Disposable[] = [this.controller];
+    private readonly disposables: vscode.Disposable[] = [];
     /** What the threads on screen were drawn from, so a redraw happens only when it changed. */
     private drawn = '';
 
@@ -73,11 +74,6 @@ export class ReviewComments implements vscode.Disposable {
         private readonly reviews: ReviewController,
         private readonly repositoryRoot: () => string | undefined
     ) {
-        this.controller.options = {
-            prompt: 'Comment on these lines',
-            placeHolder:
-                'A note for whoever fixes this — kept on this machine until you send the review to an AI CLI',
-        };
         this.offerRanges();
         this.disposables.push(
             reviews.onDidChange(() => {
@@ -87,7 +83,45 @@ export class ReviewComments implements vscode.Disposable {
         );
     }
 
+    /**
+     * A comment controller with an id of its own. VS Code files controllers
+     * by id and extension; with a fixed id, an extension host restarted
+     * mid-session — trusting a folder does it — could have the old host's
+     * cleanup remove the new host's controller, after which VS Code never
+     * asks for commenting ranges again and every Add Comment is refused.
+     */
+    private createController(): vscode.CommentController {
+        const controller = vscode.comments.createCommentController(
+            `${REVIEW_COMMENT_CONTROLLER_ID}.${Date.now().toString(36)}`,
+            'GitHawk Review'
+        );
+        controller.options = {
+            prompt: 'Comment on these lines',
+            placeHolder:
+                'A note for whoever fixes this — kept on this machine until you send the review to an AI CLI',
+        };
+        return controller;
+    }
+
+    /**
+     * Registers the controller afresh and redraws every thread on it — for
+     * a window whose VS Code has stopped asking GitHawk about comments.
+     */
+    private reregister(): void {
+        log.warn('comments: VS Code is not asking GitHawk for commenting ranges; registering again');
+        this.drawnThreads.forEach(({ thread }) => thread.dispose());
+        this.drawnThreads.clear();
+        this.threads = [];
+        this.controller.dispose();
+        this.controller = this.createController();
+        this.answered.clear();
+        this.drawn = '';
+        this.draw();
+        this.offerRanges();
+    }
+
     dispose(): void {
+        this.controller.dispose();
         this.drawnThreads.forEach(({ thread }) => thread.dispose());
         this.disposables.forEach((disposable) => disposable.dispose());
     }
@@ -301,9 +335,18 @@ export class ReviewComments implements vscode.Disposable {
         if (ready()) {
             return true;
         }
+        const wait = async () => {
+            for (let waited = 0; waited < waitMs && !ready(); waited += 50) {
+                await new Promise((resolve) => setTimeout(resolve, 50));
+            }
+        };
         this.offerRanges();
-        for (let waited = 0; waited < waitMs && !ready(); waited += 50) {
-            await new Promise((resolve) => setTimeout(resolve, 50));
+        await wait();
+        if (!ready() && !this.answered.has(uri.toString())) {
+            // Not asked at all — not even answered "none" — is VS Code
+            // having lost the controller, not a document still loading.
+            this.reregister();
+            await wait();
         }
         return ready();
     }

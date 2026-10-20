@@ -1015,38 +1015,38 @@
         {
           "command": "gitHawk.review.saveComment",
           "group": "inline",
-          "when": "commentController == gitHawk.review"
+          "when": "commentController =~ /^gitHawk\\.review/"
         }
       ],
       "comments/commentThread/title": [
         {
           "command": "gitHawk.review.deleteThread",
           "group": "navigation",
-          "when": "commentController == gitHawk.review && !commentThreadIsEmpty"
+          "when": "commentController =~ /^gitHawk\\.review/ && !commentThreadIsEmpty"
         }
       ],
       "comments/comment/title": [
         {
           "command": "gitHawk.review.editComment",
           "group": "inline@1",
-          "when": "commentController == gitHawk.review && comment == gitHawkReviewComment"
+          "when": "commentController =~ /^gitHawk\\.review/ && comment == gitHawkReviewComment"
         },
         {
           "command": "gitHawk.review.deleteComment",
           "group": "inline@2",
-          "when": "commentController == gitHawk.review && comment == gitHawkReviewComment"
+          "when": "commentController =~ /^gitHawk\\.review/ && comment == gitHawkReviewComment"
         }
       ],
       "comments/comment/context": [
         {
           "command": "gitHawk.review.cancelEdit",
           "group": "inline@1",
-          "when": "commentController == gitHawk.review"
+          "when": "commentController =~ /^gitHawk\\.review/"
         },
         {
           "command": "gitHawk.review.saveEdit",
           "group": "inline@2",
-          "when": "commentController == gitHawk.review"
+          "when": "commentController =~ /^gitHawk\\.review/"
         }
       ]
     },
