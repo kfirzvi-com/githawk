@@ -1,4 +1,9 @@
-import { Review, ReviewComment, commentsInOrder } from '../../domain/models/Review';
+import {
+    AgentReply,
+    Review,
+    ReviewComment,
+    commentsInOrder,
+} from '../../domain/models/Review';
 
 /**
  * A review's comments as a document an agent can act on.
@@ -12,7 +17,7 @@ import { Review, ReviewComment, commentsInOrder } from '../../domain/models/Revi
  * By the time the agent reaches the fifth comment it has edited the file for
  * the first four, and the line numbers no longer point where they did.
  */
-export function reviewDocument(review: Review): string {
+export function reviewDocument(review: Review, repliesPath?: string): string {
     const comments = commentsInOrder(review);
     const sections = comments.map((comment, index) => commentSection(comment, index + 1));
 
@@ -20,7 +25,8 @@ export function reviewDocument(review: Review): string {
         `# Code review: ${review.label}`,
         '',
         `${comments.length === 1 ? 'One comment' : `${comments.length} comments`} left while reviewing this change in GitHawk.`,
-        'Address each one in the code. Where a comment asks a question rather than for a change, answer it in your reply instead of editing anything.',
+        'Address each one in the code. Where a comment asks a question rather than for a change, answer it in your reply instead of editing anything. Where a comment has a conversation under it, the latest message is what to act on.',
+        ...(repliesPath ? ['', ...replyInstructions(repliesPath), ''] : []),
         ...(review.spec.kind === 'workingTree'
             ? []
             : [
@@ -53,6 +59,25 @@ function describeSpec(review: Review): string {
     }
 }
 
+/**
+ * How the agent answers, so its answer appears under the comment in the
+ * editor. A file rather than anything tool-specific: every coding agent can
+ * append a line to a file, and GitHawk is watching it.
+ */
+function replyInstructions(repliesPath: string): string[] {
+    return [
+        '## Replying',
+        '',
+        `When you have dealt with a comment, append one line of JSON for it to \`${repliesPath}\` (create the file if it is missing; never rewrite or reorder what is already in it):`,
+        '',
+        '```json',
+        '{"comment": "<the id after the heading>", "status": "done", "reply": "What you changed, in a sentence or two."}',
+        '```',
+        '',
+        '`status` is `done` when the change is made, `question` when you need an answer before you can act (ask it in `reply`), and `wontfix` when you think the comment should not be acted on (say why). Reply once per comment, after the work, not before. The reviewer reads these beside the code and may answer you.',
+    ];
+}
+
 function commentSection(comment: ReviewComment, number: number): string {
     const where =
         comment.line === comment.endLine
@@ -64,13 +89,51 @@ function commentSection(comment: ReviewComment, number: number): string {
     return [
         `## ${number}. \`${comment.path}\`, ${where}${side}`,
         '',
+        `id: \`${comment.id}\``,
+        '',
         fence,
         comment.excerpt,
         fence,
         '',
         comment.body.trim(),
         '',
+        ...(comment.replies ?? []).flatMap((reply) => [
+            `> **${reply.from === 'agent' ? `You (${reply.author ?? 'agent'})${reply.status ? `, ${reply.status}` : ''}` : 'Reviewer'}:** ${reply.body.trim().split('\n').join('\n> ')}`,
+            '',
+        ]),
     ].join('\n');
+}
+
+/**
+ * What an agent wrote to the replies file: one JSON object a line, as asked.
+ * Read forgivingly — a whole JSON array is taken too, and a line that is not
+ * a reply is skipped rather than costing the lines after it.
+ */
+export function parseAgentReplies(text: string): AgentReply[] {
+    const isReply = (value: unknown): value is AgentReply =>
+        typeof value === 'object' &&
+        value !== null &&
+        typeof (value as AgentReply).comment === 'string' &&
+        typeof (value as AgentReply).reply === 'string';
+    const trimmed = text.trim();
+    if (trimmed.startsWith('[')) {
+        try {
+            const all: unknown = JSON.parse(trimmed);
+            return Array.isArray(all) ? all.filter(isReply) : [];
+        } catch {
+            // Not one array after all; fall through to lines.
+        }
+    }
+    return trimmed
+        .split('\n')
+        .map((line) => {
+            try {
+                return JSON.parse(line) as unknown;
+            } catch {
+                return undefined;
+            }
+        })
+        .filter(isReply);
 }
 
 /** The single line typed into the agent's terminal: what to read, and what to do with it. */

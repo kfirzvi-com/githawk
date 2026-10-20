@@ -62,6 +62,8 @@ export interface ReviewOverlay {
     hunksOf(file: FileNode): readonly Hunk[] | undefined;
     fileState(file: FileNode): FileReviewState;
     isViewed(file: FileNode, hunk: Hunk): boolean;
+    /** Comments left on the hunk's lines. */
+    commentCount(file: FileNode, hunk: Hunk): number;
     /** "3 of 7 files · 12 of 30 changes", for the view's description. */
     progress(): { text: string; unviewed: number };
     /** The shortcuts, said where the reader is already looking. */
@@ -370,7 +372,10 @@ export class ChangedFilesTree implements vscode.TreeDataProvider<TreeNode> {
         ]
             .filter(Boolean)
             .join(' ');
-        item.description = [hunk.context, counts].filter(Boolean).join('  ');
+        const comments = this.review?.commentCount(file, hunk) ?? 0;
+        item.description = [comments > 0 ? `💬 ${comments}` : '', hunk.context, counts]
+            .filter(Boolean)
+            .join('  ');
         const viewed = this.review?.isViewed(file, hunk) ?? false;
         item.checkboxState = {
             state: viewed

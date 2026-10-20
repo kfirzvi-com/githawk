@@ -149,6 +149,50 @@ suite('code review', () => {
         }
     });
 
+    /**
+     * The feedback loop. The agent is told, in the document, where to write
+     * back; what it writes lands under the comment, and the reader can
+     * answer — which sends the thread again — or resolve it, which never does.
+     */
+    test('an agent writing back answers the comment, and the thread carries on', async () => {
+        const [comment] = (await state()).review.comments;
+        const { gitDir } = { gitDir: execFileSync('git', ['rev-parse', '--absolute-git-dir'], { cwd: root(), encoding: 'utf8' }).trim() };
+        const repliesPath = join(gitDir, 'githawk', 'replies.jsonl');
+        const document = readFileSync(join(gitDir, 'githawk', 'review.md'), 'utf8');
+        assert.ok(document.includes(repliesPath), 'the agent is not told where to reply');
+        assert.ok(document.includes(comment.id), 'the agent is not told which comment is which');
+
+        // The agent, from outside the editor, as it would.
+        writeFileSync(
+            repliesPath,
+            `${JSON.stringify({ comment: comment.id, status: 'question', reply: 'Which name should the constant have?' })}\n`
+        );
+        await eventually(async () => {
+            const [answered] = (await state()).review.comments;
+            assert.equal(answered.replies?.[0]?.from, 'agent', 'the reply never reached the thread');
+            assert.equal(answered.replies[0].status, 'question');
+        });
+
+        // Read again — the file is read whole on every change — and still one reply.
+        writeFileSync(repliesPath, readFileSync(repliesPath, 'utf8') + 'not json\n');
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+        assert.equal((await state()).review.comments[0].replies.length, 1);
+
+        // The reader answers, in the thread's reply box: it is to send again.
+        await run('gitHawk.review.threadForTesting', comment.id, 'reply', 'REPORT_INTERVAL, please.');
+        const [replied] = (await state()).review.comments;
+        assert.equal(replied.replies.at(-1).from, 'you');
+        assert.equal(replied.replies.at(-1).sentAt, undefined);
+
+        // Resolving folds it and keeps it out of the next handoff.
+        const resolved = await run('gitHawk.review.threadForTesting', comment.id, 'resolve');
+        assert.equal(resolved.collapsed, true);
+        assert.ok((await state()).review.comments[0].resolvedAt);
+        await run('gitHawk.review.threadForTesting', comment.id, 'reopen');
+        assert.equal((await state()).review.comments[0].resolvedAt, undefined);
+        rmSync(repliesPath, { force: true });
+    });
+
     test('leaving it for a commit keeps it, and resuming brings it back as it was', async () => {
         const { review } = await state();
 

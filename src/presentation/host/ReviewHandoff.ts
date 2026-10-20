@@ -37,6 +37,8 @@ export class ReviewHandoff {
         private readonly deps: {
             /** A repository's git directory, where the review document is written. */
             gitDirectory: (root: string) => Promise<string>;
+            /** Told where the agent will write back, so that file is watched. */
+            onSent?: (root: string, repliesPath: string) => void;
         }
     ) {}
 
@@ -65,9 +67,12 @@ export class ReviewHandoff {
             return undefined;
         }
 
-        const documentPath = join(await this.deps.gitDirectory(root), 'githawk', 'review.md');
+        const directory = join(await this.deps.gitDirectory(root), 'githawk');
+        const documentPath = join(directory, 'review.md');
+        const repliesPath = join(directory, 'replies.jsonl');
         await mkdir(dirname(documentPath), { recursive: true });
-        await writeFile(documentPath, reviewDocument({ ...review, comments }), 'utf8');
+        await writeFile(documentPath, reviewDocument({ ...review, comments }, repliesPath), 'utf8');
+        this.deps.onSent?.(root, repliesPath);
         const prompt = reviewPrompt(documentPath, comments.length);
 
         let terminal: vscode.Terminal;
@@ -98,7 +103,8 @@ export class ReviewHandoff {
             markSent(
                 current,
                 comments.map((comment) => comment.id),
-                new Date()
+                new Date(),
+                terminal.name
             )
         );
         log.info(`sent ${comments.length} review comments to "${terminal.name}" via ${documentPath}`);
@@ -125,14 +131,19 @@ export class ReviewHandoff {
             );
             return undefined;
         }
+        const open = review.comments.filter((comment) => comment.resolvedAt === undefined);
+        if (open.length === 0) {
+            vscode.window.showInformationMessage('Every comment in this review is resolved; there is nothing to send.');
+            return undefined;
+        }
         if (resend) {
-            return [...review.comments];
+            return open;
         }
         const again = await vscode.window.showInformationMessage(
-            `All ${review.comments.length} comments were sent already.`,
+            `All ${open.length} open comments were sent already, and nothing new has been said in them.`,
             'Send Them Again'
         );
-        return again ? [...review.comments] : undefined;
+        return again ? open : undefined;
     }
 
     /**

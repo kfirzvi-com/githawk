@@ -30,9 +30,14 @@ import { GitCliDirectoryReader } from './infrastructure/git/GitCliDirectoryReade
 import { GitCliTreeReader } from './infrastructure/git/GitCliTreeReader';
 import { GitCliHunkReader } from './infrastructure/git/GitCliHunkReader';
 import { ExecFileGitRunner } from './infrastructure/git/GitRunner';
-import { ReviewController } from './presentation/host/ReviewController';
-import { ReviewComments, type ShownComment } from './presentation/host/ReviewComments';
+import { ReviewController, keys } from './presentation/host/ReviewController';
+import {
+    ReviewComments,
+    setCommentAuthor,
+    type ShownComment,
+} from './presentation/host/ReviewComments';
 import { ReviewHandoff } from './presentation/host/ReviewHandoff';
+import { AgentRepliesWatcher } from './presentation/host/AgentRepliesWatcher';
 import {
     REVIEWS_VIEW_ID,
     ReviewsTree,
@@ -256,11 +261,79 @@ export async function activate(
         showWorkingTree: () => provider.compareWorkingTree('focus'),
         openFile: (request) => comparisons.openFile(request),
     });
+    /*
+     * Comments are signed with the repository's git user — the name a
+     * colleague reading over the review would see on the commits too.
+     */
+    const signComments = async () => {
+        const root = repositories.active?.root;
+        const name = root
+            ? await new ExecFileGitRunner()
+                  .run(['config', 'user.name'], root)
+                  .catch(() => '')
+            : '';
+        setCommentAuthor(name.trim() || undefined);
+    };
     const reviewComments = new ReviewComments(reviews, () => repositories.active?.root);
-    const handoff = new ReviewHandoff(reviews, {
-        gitDirectory: async (root) => (await new GitCliDirectoryReader(root).read()).gitDir,
+    context.subscriptions.push(repositories.onDidChange(() => void signComments()));
+    const gitDirectory = async (root: string) => (await new GitCliDirectoryReader(root).read()).gitDir;
+    /*
+     * The other half of the handoff: what the agent writes back lands under
+     * the comment it answers, and says so — with the way to it.
+     */
+    const agentReplies = new AgentRepliesWatcher(reviews, {
+        gitDirectory,
+        onAnswered: (review, answered) => {
+            const who =
+                review.comments.find((comment) => answered.includes(comment.id))?.replies?.filter((r) => r.from === 'agent').pop()?.author?.replace(/ — review$/, '') ??
+                'The agent';
+            void vscode.window
+                .showInformationMessage(
+                    `${who} replied to ${answered.length === 1 ? 'a comment' : `${answered.length} comments`} in “${review.label}”.`,
+                    'Show'
+                )
+                .then(async (choice) => {
+                    if (choice !== 'Show') {
+                        return;
+                    }
+                    if (reviews.current?.id !== review.id || !reviews.isActive) {
+                        await reviews.resume(review.id);
+                    }
+                    const target = reviews.orderedComments().find((entry) => entry.comment.id === answered[0]);
+                    if (target) {
+                        await reviews.openComment(target.file, target.comment);
+                        reviewComments.expandThreadOf(target.comment.id);
+                    }
+                });
+        },
     });
+    const handoff = new ReviewHandoff(reviews, {
+        gitDirectory,
+        onSent: (root, repliesPath) => agentReplies.watch(root, repliesPath),
+    });
+    context.subscriptions.push(agentReplies, reviews.onDidChange(() => void agentReplies.sync()));
     const reviewsList = new ReviewsTree(reviews);
+
+    /*
+     * From comment to comment across the whole review, in reading order:
+     * its change opens with the cursor on it and its thread unfolded, and
+     * the status bar says which of how many it is.
+     */
+    const stepComment = async (direction: 1 | -1) => {
+        const target = reviews.commentFrom(direction);
+        if (!target) {
+            vscode.window.setStatusBarMessage(
+                reviews.isActive
+                    ? `GitHawk: no comments in this review yet — ${keys('⇧C')} adds one`
+                    : 'GitHawk: no review is on screen',
+                3000
+            );
+            return;
+        }
+        await reviews.openComment(target.file, target.comment);
+        reviewComments.expandThreadOf(target.comment.id);
+        vscode.window.setStatusBarMessage(`GitHawk: comment ${target.position} of ${target.of}`, 3000);
+    };
 
     /*
      * Every way of commenting comes through here: the cursor is put on the
@@ -765,6 +838,12 @@ export async function activate(
             'gitHawk.review.deleteComment',
             (comment: ShownComment) => reviewComments.remove(comment)
         ),
+        vscode.commands.registerCommand('gitHawk.review.resolve', (thread: vscode.CommentThread) =>
+            reviewComments.setResolved(thread, true)
+        ),
+        vscode.commands.registerCommand('gitHawk.review.reopen', (thread: vscode.CommentThread) =>
+            reviewComments.setResolved(thread, false)
+        ),
         vscode.commands.registerCommand(
             'gitHawk.review.deleteThread',
             (thread: vscode.CommentThread) => reviewComments.removeThread(thread)
@@ -778,6 +857,8 @@ export async function activate(
             (comment: ShownComment) => reviewComments.saveDraft(comment)
         ),
         vscode.commands.registerCommand('gitHawk.review.escape', () => reviewComments.escape()),
+        vscode.commands.registerCommand('gitHawk.review.nextComment', () => stepComment(1)),
+        vscode.commands.registerCommand('gitHawk.review.previousComment', () => stepComment(-1)),
         vscode.commands.registerCommand(
             'gitHawk.review.saveEdit',
             (comment: ShownComment) => reviewComments.saveEdit(comment)
@@ -801,6 +882,11 @@ export async function activate(
             'gitHawk.review.commentForTesting',
             (uri: string, line: number, endLine: number, text: string) =>
                 reviewComments.commentForTesting(vscode.Uri.parse(uri), line, endLine, text)
+        ),
+        vscode.commands.registerCommand(
+            'gitHawk.review.threadForTesting',
+            (commentId: string, action: 'reply' | 'resolve' | 'reopen', text?: string) =>
+                reviewComments.threadActionForTesting(commentId, action, text)
         ),
         vscode.commands.registerCommand(
             'gitHawk.review.markPath',
@@ -1059,6 +1145,8 @@ export async function activate(
     // Everything above is registered; the graph can now wait for the scan that
     // tells it which repository to read.
     await repositories.refresh();
+    // Answers an agent wrote while the window was closed.
+    void agentReplies.sync();
     // A file is usually already open when the extension activates.
     void blame.decorateVisible();
 }

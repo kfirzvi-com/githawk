@@ -61,6 +61,36 @@ export interface ReviewComment {
     createdAt: string;
     /** Set once the comment has been handed to an agent, so the next handoff sends only what is new. */
     sentAt?: string;
+    /** Who it was handed to: the terminal's name, said on the comment. */
+    sentTo?: string;
+    /** The conversation under it, oldest first: the agent's answers, and yours to them. */
+    replies?: ReviewReply[];
+    /** Set when the reader closed the thread; a resolved thread is never sent again. */
+    resolvedAt?: string;
+}
+
+/** What an agent can say it did with a comment. */
+export type AgentStatus = 'done' | 'question' | 'wontfix';
+
+/** One message in a comment's thread after the comment itself. */
+export interface ReviewReply {
+    id: string;
+    from: 'you' | 'agent';
+    /** The agent's tool name, for its replies. */
+    author?: string;
+    body: string;
+    createdAt: string;
+    /** The agent's own account of the comment, on its replies. */
+    status?: AgentStatus;
+    /** On your replies: when it was handed over, as for a comment. */
+    sentAt?: string;
+}
+
+/** A reply as an agent writes it to the replies file. */
+export interface AgentReply {
+    comment: string;
+    reply: string;
+    status?: AgentStatus;
 }
 
 /** What a file in the review is made of, as the caller has just read it. */
@@ -282,17 +312,139 @@ export function removeComment(review: Review, id: string): Review {
     };
 }
 
-/** What the next handoff would send: everything not handed over before. */
+/**
+ * What the next handoff would send: every open thread with something in it
+ * the agent has not seen — a comment not handed over yet, or a reply you
+ * wrote since. Resolved threads stay out, whatever is in them.
+ */
 export function unsentComments(review: Review): ReviewComment[] {
-    return commentsInOrder(review).filter((comment) => comment.sentAt === undefined);
+    return commentsInOrder(review).filter(
+        (comment) =>
+            comment.resolvedAt === undefined &&
+            (comment.sentAt === undefined ||
+                (comment.replies ?? []).some((reply) => reply.from === 'you' && reply.sentAt === undefined))
+    );
 }
 
-export function markSent(review: Review, ids: readonly string[], now: Date): Review {
+/** Marks threads handed over: the comment, and every reply of yours in it. */
+export function markSent(
+    review: Review,
+    ids: readonly string[],
+    now: Date,
+    to?: string
+): Review {
     const sent = new Set(ids);
+    const at = now.toISOString();
     return {
         ...review,
         comments: review.comments.map((comment) =>
-            sent.has(comment.id) ? { ...comment, sentAt: now.toISOString() } : comment
+            sent.has(comment.id)
+                ? {
+                      ...comment,
+                      sentAt: comment.sentAt ?? at,
+                      ...(to ? { sentTo: to } : {}),
+                      replies: comment.replies?.map((reply) =>
+                          reply.from === 'you' && reply.sentAt === undefined
+                              ? { ...reply, sentAt: at }
+                              : reply
+                      ),
+                  }
+                : comment
+        ),
+    };
+}
+
+/** Your answer in a thread — to the agent's reply, or a further thought. */
+export function addReply(
+    review: Review,
+    commentId: string,
+    reply: { id: string; body: string; now: Date }
+): Review {
+    if (reply.body.trim().length === 0) {
+        throw new Error('A reply needs something in it.');
+    }
+    return updateComment(review, commentId, (comment) => ({
+        ...comment,
+        // Answering a resolved thread is reopening it.
+        resolvedAt: undefined,
+        replies: [
+            ...(comment.replies ?? []),
+            { id: reply.id, from: 'you', body: reply.body, createdAt: reply.now.toISOString() },
+        ],
+    }));
+}
+
+export function removeReply(review: Review, commentId: string, replyId: string): Review {
+    return updateComment(review, commentId, (comment) => ({
+        ...comment,
+        replies: (comment.replies ?? []).filter((reply) => reply.id !== replyId),
+    }));
+}
+
+export function resolve(review: Review, commentId: string, resolved: boolean, now: Date): Review {
+    return updateComment(review, commentId, (comment) => ({
+        ...comment,
+        resolvedAt: resolved ? now.toISOString() : undefined,
+    }));
+}
+
+/**
+ * Takes in what an agent wrote back. The replies file is read whole each
+ * time it changes, so this must be idempotent: a reply already in its
+ * thread — same comment, same words — is not added twice. A reply to a
+ * comment the review does not have is ignored, and so is an empty one.
+ *
+ * Returns the review and how many threads gained an answer.
+ */
+export function applyAgentReplies(
+    review: Review,
+    replies: readonly AgentReply[],
+    from: { author?: string; now: Date; idFor: (reply: AgentReply) => string }
+): { review: Review; answered: string[] } {
+    const answered = new Set<string>();
+    let next = review;
+    for (const reply of replies) {
+        const target = next.comments.find((comment) => comment.id === reply.comment);
+        if (!target || typeof reply.reply !== 'string' || reply.reply.trim().length === 0) {
+            continue;
+        }
+        const id = from.idFor(reply);
+        if ((target.replies ?? []).some((existing) => existing.id === id)) {
+            continue;
+        }
+        const status = isAgentStatus(reply.status) ? reply.status : undefined;
+        next = updateComment(next, target.id, (comment) => ({
+            ...comment,
+            replies: [
+                ...(comment.replies ?? []),
+                {
+                    id,
+                    from: 'agent',
+                    author: from.author ?? comment.sentTo,
+                    body: reply.reply.trim(),
+                    createdAt: from.now.toISOString(),
+                    ...(status ? { status } : {}),
+                },
+            ],
+        }));
+        answered.add(target.id);
+    }
+    return { review: next, answered: [...answered] };
+}
+
+function isAgentStatus(value: unknown): value is AgentStatus {
+    return value === 'done' || value === 'question' || value === 'wontfix';
+}
+
+function updateComment(
+    review: Review,
+    commentId: string,
+    change: (comment: ReviewComment) => ReviewComment
+): Review {
+    return {
+        ...review,
+        comments: review.comments.map((comment) =>
+            comment.id === commentId ? change(comment) : comment
         ),
     };
 }

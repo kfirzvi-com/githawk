@@ -22,6 +22,13 @@ All notable changes to GitHawk are documented here, following
   as a CodeLens (GitHawk turns on `diffEditor.codeLens` by default for it).
   Several reviews can be under way at once — a pull request's commits, a
   branch, your own work — listed in a new **Reviews** view.
+- **A conversation with the agent, per comment.** The handoff asks the agent
+  to answer each comment in `.git/githawk/replies.jsonl` — done, a question,
+  or won't fix — and GitHawk shows each answer under its comment as it is
+  written, with a notice that goes to it. Reply in the thread and the thread
+  is sent again with its history; **Resolve** folds it and keeps it out of
+  every handoff after. `Cmd+K Shift+]` / `Cmd+K Shift+[` step through the open
+  comments across files, and each change's row counts its comments.
 - **Review comments, handed to an AI CLI.** Comment on changed lines with VS
   Code's own commenting UI (`Cmd+K Shift+C`); the comments stay local and are
   listed in the Comments panel. `Cmd+K Shift+S` writes them, with the lines

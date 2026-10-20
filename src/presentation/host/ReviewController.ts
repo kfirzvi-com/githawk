@@ -5,6 +5,7 @@ import type { ComparisonSpec } from '../../domain/models/Comparison';
 import {
     hunkDeletions,
     hunkFocusLine,
+    hunkId,
     hunkInsertions,
     hunkNewRange,
     hunkOldRange,
@@ -20,7 +21,10 @@ import {
     sameSpec,
     startReview,
     wholeFileHunkId,
+    applyAgentReplies,
+    type AgentReply,
     type Review,
+    type ReviewComment,
     type ReviewedFile,
 } from '../../domain/models/Review';
 import type { IHunkReader } from '../../domain/repositories/IHunkReader';
@@ -198,7 +202,7 @@ export class ReviewController
     message(): string {
         return [
             `Reviewing ${this.review?.label ?? ''}. Kept until you end it.`,
-            `${keys(']')} next   ${keys('⇧V')} viewed   ${keys('⇧C')} comment   ${keys('⇧S')} send to AI`,
+            `${keys(']')} next   ${keys('⇧V')} viewed   ${keys('⇧C')} comment   ${keys('⇧]')} next comment   ${keys('⇧S')} send to AI`,
         ].join('\n');
     }
 
@@ -658,6 +662,103 @@ export class ReviewController
         return { path: stop.file.change.path, line, range, summary: summarise(hunk, located.side) };
     }
 
+    // ---- Comments, in reading order ----------------------------------------
+
+    /**
+     * The review's comments in the order a reader meets them: by the tree's
+     * order of files, then down each file. A comment on lines the review no
+     * longer shows — the file left the changeset — is left out.
+     */
+    orderedComments(): { comment: ReviewComment; file: FileNode; index: number }[] {
+        if (!this.review || !this.active) {
+            return [];
+        }
+        const files = this.deps.tree.files;
+        return this.review.comments
+            .filter((comment) => comment.resolvedAt === undefined)
+            .map((comment) => {
+                const index = files.findIndex(
+                    (file) =>
+                        file.change.path === comment.path &&
+                        (comment.side === 'new' ? file.targetRev : file.baseRev) === comment.rev
+                );
+                return { comment, file: files[index], index };
+            })
+            .filter((entry) => entry.index >= 0)
+            .sort((a, b) => a.index - b.index || a.comment.line - b.comment.line);
+    }
+
+    /**
+     * The next comment after the reader's place — or before it — wrapping
+     * at the ends. The place is the cursor in a diff of the review, else the
+     * last stop visited.
+     */
+    commentFrom(
+        direction: 1 | -1
+    ): { comment: ReviewComment; file: FileNode; position: number; of: number } | undefined {
+        const ordered = this.orderedComments();
+        if (ordered.length === 0) {
+            return undefined;
+        }
+        const editor = vscode.window.activeTextEditor;
+        const located = editor ? this.locate(editor.document.uri) : undefined;
+        const files = this.deps.tree.files;
+        const here = located
+            ? { index: files.indexOf(located.file), line: editor!.selection.active.line + 1 }
+            : this.lastStop
+              ? { index: files.findIndex((file) => file.change.path === this.lastStop!.path), line: 0 }
+              : { index: -1, line: 0 };
+        type Entry = (typeof ordered)[number];
+        const after = (entry: Entry) =>
+            entry.index > here.index || (entry.index === here.index && entry.comment.line > here.line);
+        const before = (entry: Entry) =>
+            entry.index < here.index || (entry.index === here.index && entry.comment.line < here.line);
+        const chosen =
+            direction === 1
+                ? (ordered.find(after) ?? ordered[0])
+                : ([...ordered].reverse().find(before) ?? ordered[ordered.length - 1]);
+        return {
+            comment: chosen.comment,
+            file: chosen.file,
+            position: ordered.indexOf(chosen) + 1,
+            of: ordered.length,
+        };
+    }
+
+    /** Opens a comment's change in the diff, the cursor on its line. */
+    async openComment(file: FileNode, comment: ReviewComment): Promise<void> {
+        const hunk = this.hunksOf(file)?.find((candidate) => {
+            const range = comment.side === 'new' ? hunkNewRange(candidate) : hunkOldRange(candidate);
+            return range.start <= comment.endLine && comment.line <= range.end;
+        });
+        this.lastStop = { path: file.change.path, hunkId: hunk?.id };
+        await this.deps.openFile({
+            path: file.change.path,
+            previousPath: file.change.previousPath,
+            baseRev: file.baseRev,
+            targetRev: file.targetRev,
+            line: comment.line,
+        });
+        void this.deps.tree.revealRow(hunk ? this.deps.tree.hunkNode(file, hunk) : file);
+    }
+
+    /** Comments on one hunk, for its row in the tree. */
+    commentCount(file: FileNode, hunk: Hunk): number {
+        if (!this.review) {
+            return 0;
+        }
+        return this.review.comments.filter((comment) => {
+            if (comment.resolvedAt !== undefined || comment.path !== file.change.path) {
+                return false;
+            }
+            if ((comment.side === 'new' ? file.targetRev : file.baseRev) !== comment.rev) {
+                return false;
+            }
+            const range = comment.side === 'new' ? hunkNewRange(hunk) : hunkOldRange(hunk);
+            return range.start <= comment.endLine && comment.line <= range.end;
+        }).length;
+    }
+
     /**
      * Opens one hunk of a file, or the file, and selects its row. From the
      * tree the keyboard stays in the tree, so arrows, Enter and Space carry
@@ -974,6 +1075,29 @@ export class ReviewController
             reviews.map((review) => (review.id === id ? change(review) : review))
         );
         this.changed.fire();
+    }
+
+    /**
+     * What an agent wrote back, from a repository's replies file, applied to
+     * whichever of its reviews the comments belong to. Returns each review
+     * that gained an answer, with the comments answered.
+     */
+    async takeAgentReplies(
+        root: string,
+        replies: readonly AgentReply[]
+    ): Promise<{ review: Review; answered: string[] }[]> {
+        const results: { review: Review; answered: string[] }[] = [];
+        for (const entry of this.entries().filter((candidate) => candidate.root === root)) {
+            const applied = applyAgentReplies(entry.review, replies, {
+                now: new Date(),
+                idFor: (reply) => `agent:${hunkId(reply.comment, [reply.status ?? '', reply.reply.trim()])}`,
+            });
+            if (applied.answered.length > 0) {
+                await this.updateReview(entry.review.id, () => applied.review);
+                results.push({ review: applied.review, answered: applied.answered });
+            }
+        }
+        return results;
     }
 
     /** A review by id, wherever it is. */

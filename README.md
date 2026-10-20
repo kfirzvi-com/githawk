@@ -273,6 +273,12 @@ against its base — press <kbd>⌘K</kbd> <kbd>⇧R</kbd> (<kbd>Ctrl+K</kbd>
   the same lines are shown with it, and all of them are in the **Comments**
   panel. They stay on your machine. They are listed
   in the **Comments** panel and stay on your machine.
+- **The agent answers in the thread.** The handoff tells it to write a line
+  per comment to `.git/githawk/replies.jsonl` — done, a question, or won't
+  fix, with what it did — and GitHawk, watching that file, puts each answer
+  under its comment and says so. Reply in the thread and the conversation goes
+  with the next handoff; **Resolve** (✓ in the thread's title) folds it and
+  keeps it out of every handoff after; **Reopen** brings it back.
 - **Send to an AI CLI** — <kbd>⌘K</kbd> <kbd>⇧S</kbd> — writes the comments,
   each with the lines it was made on, to `.git/githawk/review.md` and types one
   line into the session you pick: a terminal already running, usually the one
@@ -304,7 +310,9 @@ you have not seen.
 | <kbd>⌘K</kbd> <kbd>]</kbd> / <kbd>⌘K</kbd> <kbd>[</kbd> | Next / previous change, across files |
 | <kbd>⌘K</kbd> <kbd>⇧V</kbd> | Mark the change viewed and go to the next unviewed one |
 | <kbd>⌘K</kbd> <kbd>⇧F</kbd> | The same for the whole file |
-| <kbd>⌘K</kbd> <kbd>⇧C</kbd> | Comment on the selected lines |
+| <kbd>⌘K</kbd> <kbd>⇧C</kbd> | Comment on the change — <kbd>⌘Enter</kbd> saves, <kbd>Esc</kbd> discards |
+| <kbd>⌘K</kbd> <kbd>⇧]</kbd> / <kbd>⌘K</kbd> <kbd>⇧[</kbd> | Next / previous open comment, across files |
+| <kbd>Esc</kbd> | In a comment: discard the draft, abandon the edit, or fold the thread |
 | <kbd>⌘K</kbd> <kbd>⇧S</kbd> | Send the comments to an AI CLI |
 | <kbd>⌘K</kbd> <kbd>⇧L</kbd> | Pick a review in progress, from anywhere — type to filter, <kbd>Enter</kbd> to go back to it |
 | <kbd>⌘⇧9</kbd>, then again | Focus Changes, then Reviews, then Changes again |

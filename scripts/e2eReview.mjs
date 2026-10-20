@@ -14,7 +14,7 @@
  */
 import { _electron as electron } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 const out = process.argv[2] ?? 'artifacts/e2e-review';
 mkdirSync(out, { recursive: true });
@@ -87,6 +87,10 @@ await temp.hover(); await page.waitForTimeout(500);
 await temp.locator('.codicon-trash').first().click({ force: true }); await page.waitForTimeout(1500);
 results.deleted = (await comments('Temporary note')) === 0;
 
+// 3b. From comment to comment by keyboard.
+await page.keyboard.press('Meta+K'); await page.keyboard.press('Shift+]'); await page.waitForTimeout(1500);
+results.nextComment = await page.locator('.statusbar', { hasText: /comment 1 of 1/ }).count();
+
 // 4. The tree by keyboard: click a row, the keyboard stays; Space ticks it, Down and Space the next.
 await page.locator('.monaco-list-row', { hasText: /Lines 19/ }).first().click(); await page.waitForTimeout(2000);
 results.focusStayedInTree = await page.evaluate(() => Boolean(document.activeElement?.closest('#workbench\\.view\\.extension\\.gitHawkSidebar')));
@@ -108,6 +112,35 @@ await shot('5-send-picker');
 await page.keyboard.press('Enter'); await page.waitForTimeout(3000);
 results.sentToRunning = existsSync('/tmp/githawk-e2e-received.txt') ? readFileSync('/tmp/githawk-e2e-received.txt', 'utf8').slice(0, 90) : 'nothing received';
 
+// 5b. The agent writes back; the reader sees it, answers, and resolves.
+const document = readFileSync('/tmp/githawk-e2e-sample/.git/githawk/review.md', 'utf8');
+const commentId = /id: `([^`]+)`/.exec(document)?.[1];
+const repliesPath = /`([^`]*replies\.jsonl)`/.exec(document)?.[1];
+results.documentSaysHowToReply = Boolean(commentId && repliesPath);
+if (commentId && repliesPath) {
+    writeFileSync(repliesPath, JSON.stringify({ comment: commentId, status: 'question', reply: 'Should it be termsDays everywhere, including the API field?' }) + '\n');
+    const notice = page.locator('.notification-toast', { hasText: 'replied' });
+    await notice.waitFor({ timeout: 10_000 }).catch(() => {});
+    results.noticeShown = await notice.count();
+    await shot('5b-notice');
+    await notice.locator('.monaco-button', { hasText: 'Show' }).first().click().catch(() => {});
+    await page.waitForTimeout(2500);
+    results.agentReplyShown = await comments('including the API field');
+    await shot('5c-agent-reply');
+    // Answer in the thread's reply box, by keyboard.
+    results.replyBoxes = await page.locator('.review-widget .comment-form').evaluateAll((forms) => forms.filter((form) => form.getBoundingClientRect().height > 0).length);
+    const replyEditor = page.locator('.review-widget .comment-form .monaco-editor').last();
+    await replyEditor.scrollIntoViewIfNeeded(); await replyEditor.click({ force: true }); await page.waitForTimeout(600);
+    await page.keyboard.type('Keep the API field as it is; internal only.');
+    await page.keyboard.press('Meta+Enter'); await page.waitForTimeout(2000);
+    results.answerShown = await comments('internal only');
+    await shot('5d-answered');
+    // Resolve it from the thread's title.
+    await page.locator('.review-widget .codicon-check').first().click({ force: true }); await page.waitForTimeout(1500);
+    results.resolvedFolded = (await comments('internal only')) === 0;
+    await shot('5e-resolved');
+}
+
 // 6. Reload the window: the review, its marks and comments come back.
 await run('Developer: Reload Window');
 await page.waitForTimeout(8000);
@@ -115,7 +148,12 @@ await run('GitHawk: Show Uncommitted Changes');
 await page.waitForTimeout(3000);
 await page.locator('.monaco-list-row', { hasText: /Lines 14/ }).first().click(); await page.waitForTimeout(2500);
 await shot('6-after-reload');
-results.afterReload = { commentShown: await comments('everywhere'), reviewTitle: await page.locator('.pane-header', { hasText: 'Review' }).count() };
+// Resolved, so folded in the editor: the Comments panel is where it still shows.
+await run('View: Focus on Comments View'); await page.waitForTimeout(1500);
+results.afterReload = {
+    commentShown: await page.locator('.comments-panel .monaco-list-row', { hasText: 'everywhere' }).count(),
+    reviewTitle: await page.locator('.pane-header', { hasText: 'Review' }).count(),
+};
 console.log(JSON.stringify(results, null, 1));
 await app.close();
 const failed = [
@@ -128,10 +166,17 @@ const failed = [
     results.secondAdded !== 1 && 'comment by keyboard',
     !results.deleted && 'delete a comment',
     !results.focusStayedInTree && 'keyboard stays in the tree',
+    results.nextComment !== 1 && 'next comment by keyboard',
     !/1\/\d+ changes/.test(results.afterFirstSpace ?? '') && 'Space ticks a change',
     !/2\/\d+ changes/.test(results.spaceTicked ?? '') && 'Space ticks the next change',
     !results.fileUntouched && 'Space leaves the file alone',
     !String(results.sentToRunning).startsWith('Please address') && 'send to a running session',
+    !results.documentSaysHowToReply && 'the handoff says how to reply',
+    !results.noticeShown && 'the agent replying is announced',
+    results.agentReplyShown !== 1 && "the agent's reply shows under the comment",
+    results.replyBoxes !== 1 && 'one reply box under the conversation',
+    results.answerShown !== 1 && 'answering the agent in the thread',
+    !results.resolvedFolded && 'resolving folds the thread',
     results.afterReload?.commentShown !== 1 && 'comments survive a reload',
 ].filter(Boolean);
 console.log(failed.length ? `FAILED: ${failed.join(', ')}` : 'every step passed');

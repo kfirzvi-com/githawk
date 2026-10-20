@@ -4,9 +4,14 @@ import { randomUUID } from 'node:crypto';
 import { hunkNewRange, hunkOldRange } from '../../domain/models/Hunk';
 import {
     addComment,
+    addReply,
     editComment,
     removeComment,
+    removeReply,
+    resolve,
+    type AgentStatus,
     type ReviewComment,
+    type ReviewReply,
 } from '../../domain/models/Review';
 import type { ReviewController } from './ReviewController';
 import { encodeRevisionUri } from './RevisionContentProvider';
@@ -18,25 +23,76 @@ import { log } from './log';
  */
 export const REVIEW_COMMENT_CONTROLLER_ID = 'gitHawk.review';
 
+/** Who is writing: the repository's git user, with an avatar of their initials. */
+export interface CommentAuthor {
+    name: string;
+    iconPath?: vscode.Uri;
+}
+
+let author: CommentAuthor = { name: 'You' };
+
+/**
+ * The author every comment is shown with. Set once the git user is known;
+ * until then, and for a repository with no user configured, "You".
+ */
+export function setCommentAuthor(name: string | undefined): void {
+    const shown = name?.trim() || 'You';
+    author = { name: shown, iconPath: avatarFor(shown) };
+}
+
+/**
+ * A round avatar of the author's initials, in GitHawk's blue, as an SVG
+ * data URI — the comment header's picture, without a network fetch or a
+ * file to ship.
+ */
+function avatarFor(name: string, colour = '#4EA3E8'): vscode.Uri {
+    const initials =
+        name
+            .split(/\s+/)
+            .filter(Boolean)
+            .slice(0, 2)
+            .map((part) => part[0]?.toUpperCase() ?? '')
+            .join('') || '?';
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><circle cx="32" cy="32" r="32" fill="${colour}"/><text x="32" y="41" text-anchor="middle" font-family="-apple-system, Segoe UI, sans-serif" font-size="26" font-weight="600" fill="#ffffff">${initials.replace(/[<>&]/g, '')}</text></svg>`;
+    return vscode.Uri.parse(`data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`);
+}
+
+/** The agent, in its replies: its tool's name, and an avatar of another colour. */
+function agentAuthor(name: string | undefined): CommentAuthor {
+    const shown = name?.replace(/ — review$/, '') || 'Agent';
+    return { name: shown, iconPath: avatarFor(shown, '#A371F7') };
+}
+
+const STATUS_LABEL: Record<AgentStatus, string> = {
+    done: '✓ done',
+    question: '? question',
+    wontfix: "✗ won't fix",
+};
+
 /** A comment on screen, knowing which comment of the review it shows. */
 class ShownComment implements vscode.Comment {
     mode = vscode.CommentMode.Preview;
-    author = { name: 'You' };
+    author = author;
     contextValue = 'gitHawkReviewComment';
     body: vscode.MarkdownString;
-    label: string;
+    label?: string;
+    timestamp?: Date;
     /** What the body was before an edit began, for Cancel. */
     private saved: string;
 
     constructor(
         readonly reviewId: string,
         text: string,
-        sentAt: string | undefined,
+        shown: { createdAt?: string; sentAt?: string; sentTo?: string },
         readonly thread: vscode.CommentThread
     ) {
         this.body = new vscode.MarkdownString(text);
         this.saved = text;
-        this.label = sentAt ? 'sent' : 'not sent yet';
+        // Nothing said while it is only a note; once handed over, to whom.
+        this.label = shown.sentAt
+            ? `sent${shown.sentTo ? ` · ${shown.sentTo.replace(/ — review$/, '')}` : ''}`
+            : undefined;
+        this.timestamp = shown.createdAt ? new Date(shown.createdAt) : undefined;
     }
 
     /**
@@ -46,15 +102,33 @@ class ShownComment implements vscode.Comment {
      * ReviewComments.openDraft.
      */
     static draft(thread: vscode.CommentThread): ShownComment {
-        const draft = new ShownComment('', '', undefined, thread);
+        const draft = new ShownComment('', '', {}, thread);
         draft.mode = vscode.CommentMode.Editing;
         draft.contextValue = 'gitHawkReviewDraft';
-        draft.label = 'new comment';
+        draft.label = '⌘↵ saves · Esc cancels'.replace('⌘', process.platform === 'darwin' ? '⌘' : 'Ctrl+');
         return draft;
     }
 
     get isDraft(): boolean {
         return this.reviewId === '';
+    }
+
+    /** The id of the reply this shows, when it is one rather than the comment. */
+    replyId?: string;
+
+    /** One message of the conversation under a comment. */
+    static reply(commentId: string, reply: ReviewReply, thread: vscode.CommentThread): ShownComment {
+        const shown = new ShownComment(commentId, reply.body, { createdAt: reply.createdAt }, thread);
+        shown.replyId = reply.id;
+        if (reply.from === 'agent') {
+            shown.author = agentAuthor(reply.author);
+            shown.label = reply.status ? STATUS_LABEL[reply.status] : undefined;
+            shown.contextValue = 'gitHawkAgentReply';
+        } else {
+            shown.label = reply.sentAt ? 'sent' : undefined;
+            shown.contextValue = 'gitHawkReviewReply';
+        }
+        return shown;
     }
 
     get text(): string {
@@ -114,9 +188,8 @@ export class ReviewComments implements vscode.Disposable {
             'GitHawk Review'
         );
         controller.options = {
-            prompt: 'Comment on these lines',
-            placeHolder:
-                'A note for whoever fixes this — kept on this machine until you send the review to an AI CLI',
+            prompt: 'Reply',
+            placeHolder: 'Reply… it goes to the agent with the next handoff',
         };
         return controller;
     }
@@ -147,6 +220,13 @@ export class ReviewComments implements vscode.Disposable {
     /** The submit button on a new thread, and Reply on an existing one. */
     async save(reply: vscode.CommentReply): Promise<string | undefined> {
         const { thread, text } = reply;
+        // The reply box under a conversation: an answer in it, not a new comment.
+        const root = this.rootOf(thread);
+        if (root && text.trim()) {
+            const id = randomUUID();
+            await this.reviews.update((review) => addReply(review, root, { id, body: text, now: new Date() }));
+            return id;
+        }
         const located = this.reviews.locate(thread.uri);
         const range = thread.range;
         if (!located || !range || text.trim().length === 0) {
@@ -208,7 +288,7 @@ export class ReviewComments implements vscode.Disposable {
             []
         );
         thread.canReply = false;
-        thread.label = 'New review comment';
+        thread.label = `New comment · line ${line + 1}`;
         thread.contextValue = 'gitHawkReviewDraft';
         thread.collapsibleState = vscode.CommentThreadCollapsibleState.Collapsed;
         thread.comments = [ShownComment.draft(thread)];
@@ -259,6 +339,15 @@ export class ReviewComments implements vscode.Disposable {
             }
         }
         await vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup');
+    }
+
+    /** Unfolds the thread a comment is in — the end of a step to it. */
+    expandThreadOf(commentId: string): void {
+        for (const thread of this.threads) {
+            if (thread.comments.some((comment) => comment instanceof ShownComment && comment.reviewId === commentId)) {
+                thread.collapsibleState = vscode.CommentThreadCollapsibleState.Expanded;
+            }
+        }
     }
 
     private discardDrafts(): void {
@@ -352,8 +441,54 @@ export class ReviewComments implements vscode.Disposable {
         return this.save({ thread, text });
     }
 
+    /** See gitHawk.review.threadForTesting: the thread a comment is in, through the real buttons. */
+    async threadActionForTesting(commentId: string, action: 'reply' | 'resolve' | 'reopen', text = '') {
+        const thread = this.threads.find((candidate) => this.rootsOf(candidate).includes(commentId));
+        if (!thread) {
+            throw new Error(`no thread on screen holds ${commentId}`);
+        }
+        if (action === 'reply') {
+            return this.save({ thread, text });
+        }
+        await this.setResolved(thread, action === 'resolve');
+        return { collapsed: thread.collapsibleState === vscode.CommentThreadCollapsibleState.Collapsed, canReply: thread.canReply };
+    }
+
     async remove(comment: ShownComment): Promise<void> {
-        await this.reviews.update((review) => removeComment(review, comment.reviewId));
+        const { replyId } = comment;
+        await this.reviews.update((review) =>
+            replyId ? removeReply(review, comment.reviewId, replyId) : removeComment(review, comment.reviewId)
+        );
+    }
+
+    /** Resolve or Reopen, from a thread's title: every comment in it. */
+    async setResolved(thread: vscode.CommentThread, resolved: boolean): Promise<void> {
+        const roots = this.rootsOf(thread);
+        if (roots.length === 0) {
+            return;
+        }
+        await this.reviews.update((review) =>
+            roots.reduce((state, id) => resolve(state, id, resolved, new Date()), review)
+        );
+    }
+
+    /** The review comments a thread on screen shows, by id. */
+    private rootsOf(thread: vscode.CommentThread): string[] {
+        return [
+            ...new Set(
+                thread.comments
+                    .filter((comment): comment is ShownComment => comment instanceof ShownComment && !comment.isDraft)
+                    .map((comment) => comment.reviewId)
+            ),
+        ];
+    }
+
+    /** The comment a reply typed into this thread answers: its latest. */
+    private rootOf(thread: vscode.CommentThread): string | undefined {
+        if (![...this.drawnThreads.values()].some((drawn) => drawn.thread === thread)) {
+            return undefined;
+        }
+        return this.rootsOf(thread).pop();
     }
 
     /** The whole thread: every comment on these lines. */
@@ -481,7 +616,7 @@ export class ReviewComments implements vscode.Disposable {
         const review = this.reviews.current;
         const root = this.repositoryRoot();
         const signature = review && root
-            ? JSON.stringify([root, review.comments.map((c) => [c.id, c.sentAt, c.body])])
+            ? JSON.stringify([root, review.comments, author.name])
             : '';
         if (signature === this.drawn) {
             return;
@@ -513,13 +648,32 @@ export class ReviewComments implements vscode.Disposable {
             }
         }
         for (const [key, comments] of groups) {
-            const signature = JSON.stringify(comments.map((c) => [c.id, c.sentAt, c.body]));
+            const signature = JSON.stringify(
+                comments.map((c) => [c.id, c.sentAt, c.sentTo, c.body, c.resolvedAt, c.replies, author.name])
+            );
             const drawn = this.drawnThreads.get(key);
-            if (drawn) {
+            // VS Code adds a second reply box, rather than showing the one,
+            // when a thread that could not be replied to becomes one that can:
+            // such a thread is drawn afresh instead of changed.
+            const repliable = !comments.every((c) => c.resolvedAt) && comments.some((c) => (c.replies ?? []).length > 0);
+            if (drawn && drawn.thread.canReply !== repliable) {
+                drawn.thread.dispose();
+                this.drawnThreads.delete(key);
+            } else if (drawn) {
                 if (drawn.signature !== signature) {
-                    drawn.thread.comments = comments.map(
-                        (comment) => new ShownComment(comment.id, comment.body, comment.sentAt, drawn.thread)
+                    const before = JSON.parse(drawn.signature) as unknown[][];
+                    const agentRepliesBefore = before.reduce(
+                        (sum, row) => sum + ((row[5] as ReviewReply[] | null) ?? []).filter((r) => r.from === 'agent').length,
+                        0
                     );
+                    const resolvedBefore = before.every((row) => row[4]);
+                    drawn.thread.comments = this.shownComments(comments, drawn.thread);
+                    this.decorateConversation(drawn.thread, comments, {
+                        resolvedChanged: resolvedBefore !== comments.every((c) => c.resolvedAt),
+                        agentAnswered:
+                            comments.reduce((sum, c) => sum + (c.replies ?? []).filter((r) => r.from === 'agent').length, 0) >
+                            agentRepliesBefore,
+                    });
                     drawn.signature = signature;
                 }
                 continue;
@@ -535,10 +689,12 @@ export class ReviewComments implements vscode.Disposable {
                 new vscode.Range(first.line - 1, 0, first.endLine - 1, 0),
                 []
             );
-            thread.comments = comments.map(
-                (comment) => new ShownComment(comment.id, comment.body, comment.sentAt, thread)
-            );
+            thread.comments = this.shownComments(comments, thread);
             this.decorateThread(thread, first);
+            this.decorateConversation(thread, comments, {
+                resolvedChanged: true,
+                agentAnswered: comments.some((c) => (c.replies ?? []).some((r) => r.from === 'agent')),
+            });
             this.drawnThreads.set(key, { thread, signature });
         }
         this.threads = [...this.drawnThreads.values()].map(({ thread }) => thread);
@@ -547,11 +703,49 @@ export class ReviewComments implements vscode.Disposable {
     /** Threads on screen, by the lines they are on, with what they were drawn from. */
     private readonly drawnThreads = new Map<string, { thread: vscode.CommentThread; signature: string }>();
 
+    /** A thread's comments with their conversations, in order. */
+    private shownComments(comments: ReviewComment[], thread: vscode.CommentThread): ShownComment[] {
+        return comments.flatMap((comment) => [
+            new ShownComment(comment.id, comment.body, comment, thread),
+            ...(comment.replies ?? []).map((reply) => ShownComment.reply(comment.id, reply, thread)),
+        ]);
+    }
+
+    /**
+     * What a conversation changes about its thread: a reply box once the
+     * agent has answered — there is something to answer back — Resolve or
+     * Reopen in its title, and folded when resolved. An answer from the
+     * agent opens the thread, so it is seen.
+     */
+    private decorateConversation(
+        thread: vscode.CommentThread,
+        comments: ReviewComment[],
+        changes: { resolvedChanged: boolean; agentAnswered: boolean }
+    ): void {
+        const resolved = comments.every((comment) => comment.resolvedAt);
+        thread.canReply = !resolved && comments.some((comment) => (comment.replies ?? []).length > 0);
+        thread.state = resolved ? vscode.CommentThreadState.Resolved : vscode.CommentThreadState.Unresolved;
+        thread.contextValue = resolved ? 'gitHawkThreadResolved' : 'gitHawkThreadOpen';
+        if (changes.resolvedChanged) {
+            thread.collapsibleState = resolved
+                ? vscode.CommentThreadCollapsibleState.Collapsed
+                : vscode.CommentThreadCollapsibleState.Expanded;
+        }
+        if (changes.agentAnswered && !resolved) {
+            thread.collapsibleState = vscode.CommentThreadCollapsibleState.Expanded;
+        }
+    }
+
     private decorateThread(thread: vscode.CommentThread, comment: ReviewComment): void {
-        thread.label = `${comment.path}:${comment.line}`;
-        thread.canReply = true;
-        thread.contextValue = 'gitHawkReviewThread';
-        thread.collapsibleState = vscode.CommentThreadCollapsibleState.Expanded;
+        // The file is the editor's tab already; the lines are what tells
+        // one thread from the next.
+        thread.label =
+            comment.line === comment.endLine
+                ? `Line ${comment.line}`
+                : `Lines ${comment.line}–${comment.endLine}`;
+        // No reply box under every thread: Comment on the change adds
+        // another, and a box per thread is most of what the screen showed.
+        thread.canReply = false;
     }
 }
 

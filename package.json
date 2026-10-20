@@ -461,6 +461,29 @@
       {
         "command": "gitHawk.review.escape",
         "title": "GitHawk: Close The Review Comment"
+      },
+      {
+        "command": "gitHawk.review.nextComment",
+        "title": "GitHawk: Next Review Comment",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "gitHawk.review.previousComment",
+        "title": "GitHawk: Previous Review Comment"
+      },
+      {
+        "command": "gitHawk.review.resolve",
+        "title": "Resolve",
+        "icon": "$(check)"
+      },
+      {
+        "command": "gitHawk.review.reopen",
+        "title": "Reopen",
+        "icon": "$(issue-reopened)"
+      },
+      {
+        "command": "gitHawk.review.threadForTesting",
+        "title": "GitHawk: Act On A Review Thread"
       }
     ],
     "keybindings": [
@@ -592,6 +615,18 @@
         "command": "gitHawk.review.escape",
         "key": "escape",
         "when": "(commentEditorFocused || commentFocused) && commentController =~ /^gitHawk\\.review/"
+      },
+      {
+        "command": "gitHawk.review.nextComment",
+        "key": "ctrl+k shift+]",
+        "mac": "cmd+k shift+]",
+        "when": "gitHawk.reviewing && !terminalFocus"
+      },
+      {
+        "command": "gitHawk.review.previousComment",
+        "key": "ctrl+k shift+[",
+        "mac": "cmd+k shift+[",
+        "when": "gitHawk.reviewing && !terminalFocus"
       }
     ],
     "viewsContainers": {
@@ -1030,6 +1065,26 @@
         {
           "command": "gitHawk.review.escape",
           "when": "false"
+        },
+        {
+          "command": "gitHawk.review.nextComment",
+          "when": "gitHawk.reviewing"
+        },
+        {
+          "command": "gitHawk.review.previousComment",
+          "when": "gitHawk.reviewing"
+        },
+        {
+          "command": "gitHawk.review.resolve",
+          "when": "false"
+        },
+        {
+          "command": "gitHawk.review.reopen",
+          "when": "false"
+        },
+        {
+          "command": "gitHawk.review.threadForTesting",
+          "when": "false"
         }
       ],
       "comments/commentThread/context": [
@@ -1040,6 +1095,16 @@
         }
       ],
       "comments/commentThread/title": [
+        {
+          "command": "gitHawk.review.resolve",
+          "group": "inline@0",
+          "when": "commentController =~ /^gitHawk\\.review/ && commentThread == gitHawkThreadOpen"
+        },
+        {
+          "command": "gitHawk.review.reopen",
+          "group": "inline@0",
+          "when": "commentController =~ /^gitHawk\\.review/ && commentThread == gitHawkThreadResolved"
+        },
         {
           "command": "gitHawk.review.deleteThread",
           "group": "navigation",
@@ -1056,6 +1121,11 @@
           "command": "gitHawk.review.deleteComment",
           "group": "inline@2",
           "when": "commentController =~ /^gitHawk\\.review/ && comment == gitHawkReviewComment"
+        },
+        {
+          "command": "gitHawk.review.deleteComment",
+          "group": "inline@2",
+          "when": "commentController =~ /^gitHawk\\.review/ && comment =~ /^gitHawk(Review|Agent)Reply$/"
         }
       ],
       "comments/comment/context": [

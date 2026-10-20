@@ -10,6 +10,9 @@ import {
     markHunk,
     markSent,
     unsentComments,
+    addReply,
+    applyAgentReplies,
+    resolve,
     pinSpec,
     reviewProgress,
     sameSpec,
@@ -190,9 +193,59 @@ describe('comments', () => {
 
     test('once handed over, are not handed over again', () => {
         let state = addComment(review(), comment({ id: 'a' }));
-        state = markSent(state, ['a'], now);
+        state = markSent(state, ['a'], now, 'Claude Code — review');
+        expect(state.comments[0].sentTo).toBe('Claude Code — review');
         state = addComment(state, comment({ id: 'b' }));
         expect(unsentComments(state).map((c) => c.id)).toEqual(['b']);
+    });
+
+    test('an agent reply lands in its thread once, however often the file is read', () => {
+        const state = addComment(review(), comment({ id: 'a' }));
+        const replies = [{ comment: 'a', reply: 'Renamed it.', status: 'done' as const }];
+        const idFor = (r: { comment: string; reply: string }) => `${r.comment}:${r.reply}`;
+        const once = applyAgentReplies(state, replies, { author: 'Claude Code', now, idFor });
+        const twice = applyAgentReplies(once.review, replies, { author: 'Claude Code', now, idFor });
+
+        expect(once.answered).toEqual(['a']);
+        expect(twice.answered).toEqual([]);
+        expect(twice.review.comments[0].replies).toHaveLength(1);
+        expect(twice.review.comments[0].replies?.[0]).toMatchObject({
+            from: 'agent',
+            author: 'Claude Code',
+            status: 'done',
+        });
+    });
+
+    test('a reply to a comment the review does not have is ignored', () => {
+        const state = addComment(review(), comment({ id: 'a' }));
+        const result = applyAgentReplies(state, [{ comment: 'nope', reply: 'x' }], {
+            now,
+            idFor: () => 'id',
+        });
+        expect(result.answered).toEqual([]);
+    });
+
+    test('your answer in a sent thread sends the thread again; resolving keeps it out', () => {
+        let state = addComment(review(), comment({ id: 'a' }));
+        state = markSent(state, ['a'], now);
+        expect(unsentComments(state)).toEqual([]);
+
+        state = addReply(state, 'a', { id: 'r1', body: 'Also the tests, please.', now });
+        expect(unsentComments(state).map((c) => c.id)).toEqual(['a']);
+
+        state = markSent(state, ['a'], now);
+        expect(unsentComments(state)).toEqual([]);
+        expect(state.comments[0].replies?.[0].sentAt).toBeDefined();
+
+        state = addReply(state, 'a', { id: 'r2', body: 'One more thing.', now });
+        state = resolve(state, 'a', true, now);
+        expect(unsentComments(state)).toEqual([]);
+    });
+
+    test('answering a resolved thread reopens it', () => {
+        let state = resolve(addComment(review(), comment({ id: 'a' })), 'a', true, now);
+        state = addReply(state, 'a', { id: 'r', body: 'Not quite.', now });
+        expect(state.comments[0].resolvedAt).toBeUndefined();
     });
 
     test('are read back by file, then by line', () => {
