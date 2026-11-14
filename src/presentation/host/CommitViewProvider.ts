@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import type {
+    CommitRepositoryDto,
     CommitViewToHostMessage,
     HostToCommitViewMessage,
 } from '../../application/dto/messages';
@@ -35,6 +36,7 @@ export class CommitViewProvider implements vscode.WebviewViewProvider {
     private status: WorkingTreeStatus = cleanWorkingTree;
     private draft = '';
     private busy = false;
+    private repository?: CommitRepositoryDto;
 
     constructor(
         private readonly extensionUri: vscode.Uri,
@@ -64,6 +66,12 @@ export class CommitViewProvider implements vscode.WebviewViewProvider {
     /** The counts the graph's row shows, so the box can say what it will commit. */
     setStatus(status: WorkingTreeStatus): void {
         this.status = status;
+        this.sendState();
+    }
+
+    /** What the selectors above the box say: where a commit would land. */
+    setRepository(repository: CommitRepositoryDto | undefined): void {
+        this.repository = repository;
         this.sendState();
     }
 
@@ -133,6 +141,14 @@ export class CommitViewProvider implements vscode.WebviewViewProvider {
             case 'commit:stageAll':
                 await this.controller.stageAll();
                 break;
+            // The commands the graph's toolbar runs, so the two selectors are
+            // one feature in two places rather than two that drift apart.
+            case 'commit:pickRepository':
+                await vscode.commands.executeCommand('gitHawk.selectRepository');
+                break;
+            case 'commit:pickBranch':
+                await vscode.commands.executeCommand('gitHawk.switchBranch');
+                break;
         }
     }
 
@@ -197,6 +213,7 @@ export class CommitViewProvider implements vscode.WebviewViewProvider {
             selectedTool: this.selectedTool(tools),
             draft: this.draft,
             busy: this.busy,
+            repository: this.repository,
         });
     }
 

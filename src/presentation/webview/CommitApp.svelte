@@ -1,5 +1,7 @@
 <script lang="ts">
     import CommitBox from './components/CommitBox.svelte';
+    import RepositoryBar from './components/RepositoryBar.svelte';
+    import type { CommitRepositoryDto } from '../../application/dto/messages';
     import {
         cleanWorkingTree,
         type WorkingTreeStatus,
@@ -25,6 +27,7 @@
     let draftVersion = $state(0);
     let hasDraft = $state(false);
     let busy = $state(false);
+    let repository = $state<CommitRepositoryDto | undefined>(undefined);
     let box = $state<CommitBox | null>(null);
 
     const replaceDraft = (text: string) => {
@@ -40,6 +43,7 @@
                     tools = message.tools;
                     selectedTool = message.selectedTool;
                     busy = message.busy;
+                    repository = message.repository;
                     if (!hasDraft) {
                         hasDraft = true;
                         replaceDraft(message.draft);
@@ -67,6 +71,13 @@
     320px floor it had "removed".
 -->
 <div class="min-w-0 bg-pane font-sans">
+    {#if repository}
+        <RepositoryBar
+            {repository}
+            onSelectRepository={() => postToHost({ type: 'commit:pickRepository' })}
+            onSwitchBranch={() => postToHost({ type: 'commit:pickBranch' })}
+        />
+    {/if}
     <CommitBox
         bind:this={box}
         {status}

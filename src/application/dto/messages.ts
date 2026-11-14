@@ -105,11 +105,27 @@ export type HostToCommitViewMessage =
           draft: string;
           /** A generation or a commit is in flight; the controls wait. */
           busy: boolean;
+          /**
+           * The repository the box commits to, and its branch — the same two
+           * selectors the graph's toolbar has. Absent before the first scan.
+           */
+          repository?: CommitRepositoryDto;
       }
     /** A tool wrote this; the box replaces the draft with it. */
     | { type: 'commit:generated'; message: string }
     /** The commit landed; the box empties. */
     | { type: 'commit:committed' };
+
+/** What the commit box's selectors show. */
+export interface CommitRepositoryDto {
+    name: string;
+    /** The root, with the description when there is one: the tooltip. */
+    detail: string;
+    /** How many repositories the workspace holds; the picker is offered for any. */
+    count: number;
+    /** HEAD's branch, or its short hash when detached; null with no commit yet. */
+    branch: string | null;
+}
 
 export type CommitViewToHostMessage =
     /** The box exists and wants its state. */
@@ -122,7 +138,11 @@ export type CommitViewToHostMessage =
     /** Commit what is staged with this message. */
     | { type: 'commit:submit'; message: string }
     /** Open the Changes view's stage-everything action from the box. */
-    | { type: 'commit:stageAll' };
+    | { type: 'commit:stageAll' }
+    /** The repository selector: the same picker the graph's toolbar opens. */
+    | { type: 'commit:pickRepository' }
+    /** The branch selector: check out another branch of the selected repository. */
+    | { type: 'commit:pickBranch' };
 
 /** What `vscodeApi` carries in either direction, for whichever view is running. */
 export type AnyHostToWebviewMessage =
