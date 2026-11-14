@@ -194,3 +194,12 @@ export function lsTreeArgs(rev: string): string[] {
 export function resolveRevisionArgs(rev: string): string[] {
     return ['rev-parse', '--verify', '--end-of-options', `${rev}^{commit}`];
 }
+
+/** Empty when HEAD is detached; the hash is asked for separately. */
+export function currentBranchArgs(): string[] {
+    return ['branch', '--show-current'];
+}
+
+export function shortHeadArgs(): string[] {
+    return ['rev-parse', '--short', 'HEAD'];
+}
