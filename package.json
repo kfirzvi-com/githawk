@@ -484,6 +484,16 @@
       {
         "command": "gitHawk.review.threadForTesting",
         "title": "GitHawk: Act On A Review Thread"
+      },
+      {
+        "command": "gitHawk.showAllRepositories",
+        "title": "GitHawk: Show Changes of All Repositories",
+        "icon": "$(layers)"
+      },
+      {
+        "command": "gitHawk.showSelectedRepository",
+        "title": "GitHawk: Show Changes of the Selected Repository Only",
+        "icon": "$(layers-active)"
       }
     ],
     "keybindings": [
@@ -784,6 +794,16 @@
           "command": "gitHawk.review.end",
           "when": "view == gitHawkChanges && gitHawk.reviewing",
           "group": "navigation@0"
+        },
+        {
+          "command": "gitHawk.showAllRepositories",
+          "when": "view == gitHawkChanges && gitHawk.multipleRepositories && !gitHawk.allRepositories && !gitHawk.reviewing",
+          "group": "navigation@1"
+        },
+        {
+          "command": "gitHawk.showSelectedRepository",
+          "when": "view == gitHawkChanges && gitHawk.multipleRepositories && gitHawk.allRepositories && !gitHawk.reviewing",
+          "group": "navigation@1"
         },
         {
           "command": "gitHawk.showUncommittedChanges",

@@ -51,6 +51,20 @@ export class BlameDecorator implements vscode.Disposable {
     ) {}
 
     /**
+     * The repository a document belongs to. A revision document names its
+     * own when it came from a repository other than the selected one — a row
+     * of another repository in the Changes view.
+     */
+    private rootOf(document: vscode.TextDocument): string | undefined {
+        if (document.uri.scheme === REVISION_SCHEME) {
+            return decodeRevisionUri(document.uri).root ?? this.repositoryRoot(undefined);
+        }
+        return this.repositoryRoot(
+            document.uri.scheme === 'file' ? document.uri.fsPath : undefined
+        );
+    }
+
+    /**
      * Every editor on screen, not only the focused one — a diff is two editors,
      * and annotating whichever half happens to have focus is worse than
      * annotating neither.
@@ -83,11 +97,7 @@ export class BlameDecorator implements vscode.Disposable {
             return;
         }
 
-        const root = this.repositoryRoot(
-            editor.document.uri.scheme === 'file'
-                ? editor.document.uri.fsPath
-                : undefined
-        );
+        const root = this.rootOf(editor.document);
         if (!root) {
             return;
         }
@@ -267,8 +277,7 @@ export class BlameDecorator implements vscode.Disposable {
             return undefined;
         }
 
-        const isFile = document.uri.scheme === 'file';
-        const root = this.repositoryRoot(isFile ? document.uri.fsPath : undefined);
+        const root = this.rootOf(document);
         if (!root) {
             return undefined;
         }
@@ -284,7 +293,9 @@ export class BlameDecorator implements vscode.Disposable {
         const block = blockAt(blame, line + 1);
         // An absolute path for a file, and the repository root for a revision
         // document, whose own path is relative to it.
-        return block ? { block, path: isFile ? document.uri.fsPath : root } : undefined;
+        return block
+            ? { block, path: document.uri.scheme === 'file' ? document.uri.fsPath : root }
+            : undefined;
     }
 
     /**

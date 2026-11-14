@@ -106,7 +106,11 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
         private readonly createRemoteReader: RemoteReaderFactory,
         private readonly createStashReader: StashReaderFactory,
         private readonly createWorkingTreeReader: WorkingTreeReaderFactory,
-        private readonly revisions: RevisionBrowser
+        private readonly revisions: RevisionBrowser,
+        /** HEAD's name in any repository, for the headings of the Changes tree. */
+        private readonly readBranch: (root: string) => Promise<string | undefined> = async () => undefined,
+        /** The Changes view's toggle: every repository's working tree, or the selected one's. */
+        private readonly showsAllRepositories: () => boolean = () => false
     ) {}
 
     resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -185,6 +189,11 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
         }
 
         this.lastRepositoryRoot = root;
+        // Every repository's changes are still every repository's changes;
+        // the refresh that follows only moves the check to the new one.
+        if (this.changedFiles.showsRepositories) {
+            return;
+        }
         if (this.changedFiles.current) {
             this.changedFiles.clear();
             this.post({ type: 'comparison:cleared' });
@@ -471,7 +480,88 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
      * without the panel being open.
      */
     async compareWorkingTree(reveal: RevealMode = 'focus'): Promise<void> {
+        // A review is of one repository, so it keeps the tree to that one.
+        if (
+            this.showsAllRepositories() &&
+            this.repositories.all.length > 1 &&
+            !this.changedFiles.reviewing
+        ) {
+            await this.compareAllWorkingTrees(reveal);
+            return;
+        }
         await this.runComparison({ kind: 'workingTree' }, reveal);
+    }
+
+    /**
+     * Every repository's uncommitted changes, each under its own heading —
+     * what VS Code's Source Control shows for a workspace of several.
+     *
+     * Read in parallel and quietly: one status and two diffs per repository,
+     * and a repository that cannot be read costs its own heading, not the
+     * tree. The graph is told only about the selected repository's changes;
+     * nothing here moves it.
+     */
+    private async compareAllWorkingTrees(reveal: RevealMode): Promise<void> {
+        const ticket = ++this.comparisonTicket;
+        const activeRoot = this.repositories.active?.root;
+        const read = await Promise.all(
+            this.repositories.all.map(async (repository) => {
+                try {
+                    const [comparison, branch] = await Promise.all([
+                        this.comparisons.compare(
+                            { kind: 'workingTree' },
+                            { quiet: true, root: repository.root }
+                        ),
+                        this.readBranch(repository.root),
+                    ]);
+                    return {
+                        repository,
+                        branch,
+                        active: repository.root === activeRoot,
+                        comparison,
+                    };
+                } catch (error) {
+                    log.warn(
+                        `could not read the working tree of ${repository.root}: ${describeError(error)}`
+                    );
+                    return undefined;
+                }
+            })
+        );
+        if (ticket !== this.comparisonTicket) {
+            log.debug('dropping an all-repositories comparison that was overtaken');
+            return;
+        }
+
+        const sections = read.filter(
+            (section): section is NonNullable<typeof section> =>
+                section !== undefined && (section.comparison.groups?.length ?? 0) > 0
+        );
+        log.info(
+            `compared the working trees of ${read.length} repositories: ${sections.length} with changes`
+        );
+        if (sections.length === 0) {
+            this.changedFiles.clear();
+            this.post({ type: 'comparison:cleared' });
+            if (reveal === 'focus') {
+                vscode.window.setStatusBarMessage(
+                    'GitHawk: nothing to commit — every repository is clean',
+                    4000
+                );
+            }
+            return;
+        }
+
+        this.changedFiles.showRepositories(sections);
+        const active = sections.find((section) => section.active);
+        this.post(
+            active
+                ? { type: 'comparison:loaded', comparison: active.comparison }
+                : { type: 'comparison:cleared' }
+        );
+        if (reveal === 'focus' || (reveal === 'ifUnseen' && !this.hasRevealedChanges)) {
+            await this.revealChangedFiles();
+        }
     }
 
     /** Any comparison, by what it asks for — how a review returns to the changeset it pinned. */
@@ -594,7 +684,7 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
                 return;
             }
 
-            this.changedFiles.show(comparison);
+            this.changedFiles.show(comparison, this.repositories.active?.root);
 
             // The webview needs telling too: without this the tree fills but the
             // graph panel shows nothing, so an action looks like it did nothing.

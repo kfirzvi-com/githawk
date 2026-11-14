@@ -16,6 +16,8 @@ export interface OpenFileRequest {
     line?: number;
     /** Leave the keyboard where it is: a tree being walked keeps it. */
     preserveFocus?: boolean;
+    /** The repository the file is in, when it is not the one the graph shows. */
+    root?: string;
 }
 
 /**
@@ -28,7 +30,7 @@ export interface OpenFileRequest {
  */
 export class ComparisonController {
     constructor(
-        private readonly readerFor: () => IComparisonReader,
+        private readonly readerFor: (root?: string) => IComparisonReader,
         private readonly repositoryFor: () => IGitRepository,
         private readonly workspaceRootFor: () => string,
         /** Told about every diff opened, so its reveal button can find them. */
@@ -121,13 +123,14 @@ export class ComparisonController {
 
     async compare(
         spec: ComparisonSpec,
-        options: { quiet?: boolean } = {}
+        options: { quiet?: boolean; root?: string } = {}
     ): Promise<ComparisonDto> {
+        const reader = this.readerFor(options.root);
         // A refresh of a tree already on screen says nothing at all: the
         // reader did not ask, and a status-bar flicker on every save would be
         // the only sign anything happened.
         if (options.quiet) {
-            return new CompareUseCase(this.readerFor()).execute(spec);
+            return new CompareUseCase(reader).execute(spec);
         }
 
         // A single commit's diff is fast and happens on every click, so it
@@ -145,7 +148,7 @@ export class ComparisonController {
                         ? 'Combining the selected commits…'
                         : 'Comparing…',
             },
-            () => new CompareUseCase(this.readerFor()).execute(spec)
+            () => new CompareUseCase(reader).execute(spec)
         );
     }
 
@@ -154,11 +157,12 @@ export class ComparisonController {
         // when comparing against the working tree, so edits go where expected.
         const left = encodeRevisionUri(
             request.baseRev,
-            request.previousPath ?? request.path
+            request.previousPath ?? request.path,
+            request.root
         );
         const right = request.targetRev
-            ? encodeRevisionUri(request.targetRev, request.path)
-            : vscode.Uri.file(`${this.workspaceRootFor()}/${request.path}`);
+            ? encodeRevisionUri(request.targetRev, request.path, request.root)
+            : vscode.Uri.file(`${request.root ?? this.workspaceRootFor()}/${request.path}`);
 
         const title = request.previousPath
             ? `${request.previousPath} → ${request.path}`
