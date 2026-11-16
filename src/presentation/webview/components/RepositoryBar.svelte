@@ -17,7 +17,7 @@
 -->
 <div
     data-testid="commit-repository-bar"
-    class="flex min-w-0 items-center gap-1.5 px-3 pt-2 text-xs"
+    class="flex min-w-0 shrink-0 items-center gap-1.5 px-3 pt-2 text-xs"
 >
     <button
         type="button"

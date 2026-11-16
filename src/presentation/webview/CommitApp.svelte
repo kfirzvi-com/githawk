@@ -72,7 +72,13 @@
     CSP — and silently not in VS Code. That is how the box shipped with a
     320px floor it had "removed".
 -->
-<div class="min-w-0 bg-pane font-sans">
+<!--
+    The page is exactly the view's height, and only the message box gives
+    way: VS Code sizes a webview view however the sidebar is dragged, with no
+    way to fit it to its content, and a box that scrolled hid its own Commit
+    button below the fold.
+-->
+<div class="flex h-screen min-w-0 flex-col bg-pane font-sans">
     {#if repository}
         <RepositoryBar
             {repository}

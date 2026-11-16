@@ -227,3 +227,29 @@ test('with no working tree on screen only the selectors are drawn', async ({ pag
     await expect(page.getByTestId('commit-repository-picker')).toBeVisible();
     await expect(page.getByTestId('commit-box')).toHaveCount(0);
 });
+
+/**
+ * VS Code gives the view whatever height the sidebar leaves it. The message
+ * box gives way; the buttons under it never fall below the fold.
+ */
+test('a short view keeps every button in sight', async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 210 });
+    await open(page, '?dirty=0,2,1&repo=githawk&repos=3&branch=main');
+
+    const overflow = await page.evaluate(
+        () => document.documentElement.scrollHeight - document.documentElement.clientHeight
+    );
+    expect(overflow).toBe(0);
+    for (const id of ['commit-button', 'stage-all', 'commit-scope']) {
+        const box = (await page.getByTestId(id).boundingBox())!;
+        expect(box.y + box.height, id).toBeLessThanOrEqual(210);
+    }
+});
+
+test('a tall view gives the room to the message', async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 480 });
+    await open(page, '?dirty=2&repo=githawk&repos=3&branch=main');
+
+    const message = (await page.getByTestId('commit-message').boundingBox())!;
+    expect(message.height).toBeGreaterThan(200);
+});
