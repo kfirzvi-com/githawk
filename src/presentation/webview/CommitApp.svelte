@@ -28,6 +28,7 @@
     let hasDraft = $state(false);
     let busy = $state(false);
     let repository = $state<CommitRepositoryDto | undefined>(undefined);
+    let workingTreeShown = $state(true);
     let box = $state<CommitBox | null>(null);
 
     const replaceDraft = (text: string) => {
@@ -44,6 +45,7 @@
                     selectedTool = message.selectedTool;
                     busy = message.busy;
                     repository = message.repository;
+                    workingTreeShown = message.workingTreeShown;
                     if (!hasDraft) {
                         hasDraft = true;
                         replaceDraft(message.draft);
@@ -78,18 +80,20 @@
             onSwitchBranch={() => postToHost({ type: 'commit:pickBranch' })}
         />
     {/if}
-    <CommitBox
-        bind:this={box}
-        {status}
-        {tools}
-        {selectedTool}
-        {draft}
-        {draftVersion}
-        {busy}
-        onDraft={(message) => postToHost({ type: 'commit:draft', message })}
-        onSelectTool={(tool) => postToHost({ type: 'commit:selectTool', tool })}
-        onGenerate={(tool) => postToHost({ type: 'commit:generate', tool })}
-        onCommit={(message) => postToHost({ type: 'commit:submit', message })}
-        onStageAll={() => postToHost({ type: 'commit:stageAll' })}
-    />
+    {#if workingTreeShown}
+        <CommitBox
+            bind:this={box}
+            {status}
+            {tools}
+            {selectedTool}
+            {draft}
+            {draftVersion}
+            {busy}
+            onDraft={(message) => postToHost({ type: 'commit:draft', message })}
+            onSelectTool={(tool) => postToHost({ type: 'commit:selectTool', tool })}
+            onGenerate={(tool) => postToHost({ type: 'commit:generate', tool })}
+            onCommit={(message) => postToHost({ type: 'commit:submit', message })}
+            onStageAll={() => postToHost({ type: 'commit:stageAll' })}
+        />
+    {/if}
 </div>

@@ -216,3 +216,14 @@ test('looks right — the commit box with its selectors', async ({ page }) => {
 
     await expect(page).toHaveScreenshot('commit-box-selectors.png', { fullPage: true });
 });
+
+/**
+ * Nothing uncommitted on screen: the selectors stay, so the repository and
+ * branch can be changed from the sidebar at any time; the box goes.
+ */
+test('with no working tree on screen only the selectors are drawn', async ({ page }) => {
+    await page.goto('/commit.html?repo=githawk&repos=3&box=0');
+
+    await expect(page.getByTestId('commit-repository-picker')).toBeVisible();
+    await expect(page.getByTestId('commit-box')).toHaveCount(0);
+});

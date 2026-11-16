@@ -669,7 +669,7 @@
           "contextualTitle": "GitHawk",
           "type": "webview",
           "icon": "$(git-commit)",
-          "when": "gitHawk.workingTreeShown",
+          "when": "gitHawk.workingTreeShown || gitHawk.hasRepository",
           "initialSize": 1
         },
         {

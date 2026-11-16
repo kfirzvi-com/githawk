@@ -558,6 +558,10 @@ export async function activate(
          * A review narrows the tree to its own repository; when it ends, the
          * others come back.
          */
+        // The box under the selectors exists while there is uncommitted work on screen.
+        changedFiles.onDidShow(() =>
+            commitView.setWorkingTreeShown(changedFiles.showsWorkingTree)
+        ),
         changedFiles.onDidToggleReview((reviewing) => {
             if (!reviewing && scope.showsAll && changedFiles.showsWorkingTree) {
                 void provider.refreshWorkingTree();

@@ -110,6 +110,11 @@ export type HostToCommitViewMessage =
            * selectors the graph's toolbar has. Absent before the first scan.
            */
           repository?: CommitRepositoryDto;
+          /**
+           * Whether the Changes view shows uncommitted work. Without it there
+           * is nothing to commit, and only the selectors are drawn.
+           */
+          workingTreeShown: boolean;
       }
     /** A tool wrote this; the box replaces the draft with it. */
     | { type: 'commit:generated'; message: string }

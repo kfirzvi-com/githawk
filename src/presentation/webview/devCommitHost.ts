@@ -40,6 +40,7 @@ export function startCommitHost(): void {
                       branch: parameters.get('branch') ?? 'main',
                   }
                 : undefined,
+            workingTreeShown: parameters.get('box') !== '0',
         });
 
     /*

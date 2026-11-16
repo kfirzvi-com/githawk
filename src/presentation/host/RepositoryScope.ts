@@ -6,6 +6,8 @@ const SHOW_ALL_KEY = 'gitHawk.showAllRepositories';
 export const ALL_REPOSITORIES_CONTEXT = 'gitHawk.allRepositories';
 /** The toggle exists only where there is more than one repository to show. */
 export const MULTIPLE_REPOSITORIES_CONTEXT = 'gitHawk.multipleRepositories';
+/** The selectors above the commit box exist wherever there is a repository to select. */
+export const HAS_REPOSITORY_CONTEXT = 'gitHawk.hasRepository';
 
 /**
  * Whether the Changes view shows the selected repository's working tree or
@@ -46,6 +48,7 @@ export class RepositoryScope implements vscode.Disposable {
     /** Called after every scan: one repository has nothing to toggle between. */
     noteRepositoryCount(count: number): void {
         void vscode.commands.executeCommand('setContext', MULTIPLE_REPOSITORIES_CONTEXT, count > 1);
+        void vscode.commands.executeCommand('setContext', HAS_REPOSITORY_CONTEXT, count > 0);
     }
 
     dispose(): void {

@@ -37,6 +37,7 @@ export class CommitViewProvider implements vscode.WebviewViewProvider {
     private draft = '';
     private busy = false;
     private repository?: CommitRepositoryDto;
+    private workingTreeShown = false;
 
     constructor(
         private readonly extensionUri: vscode.Uri,
@@ -67,6 +68,14 @@ export class CommitViewProvider implements vscode.WebviewViewProvider {
     setStatus(status: WorkingTreeStatus): void {
         this.status = status;
         this.sendState();
+    }
+
+    /** The box is drawn only under uncommitted work; the selectors always are. */
+    setWorkingTreeShown(shown: boolean): void {
+        if (shown !== this.workingTreeShown) {
+            this.workingTreeShown = shown;
+            this.sendState();
+        }
     }
 
     /** What the selectors above the box say: where a commit would land. */
@@ -214,6 +223,7 @@ export class CommitViewProvider implements vscode.WebviewViewProvider {
             draft: this.draft,
             busy: this.busy,
             repository: this.repository,
+            workingTreeShown: this.workingTreeShown,
         });
     }
 
