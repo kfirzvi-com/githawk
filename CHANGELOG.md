@@ -37,6 +37,16 @@ All notable changes to GitHawk are documented here, following
   of any tool in `gitHawk.aiTools`, which gains `promptCommand` for starting a
   tool with a first message. Sent comments are not sent again.
 
+### Changed
+
+- **GitHawk is now published by Praktical, as `praktical.githawk`.** The
+  extension under the old identifier, `kfirzvi-com.githawk`, is deprecated and
+  gets no more updates; VS Code offers to switch you over. Install the new one
+  in place of the old rather than beside it: the two share their commands and
+  views. Your `gitHawk.*` settings, keybindings and everything under
+  `.git/githawk` carry over; a review under way and the repositories GitHawk
+  remembered for a workspace do not, since VS Code keeps those per extension.
+
 ## [0.8.0] — 2026-09-21
 
 ### Added

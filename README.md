@@ -14,8 +14,11 @@ account, no cloud. MIT licensed.
 Search **GitHawk** in the Extensions view, or:
 
 ```
-code --install-extension kfirzvi-com.githawk
+code --install-extension praktical.githawk
 ```
+
+GitHawk used to be published as `kfirzvi-com.githawk`. If you have that one,
+uninstall it and install this one in its place; your settings carry over.
 
 Then press **`Cmd+9`** (**`Ctrl+9`** on Windows and Linux) — or run
 **`GitHawk: Open Git Graph`**. The graph opens in the panel at the bottom; changed
