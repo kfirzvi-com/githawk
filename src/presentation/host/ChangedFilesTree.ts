@@ -514,7 +514,7 @@ export class ChangedFilesTree implements vscode.TreeDataProvider<TreeNode> {
             this.view.title = 'Changes';
             this.view.description = undefined;
             this.view.message = [
-                'Select a commit in the Git Graph panel, or compare two branches, to see what changed.',
+                'No uncommitted changes. Select a commit in the Git Graph panel, or compare two branches, to see what changed.',
                 this.reviewNote,
             ]
                 .filter(Boolean)

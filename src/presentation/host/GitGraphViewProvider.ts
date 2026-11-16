@@ -94,6 +94,12 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
      * reader clicked a commit and the tree showed the working tree.
      */
     private comparisonTicket = 0;
+    /**
+     * The working tree is on screen because nothing else was asked for, not
+     * because the reader asked for it. The sidebar shows it; the graph is not
+     * told, so a default never puts a summary in the panel.
+     */
+    private showingDefault = false;
 
     constructor(
         private readonly extensionUri: vscode.Uri,
@@ -170,7 +176,20 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
         }
         if (this.changedFiles.showsWorkingTree) {
             await this.compareWorkingTree('none');
+        } else if (!this.changedFiles.current) {
+            await this.showDefault();
         }
+    }
+
+    /**
+     * What the Changes view shows when nothing was selected: the uncommitted
+     * changes. Asked for at startup, after a switch of repository, and
+     * whenever a selection is cleared — and quietly, for a clean tree: the
+     * view then says there is nothing uncommitted.
+     */
+    async showDefault(): Promise<void> {
+        this.showingDefault = true;
+        await this.compareWorkingTree('none');
     }
 
     /**
@@ -386,6 +405,7 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
                 break;
             case 'compare:clear':
                 this.changedFiles.clear();
+                void this.showDefault();
                 break;
         }
     }
@@ -480,6 +500,9 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
      * without the panel being open.
      */
     async compareWorkingTree(reveal: RevealMode = 'focus'): Promise<void> {
+        if (reveal !== 'none') {
+            this.showingDefault = false;
+        }
         // A review is of one repository, so it keeps the tree to that one.
         if (
             this.showsAllRepositories() &&
@@ -555,7 +578,7 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
         this.changedFiles.showRepositories(sections);
         const active = sections.find((section) => section.active);
         this.post(
-            active
+            active && !this.showingDefault
                 ? { type: 'comparison:loaded', comparison: active.comparison }
                 : { type: 'comparison:cleared' }
         );
@@ -653,6 +676,9 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
         reveal: RevealMode
     ): Promise<void> {
         log.info(`comparing: ${JSON.stringify(spec)}`);
+        if (spec.kind !== 'workingTree') {
+            this.showingDefault = false;
+        }
         const ticket = ++this.comparisonTicket;
         try {
             const comparison = await this.comparisons.compare(spec, {
@@ -688,7 +714,11 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
 
             // The webview needs telling too: without this the tree fills but the
             // graph panel shows nothing, so an action looks like it did nothing.
-            this.post({ type: 'comparison:loaded', comparison });
+            this.post(
+                this.showingDefault && spec.kind === 'workingTree'
+                    ? { type: 'comparison:cleared' }
+                    : { type: 'comparison:loaded', comparison }
+            );
 
             if (reveal === 'focus' || (reveal === 'ifUnseen' && !this.hasRevealedChanges)) {
                 await this.revealChangedFiles();

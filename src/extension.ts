@@ -832,9 +832,11 @@ export async function activate(
                     )
                 );
         }),
-        vscode.commands.registerCommand('gitHawk.clearChanges', () =>
-            changedFiles.clear()
-        ),
+        // Back to the default: the uncommitted changes.
+        vscode.commands.registerCommand('gitHawk.clearChanges', () => {
+            changedFiles.clear();
+            return provider.showDefault();
+        }),
         changesView.onDidChangeCheckboxState((event) =>
             reviews.checkboxesChanged(event.items)
         ),

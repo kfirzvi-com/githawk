@@ -807,12 +807,12 @@
         },
         {
           "command": "gitHawk.showUncommittedChanges",
-          "when": "view == gitHawkChanges && !gitHawk.reviewing",
+          "when": "view == gitHawkChanges && !gitHawk.reviewing && !gitHawk.workingTreeShown",
           "group": "navigation@1"
         },
         {
           "command": "gitHawk.clearChanges",
-          "when": "view == gitHawkChanges && !gitHawk.reviewing",
+          "when": "false",
           "group": "navigation@2"
         },
         {
