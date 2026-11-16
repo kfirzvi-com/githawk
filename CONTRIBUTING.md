@@ -232,8 +232,8 @@ reissued anywhere.
 version that did go up cannot be replaced:
 
 ```bash
-npx vsce show kfirzvi-com.githawk                       # Marketplace
-curl -s https://open-vsx.org/api/kfirzvi-com/githawk/<version>
+npx vsce show praktical.githawk                         # Marketplace
+curl -s https://open-vsx.org/api/Praktical/githawk/<version>
 ```
 
 Both registries index asynchronously — Open VSX takes a couple of minutes and
