@@ -51,6 +51,7 @@ import {
     RevisionFilesTree,
 } from './presentation/host/RevisionFilesTree';
 import { RevisionBrowser } from './presentation/host/RevisionBrowser';
+import { PublisherMoveNotice } from './presentation/host/PublisherMoveNotice';
 import type { RevisionNode } from './presentation/host/revisionFilesTreeModel';
 import {
     AUTO_REFRESH_SETTING,
@@ -125,6 +126,12 @@ export async function activate(
 ): Promise<void> {
     context.subscriptions.push(initialiseLog());
     log.info('GitHawk activated');
+
+    // Only the last release under the old publisher; not awaited, since the
+    // notice waits on the user.
+    if (PublisherMoveNotice.appliesTo(context.extension.id)) {
+        void new PublisherMoveNotice().offer();
+    }
 
     const repositories = new RepositoryRegistry(
         context.workspaceState,
