@@ -1010,6 +1010,14 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
         });
     }
 
+    /**
+     * Fetch, pull or push the selected repository — the toolbar's buttons,
+     * for a caller outside the webview: a row of the Repositories view.
+     */
+    runRemoteOperation(type: 'fetch' | 'pull' | 'push'): Promise<void> {
+        return this.createMenu().runRemoteOperation(type);
+    }
+
     /** Exposed so a command can open the manager without going via the webview. */
     createRemoteMenu(): RemoteMenu {
         return new RemoteMenu({

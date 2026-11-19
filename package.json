@@ -494,6 +494,45 @@
         "command": "gitHawk.showSelectedRepository",
         "title": "GitHawk: Show Changes of the Selected Repository Only",
         "icon": "$(layers-active)"
+      },
+      {
+        "command": "gitHawk.refreshRepositories",
+        "title": "GitHawk: Refresh Repositories",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "gitHawk.hideCleanRepositories",
+        "title": "GitHawk: Hide Repositories Without Changes",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "gitHawk.showCleanRepositories",
+        "title": "GitHawk: Show Repositories Without Changes",
+        "icon": "$(filter-filled)"
+      },
+      {
+        "command": "gitHawk.repositoriesTree",
+        "title": "GitHawk: Describe The Repositories View"
+      },
+      {
+        "command": "gitHawk.repository.commit",
+        "title": "Commit",
+        "icon": "$(check)"
+      },
+      {
+        "command": "gitHawk.repository.switchBranch",
+        "title": "Check Out a Branch",
+        "icon": "$(git-branch)"
+      },
+      {
+        "command": "gitHawk.repository.pull",
+        "title": "Pull",
+        "icon": "$(arrow-down)"
+      },
+      {
+        "command": "gitHawk.repository.push",
+        "title": "Push",
+        "icon": "$(arrow-up)"
       }
     ],
     "keybindings": [
@@ -664,6 +703,13 @@
     "views": {
       "gitHawkSidebar": [
         {
+          "id": "gitHawkRepositories",
+          "name": "Repositories",
+          "contextualTitle": "GitHawk",
+          "icon": "$(repo)",
+          "when": "gitHawk.multipleRepositories"
+        },
+        {
           "id": "gitHawkCommit",
           "name": "Commit",
           "contextualTitle": "GitHawk",
@@ -829,6 +875,21 @@
           "command": "gitHawk.closeFiles",
           "when": "view == gitHawkFiles",
           "group": "navigation@2"
+        },
+        {
+          "command": "gitHawk.hideCleanRepositories",
+          "when": "view == gitHawkRepositories && !gitHawk.hidingCleanRepositories",
+          "group": "navigation@1"
+        },
+        {
+          "command": "gitHawk.showCleanRepositories",
+          "when": "view == gitHawkRepositories && gitHawk.hidingCleanRepositories",
+          "group": "navigation@1"
+        },
+        {
+          "command": "gitHawk.refreshRepositories",
+          "when": "view == gitHawkRepositories",
+          "group": "navigation@2"
         }
       ],
       "view/item/context": [
@@ -901,6 +962,46 @@
           "command": "gitHawk.review.endFromList",
           "when": "view == gitHawkReviews && viewItem == gitHawkReview",
           "group": "1_review@2"
+        },
+        {
+          "command": "gitHawk.repository.commit",
+          "when": "view == gitHawkRepositories && viewItem =~ /^gitHawkRepositoryRow/ && viewItem =~ /\\bchanged\\b/",
+          "group": "inline@1"
+        },
+        {
+          "command": "gitHawk.repository.pull",
+          "when": "view == gitHawkRepositories && viewItem =~ /^gitHawkRepositoryRow/ && viewItem =~ /\\bbehind\\b/",
+          "group": "inline@2"
+        },
+        {
+          "command": "gitHawk.repository.push",
+          "when": "view == gitHawkRepositories && viewItem =~ /^gitHawkRepositoryRow/ && viewItem =~ /\\bahead\\b/",
+          "group": "inline@3"
+        },
+        {
+          "command": "gitHawk.repository.switchBranch",
+          "when": "view == gitHawkRepositories && viewItem =~ /^gitHawkRepositoryRow/",
+          "group": "inline@4"
+        },
+        {
+          "command": "gitHawk.repository.commit",
+          "when": "view == gitHawkRepositories && viewItem =~ /^gitHawkRepositoryRow/ && viewItem =~ /\\bchanged\\b/",
+          "group": "1_repository@1"
+        },
+        {
+          "command": "gitHawk.repository.switchBranch",
+          "when": "view == gitHawkRepositories && viewItem =~ /^gitHawkRepositoryRow/",
+          "group": "1_repository@2"
+        },
+        {
+          "command": "gitHawk.repository.pull",
+          "when": "view == gitHawkRepositories && viewItem =~ /^gitHawkRepositoryRow/ && viewItem =~ /\\bbehind\\b/",
+          "group": "2_sync@1"
+        },
+        {
+          "command": "gitHawk.repository.push",
+          "when": "view == gitHawkRepositories && viewItem =~ /^gitHawkRepositoryRow/ && viewItem =~ /\\bahead\\b/",
+          "group": "2_sync@2"
         }
       ],
       "commandPalette": [
@@ -1110,6 +1211,26 @@
         },
         {
           "command": "gitHawk.review.threadForTesting",
+          "when": "false"
+        },
+        {
+          "command": "gitHawk.repository.commit",
+          "when": "false"
+        },
+        {
+          "command": "gitHawk.repository.pull",
+          "when": "false"
+        },
+        {
+          "command": "gitHawk.repository.push",
+          "when": "false"
+        },
+        {
+          "command": "gitHawk.repository.switchBranch",
+          "when": "false"
+        },
+        {
+          "command": "gitHawk.repositoriesTree",
           "when": "false"
         }
       ],
