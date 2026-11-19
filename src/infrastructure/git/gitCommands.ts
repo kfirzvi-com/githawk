@@ -203,3 +203,21 @@ export function currentBranchArgs(): string[] {
 export function shortHeadArgs(): string[] {
     return ['rev-parse', '--short', 'HEAD'];
 }
+
+/**
+ * Branch, upstream, ahead/behind and every changed file, in one process.
+ *
+ * `--no-optional-locks` because this runs whenever `.git` changes, and a
+ * plain `git status` refreshes the index's stat cache — writing `.git/index`,
+ * which is itself watched. Without it, reading the status is a change.
+ */
+export function branchStatusArgs(): string[] {
+    return [
+        '--no-optional-locks',
+        'status',
+        '--porcelain=v2',
+        '--branch',
+        '-z',
+        '--untracked-files=normal',
+    ];
+}
