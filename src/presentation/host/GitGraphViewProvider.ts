@@ -169,10 +169,20 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
      * call it: two diffs and a status, no log.
      */
     async refreshWorkingTree(): Promise<void> {
+        const ticket = this.comparisonTicket;
         if (this.view) {
             await this.sendWorkingTree();
         } else {
             await this.readWorkingTree();
+        }
+        /*
+         * Something was asked for while the status was being read — a commit
+         * picked straight after switching repository. That comparison is what
+         * the tree should show; redrawing the working tree now would take a
+         * newer ticket than it and replace the answer with the default.
+         */
+        if (ticket !== this.comparisonTicket) {
+            return;
         }
         if (this.changedFiles.showsWorkingTree) {
             await this.compareWorkingTree('none');
