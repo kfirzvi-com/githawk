@@ -1,39 +1,37 @@
 import * as vscode from 'vscode';
 import { log } from './log';
+import { NEW_IDS, OLD_ID, offersMove } from './publisherMove';
 
 /**
- * GitHawk moved from the `kfirzvi-com` publisher to `praktical`. The
- * Marketplace keeps an extension's name unique across publishers, so the new
- * identifier can only be published once the old one is gone — and a removed
- * extension never updates again. The last release under the old identifier is
- * therefore the whole of GitHawk plus this offer to switch, which keeps
- * offering on each start until the new one installs.
+ * The last release under the old identifier is the whole of GitHawk plus this
+ * offer to switch, which keeps offering on each start until a new one installs.
+ * The new identifier differs per registry (see `publisherMove`), so the switch
+ * tries each in turn and keeps the first that installs.
  *
- * Under the new identifier it does nothing.
+ * Under either new identifier it does nothing.
  */
 export class PublisherMoveNotice {
-    static readonly OLD_ID = 'kfirzvi-com.githawk';
-    static readonly NEW_ID = 'praktical.githawk';
     private static readonly HOW_TO = 'https://github.com/kfirzvi-com/githawk#install';
 
     static appliesTo(extensionId: string): boolean {
-        return extensionId.toLowerCase() === PublisherMoveNotice.OLD_ID;
+        return offersMove(extensionId);
     }
 
     async offer(): Promise<void> {
-        if (vscode.extensions.getExtension(PublisherMoveNotice.NEW_ID) !== undefined) {
+        const installed = NEW_IDS.find((id) => vscode.extensions.getExtension(id) !== undefined);
+        if (installed !== undefined) {
             const choice = await vscode.window.showInformationMessage(
-                `GitHawk now comes from ${PublisherMoveNotice.NEW_ID}, which is installed. Remove this old copy, ${PublisherMoveNotice.OLD_ID}?`,
+                `GitHawk now comes from ${installed}, which is installed. Remove this old copy, ${OLD_ID}?`,
                 'Remove'
             );
             if (choice === 'Remove') {
-                await this.removeOldAndReload();
+                await this.removeOldAndReload(installed);
             }
             return;
         }
 
         const choice = await vscode.window.showInformationMessage(
-            `GitHawk has moved to a new publisher. Switch to ${PublisherMoveNotice.NEW_ID} to keep getting updates — your settings carry over.`,
+            'GitHawk has moved to the Praktical publisher. Switch to keep getting updates — your settings carry over.',
             'Switch',
             'Later'
         );
@@ -41,15 +39,10 @@ export class PublisherMoveNotice {
             return;
         }
 
-        try {
-            await vscode.commands.executeCommand(
-                'workbench.extensions.installExtension',
-                PublisherMoveNotice.NEW_ID
-            );
-        } catch (error) {
-            log.warn(`Could not install ${PublisherMoveNotice.NEW_ID}`, error);
+        const switched = await this.installFirstAvailable();
+        if (switched === undefined) {
             const next = await vscode.window.showWarningMessage(
-                `${PublisherMoveNotice.NEW_ID} could not be installed yet. GitHawk keeps working as it is, and will offer again next time.`,
+                'The new GitHawk could not be installed yet. GitHawk keeps working as it is, and will offer again next time.',
                 'How to switch'
             );
             if (next === 'How to switch') {
@@ -57,17 +50,27 @@ export class PublisherMoveNotice {
             }
             return;
         }
-        await this.removeOldAndReload();
+        await this.removeOldAndReload(switched);
+    }
+
+    /** The identifier that installed, or undefined when none is in this editor's registry. */
+    private async installFirstAvailable(): Promise<string | undefined> {
+        for (const id of NEW_IDS) {
+            try {
+                await vscode.commands.executeCommand('workbench.extensions.installExtension', id);
+                return id;
+            } catch (error) {
+                log.warn(`Could not install ${id}`, error);
+            }
+        }
+        return undefined;
     }
 
     /** Both copies share every command and view, so only one may stay. */
-    private async removeOldAndReload(): Promise<void> {
-        await vscode.commands.executeCommand(
-            'workbench.extensions.uninstallExtension',
-            PublisherMoveNotice.OLD_ID
-        );
+    private async removeOldAndReload(newId: string): Promise<void> {
+        await vscode.commands.executeCommand('workbench.extensions.uninstallExtension', OLD_ID);
         const reload = await vscode.window.showInformationMessage(
-            `GitHawk now comes from ${PublisherMoveNotice.NEW_ID}. Reload the window to finish switching.`,
+            `GitHawk now comes from ${newId}. Reload the window to finish switching.`,
             'Reload'
         );
         if (reload === 'Reload') {

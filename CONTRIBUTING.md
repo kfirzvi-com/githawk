@@ -203,13 +203,16 @@ exact commit being published first. A version cannot be withdrawn once it is up,
 only superseded, so the gate has to be on the commit rather than on whatever
 happened to be in someone's working tree.
 
-Two registries, one package, **and a job each**. `package` builds a single
-`.vsix` and uploads it as an artifact; `marketplace` and `openvsx` both take
-that same file and publish it — to the **Visual Studio Marketplace**
-(`VSCE_PAT`, where VS Code installs from) and to **Open VSX** (`OVSX_PAT`, where
-the forks install from — Cursor, Antigravity, VSCodium, Windsurf). Both channels
-go to both registries, so no audience is ever a version behind the other, and
-what the two install is byte-for-byte the same file rather than one build each.
+Two registries, one build, **and a job each**. `package` builds once and packs
+two `.vsix` files that differ only in the manifest's `name`, and uploads both
+as one artifact. `marketplace` publishes `githawk-graph-<version>.vsix` to the
+**Visual Studio Marketplace** (`VSCE_PAT`, where VS Code installs from) as
+**`praktical.githawk-graph`**; `openvsx` publishes `githawk-<version>.vsix` to
+**Open VSX** (`OVSX_PAT`, where the forks install from — Cursor, Antigravity,
+VSCodium, Windsurf) as **`praktical.githawk`**. The names differ because the
+Marketplace keeps a name unique across publishers and `githawk` is still held
+there by the old `kfirzvi-com.githawk`. Both channels go to both registries, so
+no audience is ever a version behind the other.
 Open VSX reads the channel from the flag `vsce` stamped into the manifest;
 passing `--pre-release` to `ovsx` for an already-packaged `.vsix` does nothing,
 and it will say so.
@@ -232,7 +235,7 @@ reissued anywhere.
 version that did go up cannot be replaced:
 
 ```bash
-npx vsce show praktical.githawk                         # Marketplace
+npx vsce show praktical.githawk-graph                   # Marketplace
 curl -s https://open-vsx.org/api/Praktical/githawk/<version>
 ```
 

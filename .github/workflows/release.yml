@@ -92,9 +92,11 @@ jobs:
   # combined one would try to reissue a version the other registry already has,
   # and be refused.
   #
-  # Still one file rather than one build each, which is the point of packaging
-  # here and handing both jobs the same artifact: what the two audiences install
-  # is byte-for-byte identical.
+  # Two files from one build, differing only in the manifest's name. The
+  # Marketplace keeps extension names unique across publishers and `githawk` is
+  # still held there by the old kfirzvi-com.githawk, so the Marketplace gets
+  # praktical.githawk-graph; Open VSX has no such rule and keeps
+  # praktical.githawk. Everything else the two audiences install is the same.
   package:
     name: Package ${{ needs.plan.outputs.channel }} ${{ needs.plan.outputs.version }}
     needs: [plan, ci]
@@ -124,12 +126,16 @@ jobs:
           flag=()
           if [[ "$CHANNEL" == pre-release ]]; then flag=(--pre-release); fi
           npx vsce package "${flag[@]}" --out "githawk-$VERSION.vsix"
+          npm pkg set name=githawk-graph
+          npx vsce package "${flag[@]}" --out "githawk-graph-$VERSION.vsix"
 
       # Both publishing jobs take the vsix from here, so neither rebuilds it.
       - uses: actions/upload-artifact@v4
         with:
           name: githawk-${{ needs.plan.outputs.version }}
-          path: githawk-*.vsix
+          path: |
+            githawk-${{ needs.plan.outputs.version }}.vsix
+            githawk-graph-${{ needs.plan.outputs.version }}.vsix
           retention-days: 90
 
   marketplace:
@@ -156,7 +162,7 @@ jobs:
           set -euo pipefail
           flag=()
           if [[ "$CHANNEL" == pre-release ]]; then flag=(--pre-release); fi
-          npx vsce publish "${flag[@]}" --packagePath "githawk-$VERSION.vsix"
+          npx vsce publish "${flag[@]}" --packagePath "githawk-graph-$VERSION.vsix"
 
   # Where the forks install from — Cursor, Antigravity, VSCodium, Windsurf.
   # Neither audience should be a version behind the other, which is why this
@@ -211,6 +217,6 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/changelogSection.mjs "$VERSION" > /tmp/notes.md
-          gh release create "v$VERSION" "githawk-$VERSION.vsix" \
+          gh release create "v$VERSION" "githawk-$VERSION.vsix" "githawk-graph-$VERSION.vsix" \
             --title "GitHawk $VERSION" \
             --notes-file /tmp/notes.md

@@ -3,6 +3,17 @@
 All notable changes to GitHawk are documented here, following
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Changed
+
+- **On the Visual Studio Marketplace, GitHawk is now `praktical.githawk-graph`.**
+  The Marketplace keeps names unique across publishers and `githawk` was still
+  taken by the old `kfirzvi-com.githawk`. On Open VSX it stays
+  `praktical.githawk`.
+- The switch offered under the old `kfirzvi-com.githawk` now installs whichever
+  new identifier the editor's registry has.
+
 ## [0.9.0] — 2026-11-18
 
 ### Added
