@@ -161,6 +161,11 @@
         "title": "GitHawk: Show Log"
       },
       {
+        "command": "gitHawk.rate",
+        "category": "GitHawk",
+        "title": "Rate GitHawk"
+      },
+      {
         "command": "gitHawk.compareCommits",
         "title": "GitHawk: Compare Commits"
       },
@@ -765,6 +770,11 @@
         }
       ],
       "view/title": [
+        {
+          "command": "gitHawk.rate",
+          "when": "view == gitHawkView",
+          "group": "z_rate@1"
+        },
         {
           "command": "gitHawk.review.start",
           "when": "view == gitHawkChanges && !gitHawk.reviewing",

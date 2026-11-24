@@ -86,6 +86,9 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
      */
     private readonly workingTreeRead = new vscode.EventEmitter<WorkingTreeStatus>();
     readonly onDidReadWorkingTree = this.workingTreeRead.event;
+    /** The graph came into view: opened, or its panel shown again. */
+    private readonly graphShown = new vscode.EventEmitter<void>();
+    readonly onDidShowGraph = this.graphShown.event;
     /**
      * Which comparison is the one the tree should end up showing. Two can be
      * in flight at once — a background refresh of the working tree and a
@@ -120,6 +123,13 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
         };
 
         webviewView.webview.html = this.buildHtml(webviewView.webview);
+
+        this.graphShown.fire();
+        webviewView.onDidChangeVisibility(() => {
+            if (webviewView.visible) {
+                this.graphShown.fire();
+            }
+        });
 
         webviewView.webview.onDidReceiveMessage(
             (message: WebviewToHostMessage) => this.handleMessage(message)

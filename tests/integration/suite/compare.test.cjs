@@ -49,6 +49,7 @@ suite('GitHawk in a real extension host', () => {
             'gitHawk.commit',
             'gitHawk.stage',
             'gitHawk.unstage',
+            'gitHawk.rate',
         ]) {
             assert.ok(
                 commands.includes(expected),
