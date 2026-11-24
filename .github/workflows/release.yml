@@ -92,11 +92,12 @@ jobs:
   # combined one would try to reissue a version the other registry already has,
   # and be refused.
   #
-  # Two files from one build, differing only in the manifest's name. The
-  # Marketplace keeps extension names unique across publishers and `githawk` is
-  # still held there by the old kfirzvi-com.githawk, so the Marketplace gets
-  # praktical.githawk-graph; Open VSX has no such rule and keeps
-  # praktical.githawk. Everything else the two audiences install is the same.
+  # Two files from one build, differing only in the manifest's name and
+  # display name. The Marketplace keeps both unique across publishers and the
+  # old kfirzvi-com.githawk still holds `githawk` and "GitHawk" there, so the
+  # Marketplace gets praktical.githawk-graph, "GitHawk Graph"; Open VSX has no
+  # such rule and keeps praktical.githawk, "GitHawk". Everything else the two
+  # audiences install is the same.
   package:
     name: Package ${{ needs.plan.outputs.channel }} ${{ needs.plan.outputs.version }}
     needs: [plan, ci]
@@ -126,7 +127,7 @@ jobs:
           flag=()
           if [[ "$CHANNEL" == pre-release ]]; then flag=(--pre-release); fi
           npx vsce package "${flag[@]}" --out "githawk-$VERSION.vsix"
-          npm pkg set name=githawk-graph
+          npm pkg set name=githawk-graph displayName="GitHawk Graph"
           npx vsce package "${flag[@]}" --out "githawk-graph-$VERSION.vsix"
 
       # Both publishing jobs take the vsix from here, so neither rebuilds it.

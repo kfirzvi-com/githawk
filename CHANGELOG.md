@@ -3,6 +3,14 @@
 All notable changes to GitHawk are documented here, following
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.11.0] — 2026-11-24
+
+### Changed
+
+- **On the Visual Studio Marketplace, GitHawk is now listed as "GitHawk Graph".**
+  The Marketplace keeps display names unique too, and "GitHawk" is still held
+  there by the old `kfirzvi-com.githawk`. On Open VSX it stays "GitHawk".
+
 ## [0.10.0] — 2026-11-23
 
 ### Changed
