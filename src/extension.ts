@@ -53,6 +53,7 @@ import {
 import { RevisionBrowser } from './presentation/host/RevisionBrowser';
 import { PublisherMoveNotice } from './presentation/host/PublisherMoveNotice';
 import { RatingNotice } from './presentation/host/RatingNotice';
+import { WhatsNewPanel } from './presentation/host/WhatsNewPanel';
 import type { RevisionNode } from './presentation/host/revisionFilesTreeModel';
 import {
     AUTO_REFRESH_SETTING,
@@ -129,9 +130,17 @@ export async function activate(
     log.info('GitHawk activated');
 
     // Only the last release under the old publisher; not awaited, since the
-    // notice waits on the user.
+    // notice waits on the user. Every other copy shows the What's New page
+    // after a minor or major update.
     if (PublisherMoveNotice.appliesTo(context.extension.id)) {
         void new PublisherMoveNotice().offer();
+    } else {
+        new WhatsNewPanel(context.globalState, {
+            extensionUri: context.extensionUri,
+            version: String(context.extension.packageJSON.version),
+        })
+            .onActivate()
+            .catch((error) => log.error("What's New page failed", error));
     }
 
     const repositories = new RepositoryRegistry(
