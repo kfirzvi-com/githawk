@@ -5,6 +5,9 @@ account, no cloud. MIT licensed.
 
 ![The GitHawk graph panel](media/screenshots/graph.png)
 
+[![Rate on the VS Code Marketplace](https://img.shields.io/badge/%E2%98%86%20Rate%20on-VS%20Code%20Marketplace-0078d4)](https://marketplace.visualstudio.com/items?itemName=praktical.githawk-graph&ssr=false#review-details)
+[![Rate on Open VSX](https://img.shields.io/badge/%E2%98%86%20Rate%20on-Open%20VSX-a60ee5)](https://open-vsx.org/extension/praktical/githawk/reviews)
+
 > **Preview.** Everything documented here works and is covered by tests. What it
 > does not do yet: stay fast on very long histories, or help you out of a
 > conflicted merge.
@@ -510,6 +513,7 @@ different one, GitHawk switches to it and then shows the commit.
 | `GitHawk: Start An AI CLI Here` | |
 | `GitHawk: Update All Branches From Upstream` | Fast-forwards every branch that can be |
 | `GitHawk: Show Log` | GitHawk's own output, when something goes wrong |
+| `GitHawk: Rate GitHawk` | Opens the reviews page of the store you installed from |
 
 ## Known limitations
 
@@ -522,6 +526,12 @@ Honest list, in the order they are likely to annoy you:
 - **One repository at a time** — there is no combined view across several.
 - **Repositories are found by scanning on load, not watched.** One cloned while the
   window is open needs a refresh.
+
+## Like it?
+
+A rating helps other people find GitHawk: use the **☆ Rate** buttons at the top.
+After a week or so of use, GitHawk asks once (twice at most, if you pick "Later").
+"Don't Ask Again" means it. Nothing is sent anywhere; the count stays in your editor.
 
 ## Contributing
 
