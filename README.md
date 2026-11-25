@@ -562,6 +562,14 @@ Bug reports and pull requests are welcome —
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the architecture, how to run it locally,
 and how the three tiers of tests work.
 
+## Made by Praktical
+
+GitHawk is built by **Praktical**, the company behind a small family of developer tools.
+Our other products:
+
+- **[GitGrit](https://gitgrit.dev)**: define your engineering standards as code, and see how every repository measures up.
+- **[HermiTile](https://github.com/kfirzvi-com/hermitile)**: layouts for VS Code's panels, switched from the keyboard.
+
 ## Licence
 
 MIT — see [LICENSE](LICENSE). Actually MIT, in the sense that you may fork it,
