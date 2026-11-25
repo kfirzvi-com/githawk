@@ -11,7 +11,8 @@ import { AiTool } from './config';
 import { log } from './log';
 
 export interface CommitControllerDeps {
-    createWriter: () => IGitWriter;
+    /** The selected repository's writer, or the named one's. */
+    createWriter: (root?: string) => IGitWriter;
     createWorkingTreeReader: () => IWorkingTreeReader;
     commandRunner: ITextCommandRunner;
     /** The repository the changes belong to, and the tool's working directory. */
@@ -32,19 +33,20 @@ export interface CommitControllerDeps {
 export class CommitController {
     constructor(private readonly deps: CommitControllerDeps) {}
 
-    private runner(): ActionRunner {
-        return new ActionRunner(this.deps.createWriter(), this.deps.onCompleted);
+    private runner(root?: string): ActionRunner {
+        return new ActionRunner(this.deps.createWriter(root), this.deps.onCompleted);
     }
 
-    async stage(paths: string[]): Promise<void> {
+    /** `root` is the repository the rows came from, which may not be the selected one. */
+    async stage(paths: string[], root?: string): Promise<void> {
         if (paths.length > 0) {
-            await this.runner().run({ type: 'stageFiles', paths });
+            await this.runner(root).run({ type: 'stageFiles', paths });
         }
     }
 
-    async unstage(paths: string[]): Promise<void> {
+    async unstage(paths: string[], root?: string): Promise<void> {
         if (paths.length > 0) {
-            await this.runner().run({ type: 'unstageFiles', paths });
+            await this.runner(root).run({ type: 'unstageFiles', paths });
         }
     }
 

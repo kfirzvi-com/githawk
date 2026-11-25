@@ -74,10 +74,13 @@ export class ExplorerReveal {
         return fsPath;
     }
 
-    /** A path in the repository, for a path git handed us. */
-    resolvePath(repositoryRelative: string): string | undefined {
-        const root = this.repositoryRoot();
-        return root ? join(root, repositoryRelative) : undefined;
+    /**
+     * A path in the repository, for a path git handed us. `root` names the
+     * repository when it is not the selected one.
+     */
+    resolvePath(repositoryRelative: string, root?: string): string | undefined {
+        const base = root ?? this.repositoryRoot();
+        return base ? join(base, repositoryRelative) : undefined;
     }
 
     private resolve(uri: vscode.Uri): string | undefined {
@@ -85,7 +88,8 @@ export class ExplorerReveal {
             return uri.fsPath;
         }
         if (uri.scheme === REVISION_SCHEME) {
-            return this.resolvePath(decodeRevisionUri(uri).path);
+            const { path, root } = decodeRevisionUri(uri);
+            return this.resolvePath(path, root);
         }
         return undefined;
     }

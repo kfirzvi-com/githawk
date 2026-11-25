@@ -3,6 +3,7 @@ import {
     DirectoryNode,
     TreeNode,
     buildComparisonTree,
+    buildRepositoriesTree,
     buildTree,
     countFiles,
     describeChange,
@@ -23,13 +24,30 @@ const file = (path: string, overrides: Partial<FileChangeDto> = {}): FileChangeD
     ...overrides,
 });
 
+const comparison = (
+    overrides: Partial<ComparisonDto> = {}
+): ComparisonDto => ({
+    spec: { kind: 'twoRefs', left: 'abc', right: 'def' },
+    label: 'x',
+    method: 'direct',
+    methodExplanation: '',
+    files: [],
+    totals: { files: 0, insertions: 0, deletions: 0, binaryFiles: 0 },
+    baseRev: 'abc',
+    targetRev: 'def',
+    skipped: [],
+    ...overrides,
+});
+
 const labels = (nodes: TreeNode[]) =>
     nodes.map((node) =>
         node.kind === 'file'
             ? node.change.path
             : node.kind === 'hunk'
               ? node.hunk.id
-              : node.label
+              : node.kind === 'repository'
+                ? node.name
+                : node.label
     );
 
 const directory = (nodes: TreeNode[], label: string): DirectoryNode => {
@@ -212,20 +230,6 @@ describe('markdownTooltipSource', () => {
 });
 
 describe('buildComparisonTree', () => {
-    const comparison = (
-        overrides: Partial<ComparisonDto> = {}
-    ): ComparisonDto => ({
-        spec: { kind: 'twoRefs', left: 'abc', right: 'def' },
-        label: 'x',
-        method: 'direct',
-        methodExplanation: '',
-        files: [],
-        totals: { files: 0, insertions: 0, deletions: 0, binaryFiles: 0 },
-        baseRev: 'abc',
-        targetRev: 'def',
-        skipped: [],
-        ...overrides,
-    });
 
     test('a comparison without groups starts at the directories', () => {
         const tree = buildComparisonTree(
@@ -324,5 +328,53 @@ describe('untracked files', () => {
         expect(source).toContain('**Untracked**');
         expect(source).toContain('stage it');
         expect(source).not.toContain('+0');
+    });
+});
+
+describe('buildRepositoriesTree', () => {
+    const workingTree = (...paths: string[]) =>
+        comparison({
+            method: 'workingTree',
+            groups: [{ kind: 'unstaged', files: paths.map((path) => file(path)), baseRev: ':0' }],
+        });
+    const section = (name: string, active: boolean, ...paths: string[]) => ({
+        repository: { root: `/work/${name}`, name },
+        branch: 'main',
+        active,
+        comparison: workingTree(...paths),
+    });
+
+    test('puts the active repository first and the rest by name', () => {
+        const tree = buildRepositoriesTree([
+            section('zeta', false, 'z.ts'),
+            section('beta', true, 'b.ts'),
+            section('alpha', false, 'a.ts'),
+        ]);
+
+        expect(labels(tree)).toEqual(['beta', 'alpha', 'zeta']);
+    });
+
+    /**
+     * The whole point of the feature: two repositories can both have a
+     * src/index.ts, and staging one must not stage the other.
+     */
+    test('every row beneath a repository carries that repository', () => {
+        const tree = buildRepositoriesTree([
+            section('app', true, 'src/index.ts'),
+            section('lib', false, 'src/index.ts'),
+        ]);
+
+        const [app, lib] = tree;
+        expect(filesBeneath(app).map((row) => row.root)).toEqual(['/work/app']);
+        expect(filesBeneath(lib).map((row) => row.root)).toEqual(['/work/lib']);
+        expect(app.children.every((child) => child.kind === 'group' && child.root === '/work/app')).toBe(true);
+        const group = lib.children[0];
+        expect(group.kind === 'group' && directory(group.children, 'src').root).toBe('/work/lib');
+    });
+
+    test('a single comparison carries the root it was given', () => {
+        const tree = buildComparisonTree(workingTree('src/deep/a.ts'), '/work/app');
+
+        expect(tree.flatMap(filesBeneath).map((row) => row.root)).toEqual(['/work/app']);
     });
 });

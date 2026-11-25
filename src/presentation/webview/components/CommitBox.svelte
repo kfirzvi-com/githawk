@@ -128,10 +128,10 @@
     wrap: the sidebar can be dragged to a couple of hundred pixels, and a
     box that scrolled sideways there would hide its own Commit button.
 -->
-<div class="flex min-w-0 flex-col gap-2 p-2 text-fg" data-testid="commit-box">
+<div class="flex min-h-0 min-w-0 flex-1 flex-col gap-2 p-2 text-fg [&>*:not(textarea)]:shrink-0" data-testid="commit-box">
     <textarea
         bind:this={textarea}
-        class="block min-h-[4.5rem] w-full min-w-0 max-w-full resize-y rounded-sm border border-input-line bg-input px-2 py-1.5 font-sans text-[13px] leading-snug text-input-fg placeholder:text-input-placeholder focus:border-focus focus:outline-none"
+        class="block min-h-[2.75rem] w-full min-w-0 max-w-full flex-1 resize-none rounded-sm border border-input-line bg-input px-2 py-1.5 font-sans text-[13px] leading-snug text-input-fg placeholder:text-input-placeholder focus:border-focus focus:outline-none"
         placeholder="Message ({navigator.platform.includes('Mac') ? '⌘' : 'Ctrl+'}Enter to commit)"
         aria-label="Commit message"
         data-testid="commit-message"

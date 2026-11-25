@@ -170,3 +170,86 @@ test('fits a narrow sidebar without scrolling sideways', async ({ page }) => {
         fullPage: true,
     });
 });
+
+/**
+ * The graph toolbar's two selectors, above the box — `?repo=` turns them on.
+ * They ask the host to run the same pickers the graph's toolbar runs.
+ */
+test('the repository and branch selectors open the host pickers', async ({ page }) => {
+    const seen = posts(page);
+    await open(page, '?dirty=1&repo=githawk&repos=3&branch=feature%2Fmulti-repo');
+
+    const repository = page.getByTestId('commit-repository-picker');
+    const branch = page.getByTestId('commit-branch-picker');
+    await expect(repository).toContainText('githawk');
+    await expect(repository).toContainText('+2');
+    await expect(branch).toContainText('feature/multi-repo');
+
+    await repository.click();
+    await branch.click();
+    expect(seen.some((line) => line.includes('commit:pickRepository'))).toBe(true);
+    expect(seen.some((line) => line.includes('commit:pickBranch'))).toBe(true);
+});
+
+test('no repository yet, no selectors', async ({ page }) => {
+    await open(page, '?dirty=1');
+
+    await expect(page.getByTestId('commit-repository-bar')).toHaveCount(0);
+});
+
+test('long names truncate rather than scroll a narrow sidebar sideways', async ({ page }) => {
+    await page.setViewportSize({ width: 190, height: 320 });
+    await open(
+        page,
+        '?dirty=3&repo=a-repository-with-a-very-long-name&branch=feature%2Fa-branch-name-that-goes-on-and-on'
+    );
+
+    const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+    );
+    expect(overflow).toBe(0);
+});
+
+test('looks right — the commit box with its selectors', async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 300 });
+    await open(page, '?dirty=2,1,3&repo=githawk&repos=3&branch=main');
+
+    await expect(page).toHaveScreenshot('commit-box-selectors.png', { fullPage: true });
+});
+
+/**
+ * Nothing uncommitted on screen: the selectors stay, so the repository and
+ * branch can be changed from the sidebar at any time; the box goes.
+ */
+test('with no working tree on screen only the selectors are drawn', async ({ page }) => {
+    await page.goto('/commit.html?repo=githawk&repos=3&box=0');
+
+    await expect(page.getByTestId('commit-repository-picker')).toBeVisible();
+    await expect(page.getByTestId('commit-box')).toHaveCount(0);
+});
+
+/**
+ * VS Code gives the view whatever height the sidebar leaves it. The message
+ * box gives way; the buttons under it never fall below the fold.
+ */
+test('a short view keeps every button in sight', async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 210 });
+    await open(page, '?dirty=0,2,1&repo=githawk&repos=3&branch=main');
+
+    const overflow = await page.evaluate(
+        () => document.documentElement.scrollHeight - document.documentElement.clientHeight
+    );
+    expect(overflow).toBe(0);
+    for (const id of ['commit-button', 'stage-all', 'commit-scope']) {
+        const box = (await page.getByTestId(id).boundingBox())!;
+        expect(box.y + box.height, id).toBeLessThanOrEqual(210);
+    }
+});
+
+test('a tall view gives the room to the message', async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 480 });
+    await open(page, '?dirty=2&repo=githawk&repos=3&branch=main');
+
+    const message = (await page.getByTestId('commit-message').boundingBox())!;
+    expect(message.height).toBeGreaterThan(200);
+});

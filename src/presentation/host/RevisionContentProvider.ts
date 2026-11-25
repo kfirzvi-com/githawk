@@ -11,12 +11,12 @@ export const REVISION_SCHEME = 'githawk-rev';
 export class RevisionContentProvider
     implements vscode.TextDocumentContentProvider
 {
-    constructor(private readonly readerFor: () => IComparisonReader) {}
+    constructor(private readonly readerFor: (root?: string) => IComparisonReader) {}
 
     async provideTextDocumentContent(uri: vscode.Uri): Promise<string> {
-        const { rev, path } = decodeRevisionUri(uri);
+        const { rev, path, root } = decodeRevisionUri(uri);
         try {
-            return await this.readerFor().fileContentAt(rev, path);
+            return await this.readerFor(root).fileContentAt(rev, path);
         } catch (error) {
             return `Could not read ${path} at ${rev}\n\n${
                 error instanceof Error ? error.message : String(error)
@@ -30,17 +30,24 @@ export class RevisionContentProvider
  * syntax highlighting from the file extension; the revision travels in the query
  * so it does not disturb that.
  */
-export function encodeRevisionUri(rev: string, path: string): vscode.Uri {
+/**
+ * `root` names the repository when it is not the one the graph shows — a row
+ * of another repository in the Changes view. Left out otherwise, so every
+ * URI made before there was a choice still reads the same.
+ */
+export function encodeRevisionUri(rev: string, path: string, root?: string): vscode.Uri {
     return vscode.Uri.from({
         scheme: REVISION_SCHEME,
         path: `/${path}`,
         query: rev,
+        fragment: root ?? '',
     });
 }
 
-export function decodeRevisionUri(uri: vscode.Uri): { rev: string; path: string } {
+export function decodeRevisionUri(uri: vscode.Uri): { rev: string; path: string; root?: string } {
     return {
         rev: uri.query,
         path: uri.path.replace(/^\//, ''),
+        root: uri.fragment || undefined,
     };
 }

@@ -31,6 +31,16 @@ export function startCommitHost(): void {
             selectedTool,
             draft,
             busy,
+            // Only when asked for, so the box's own baselines stay as they are.
+            repository: parameters.has('repo')
+                ? {
+                      name: parameters.get('repo') || 'githawk',
+                      detail: '/work/githawk',
+                      count: Number(parameters.get('repos') ?? '3'),
+                      branch: parameters.get('branch') ?? 'main',
+                  }
+                : undefined,
+            workingTreeShown: parameters.get('box') !== '0',
         });
 
     /*

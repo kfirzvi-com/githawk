@@ -94,6 +94,12 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
      * reader clicked a commit and the tree showed the working tree.
      */
     private comparisonTicket = 0;
+    /**
+     * The working tree is on screen because nothing else was asked for, not
+     * because the reader asked for it. The sidebar shows it; the graph is not
+     * told, so a default never puts a summary in the panel.
+     */
+    private showingDefault = false;
 
     constructor(
         private readonly extensionUri: vscode.Uri,
@@ -106,7 +112,11 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
         private readonly createRemoteReader: RemoteReaderFactory,
         private readonly createStashReader: StashReaderFactory,
         private readonly createWorkingTreeReader: WorkingTreeReaderFactory,
-        private readonly revisions: RevisionBrowser
+        private readonly revisions: RevisionBrowser,
+        /** HEAD's name in any repository, for the headings of the Changes tree. */
+        private readonly readBranch: (root: string) => Promise<string | undefined> = async () => undefined,
+        /** The Changes view's toggle: every repository's working tree, or the selected one's. */
+        private readonly showsAllRepositories: () => boolean = () => false
     ) {}
 
     resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -159,14 +169,37 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
      * call it: two diffs and a status, no log.
      */
     async refreshWorkingTree(): Promise<void> {
+        const ticket = this.comparisonTicket;
         if (this.view) {
             await this.sendWorkingTree();
         } else {
             await this.readWorkingTree();
         }
+        /*
+         * Something was asked for while the status was being read — a commit
+         * picked straight after switching repository. That comparison is what
+         * the tree should show; redrawing the working tree now would take a
+         * newer ticket than it and replace the answer with the default.
+         */
+        if (ticket !== this.comparisonTicket) {
+            return;
+        }
         if (this.changedFiles.showsWorkingTree) {
             await this.compareWorkingTree('none');
+        } else if (!this.changedFiles.current) {
+            await this.showDefault();
         }
+    }
+
+    /**
+     * What the Changes view shows when nothing was selected: the uncommitted
+     * changes. Asked for at startup, after a switch of repository, and
+     * whenever a selection is cleared — and quietly, for a clean tree: the
+     * view then says there is nothing uncommitted.
+     */
+    async showDefault(): Promise<void> {
+        this.showingDefault = true;
+        await this.compareWorkingTree('none');
     }
 
     /**
@@ -185,6 +218,11 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
         }
 
         this.lastRepositoryRoot = root;
+        // Every repository's changes are still every repository's changes;
+        // the refresh that follows only moves the check to the new one.
+        if (this.changedFiles.showsRepositories) {
+            return;
+        }
         if (this.changedFiles.current) {
             this.changedFiles.clear();
             this.post({ type: 'comparison:cleared' });
@@ -377,6 +415,7 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
                 break;
             case 'compare:clear':
                 this.changedFiles.clear();
+                void this.showDefault();
                 break;
         }
     }
@@ -471,7 +510,91 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
      * without the panel being open.
      */
     async compareWorkingTree(reveal: RevealMode = 'focus'): Promise<void> {
+        if (reveal !== 'none') {
+            this.showingDefault = false;
+        }
+        // A review is of one repository, so it keeps the tree to that one.
+        if (
+            this.showsAllRepositories() &&
+            this.repositories.all.length > 1 &&
+            !this.changedFiles.reviewing
+        ) {
+            await this.compareAllWorkingTrees(reveal);
+            return;
+        }
         await this.runComparison({ kind: 'workingTree' }, reveal);
+    }
+
+    /**
+     * Every repository's uncommitted changes, each under its own heading —
+     * what VS Code's Source Control shows for a workspace of several.
+     *
+     * Read in parallel and quietly: one status and two diffs per repository,
+     * and a repository that cannot be read costs its own heading, not the
+     * tree. The graph is told only about the selected repository's changes;
+     * nothing here moves it.
+     */
+    private async compareAllWorkingTrees(reveal: RevealMode): Promise<void> {
+        const ticket = ++this.comparisonTicket;
+        const activeRoot = this.repositories.active?.root;
+        const read = await Promise.all(
+            this.repositories.all.map(async (repository) => {
+                try {
+                    const [comparison, branch] = await Promise.all([
+                        this.comparisons.compare(
+                            { kind: 'workingTree' },
+                            { quiet: true, root: repository.root }
+                        ),
+                        this.readBranch(repository.root),
+                    ]);
+                    return {
+                        repository,
+                        branch,
+                        active: repository.root === activeRoot,
+                        comparison,
+                    };
+                } catch (error) {
+                    log.warn(
+                        `could not read the working tree of ${repository.root}: ${describeError(error)}`
+                    );
+                    return undefined;
+                }
+            })
+        );
+        if (ticket !== this.comparisonTicket) {
+            log.debug('dropping an all-repositories comparison that was overtaken');
+            return;
+        }
+
+        const sections = read.filter(
+            (section): section is NonNullable<typeof section> =>
+                section !== undefined && (section.comparison.groups?.length ?? 0) > 0
+        );
+        log.info(
+            `compared the working trees of ${read.length} repositories: ${sections.length} with changes`
+        );
+        if (sections.length === 0) {
+            this.changedFiles.clear();
+            this.post({ type: 'comparison:cleared' });
+            if (reveal === 'focus') {
+                vscode.window.setStatusBarMessage(
+                    'GitHawk: nothing to commit — every repository is clean',
+                    4000
+                );
+            }
+            return;
+        }
+
+        this.changedFiles.showRepositories(sections);
+        const active = sections.find((section) => section.active);
+        this.post(
+            active && !this.showingDefault
+                ? { type: 'comparison:loaded', comparison: active.comparison }
+                : { type: 'comparison:cleared' }
+        );
+        if (reveal === 'focus' || (reveal === 'ifUnseen' && !this.hasRevealedChanges)) {
+            await this.revealChangedFiles();
+        }
     }
 
     /** Any comparison, by what it asks for — how a review returns to the changeset it pinned. */
@@ -563,6 +686,9 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
         reveal: RevealMode
     ): Promise<void> {
         log.info(`comparing: ${JSON.stringify(spec)}`);
+        if (spec.kind !== 'workingTree') {
+            this.showingDefault = false;
+        }
         const ticket = ++this.comparisonTicket;
         try {
             const comparison = await this.comparisons.compare(spec, {
@@ -594,11 +720,15 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
                 return;
             }
 
-            this.changedFiles.show(comparison);
+            this.changedFiles.show(comparison, this.repositories.active?.root);
 
             // The webview needs telling too: without this the tree fills but the
             // graph panel shows nothing, so an action looks like it did nothing.
-            this.post({ type: 'comparison:loaded', comparison });
+            this.post(
+                this.showingDefault && spec.kind === 'workingTree'
+                    ? { type: 'comparison:cleared' }
+                    : { type: 'comparison:loaded', comparison }
+            );
 
             if (reveal === 'focus' || (reveal === 'ifUnseen' && !this.hasRevealedChanges)) {
                 await this.revealChangedFiles();
@@ -878,6 +1008,14 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
                     'focus'
                 ),
         });
+    }
+
+    /**
+     * Fetch, pull or push the selected repository — the toolbar's buttons,
+     * for a caller outside the webview: a row of the Repositories view.
+     */
+    runRemoteOperation(type: 'fetch' | 'pull' | 'push'): Promise<void> {
+        return this.createMenu().runRemoteOperation(type);
     }
 
     /** Exposed so a command can open the manager without going via the webview. */
