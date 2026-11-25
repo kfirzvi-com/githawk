@@ -20,6 +20,38 @@ All notable changes to GitHawk are documented here, following
   GitHawk opens that version's notes from this changelog, with a "Rate
   GitHawk" button.
 
+## [0.12.0] — 2026-11-25
+
+### Added
+
+- **The Repositories view.** With more than one repository in the workspace, the
+  top of the sidebar lists them all, one row each: branch, how many files are
+  uncommitted, and how far it is from its upstream — `main · 4 changed · ↑1 ↓2`.
+  Changed repositories take git's modified colour, conflicted ones its conflict
+  colour, and clean ones fade; the sidebar's badge counts the changed ones.
+  Click a row to select that repository. Hover it for **Commit**, **Pull**,
+  **Push** and **Check Out a Branch**, each only when it applies, and use the
+  filter in the title bar to hide the clean ones. It keeps up with files written
+  outside the editor too — by a build, a terminal, or an agent.
+- **Every repository's changes in one tree.** A toggle in the Changes view's
+  title bar lists each repository's uncommitted work under its own heading, the
+  selected one first. Staging, diffs, reveal and blame run in the repository a
+  row belongs to, and none of them moves the graph.
+- **Repository and branch selectors above the commit box**, so you can see —
+  and change — where a commit lands without leaving the sidebar.
+
+### Changed
+
+- The Changes view shows your uncommitted work whenever nothing else is
+  selected: at startup, after switching repository, and when a comparison is
+  cleared. **Clear** in its title bar is gone; it did the same thing.
+- The commit box fits the view, so its buttons never sit behind a scrollbar.
+
+### Fixed
+
+- A commit picked right after switching repository could be replaced by the
+  uncommitted changes a moment later.
+
 ## [0.11.0] — 2026-11-24
 
 ### Changed

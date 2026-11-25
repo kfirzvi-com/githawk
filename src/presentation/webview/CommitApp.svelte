@@ -1,5 +1,7 @@
 <script lang="ts">
     import CommitBox from './components/CommitBox.svelte';
+    import RepositoryBar from './components/RepositoryBar.svelte';
+    import type { CommitRepositoryDto } from '../../application/dto/messages';
     import {
         cleanWorkingTree,
         type WorkingTreeStatus,
@@ -25,6 +27,8 @@
     let draftVersion = $state(0);
     let hasDraft = $state(false);
     let busy = $state(false);
+    let repository = $state<CommitRepositoryDto | undefined>(undefined);
+    let workingTreeShown = $state(true);
     let box = $state<CommitBox | null>(null);
 
     const replaceDraft = (text: string) => {
@@ -40,6 +44,8 @@
                     tools = message.tools;
                     selectedTool = message.selectedTool;
                     busy = message.busy;
+                    repository = message.repository;
+                    workingTreeShown = message.workingTreeShown;
                     if (!hasDraft) {
                         hasDraft = true;
                         replaceDraft(message.draft);
@@ -66,19 +72,34 @@
     CSP — and silently not in VS Code. That is how the box shipped with a
     320px floor it had "removed".
 -->
-<div class="min-w-0 bg-pane font-sans">
-    <CommitBox
-        bind:this={box}
-        {status}
-        {tools}
-        {selectedTool}
-        {draft}
-        {draftVersion}
-        {busy}
-        onDraft={(message) => postToHost({ type: 'commit:draft', message })}
-        onSelectTool={(tool) => postToHost({ type: 'commit:selectTool', tool })}
-        onGenerate={(tool) => postToHost({ type: 'commit:generate', tool })}
-        onCommit={(message) => postToHost({ type: 'commit:submit', message })}
-        onStageAll={() => postToHost({ type: 'commit:stageAll' })}
-    />
+<!--
+    The page is exactly the view's height, and only the message box gives
+    way: VS Code sizes a webview view however the sidebar is dragged, with no
+    way to fit it to its content, and a box that scrolled hid its own Commit
+    button below the fold.
+-->
+<div class="flex h-screen min-w-0 flex-col bg-pane font-sans">
+    {#if repository}
+        <RepositoryBar
+            {repository}
+            onSelectRepository={() => postToHost({ type: 'commit:pickRepository' })}
+            onSwitchBranch={() => postToHost({ type: 'commit:pickBranch' })}
+        />
+    {/if}
+    {#if workingTreeShown}
+        <CommitBox
+            bind:this={box}
+            {status}
+            {tools}
+            {selectedTool}
+            {draft}
+            {draftVersion}
+            {busy}
+            onDraft={(message) => postToHost({ type: 'commit:draft', message })}
+            onSelectTool={(tool) => postToHost({ type: 'commit:selectTool', tool })}
+            onGenerate={(tool) => postToHost({ type: 'commit:generate', tool })}
+            onCommit={(message) => postToHost({ type: 'commit:submit', message })}
+            onStageAll={() => postToHost({ type: 'commit:stageAll' })}
+        />
+    {/if}
 </div>

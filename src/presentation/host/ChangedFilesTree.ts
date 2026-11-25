@@ -12,9 +12,12 @@ import {
     FileNode,
     GroupNode,
     HunkNode,
+    RepositoryNode,
+    RepositorySection,
     TreeNode,
     basename,
     buildComparisonTree,
+    buildRepositoriesTree,
     countFiles,
     describeChange,
     filesBeneath,
@@ -51,6 +54,7 @@ export const GROUP_CONTEXT: Record<ChangeGroupKind, string> = {
 };
 
 export const HUNK_CONTEXT = 'gitHawkHunk';
+export const REPOSITORY_CONTEXT = 'gitHawkRepository';
 
 /**
  * What a review adds to the tree: a checkbox on every file, and the file's
@@ -89,6 +93,12 @@ export class ChangedFilesTree implements vscode.TreeDataProvider<TreeNode> {
     readonly onDidChangeTreeData = this.changed.event;
 
     private comparison?: ComparisonDto;
+    /**
+     * Set while the tree shows every repository's working tree at once. The
+     * comparison above is then the active repository's, which is the one a
+     * review or the commit box acts on, or undefined when it has nothing.
+     */
+    private sections?: readonly RepositorySection[];
     private roots: TreeNode[] = [];
     /** Each node's parent, which `reveal` needs to find a node's place. */
     private parents = new Map<TreeNode, TreeNode>();
@@ -112,6 +122,13 @@ export class ChangedFilesTree implements vscode.TreeDataProvider<TreeNode> {
     private readonly shown = new vscode.EventEmitter<ComparisonDto | undefined>();
     /** Fires after every show and clear, with what is now on screen. */
     readonly onDidShow = this.shown.event;
+    private readonly reviewToggled = new vscode.EventEmitter<boolean>();
+    /**
+     * Fires when a review starts or stops owning the tree. A review is of
+     * one repository, so starting one narrows an all-repositories tree to it,
+     * and ending one is the cue to widen it again.
+     */
+    readonly onDidToggleReview = this.reviewToggled.event;
 
     constructor(private readonly decorations: ChangeDecorationProvider) {}
 
@@ -131,25 +148,48 @@ export class ChangedFilesTree implements vscode.TreeDataProvider<TreeNode> {
 
     /** True while the tree shows the uncommitted changeset. */
     get showsWorkingTree(): boolean {
-        return this.comparison?.groups !== undefined;
+        return this.sections !== undefined || this.comparison?.groups !== undefined;
     }
 
-    show(comparison: ComparisonDto): void {
+    /** True while the tree shows several repositories, one heading each. */
+    get showsRepositories(): boolean {
+        return this.sections !== undefined;
+    }
+
+    /**
+     * One comparison. `root` is the repository it was read from, which every
+     * row then carries.
+     */
+    show(comparison: ComparisonDto, root?: string): void {
+        this.sections = undefined;
         this.comparison = comparison;
-        this.roots = buildComparisonTree(comparison);
+        this.display(buildComparisonTree(comparison, root));
+    }
+
+    /** Every repository with something uncommitted, each under its own heading. */
+    showRepositories(sections: readonly RepositorySection[]): void {
+        this.sections = sections;
+        this.comparison = sections.find((section) => section.active)?.comparison;
+        this.display(buildRepositoriesTree(sections));
+    }
+
+    private display(roots: TreeNode[]): void {
+        this.roots = roots;
         this.parents = parentsOf(this.roots);
         this.decorations.setChanges(
             this.roots.flatMap(filesBeneath).map((node) => ({
                 change: node.change,
                 group: node.group,
+                root: node.root,
             }))
         );
         this.changed.fire(undefined);
         this.describe();
-        this.shown.fire(comparison);
+        this.shown.fire(this.comparison);
     }
 
     clear(): void {
+        this.sections = undefined;
         this.comparison = undefined;
         this.roots = [];
         this.parents = new Map();
@@ -159,15 +199,35 @@ export class ChangedFilesTree implements vscode.TreeDataProvider<TreeNode> {
         this.shown.fire(undefined);
     }
 
-    /** Every file row, in the order the tree shows them — the order a review walks. */
+    /**
+     * Every file row, in the order the tree shows them — the order a review
+     * walks. With several repositories on screen, only the active one's: a
+     * review is of one repository, and its hunks are read from that one.
+     */
     get files(): FileNode[] {
-        return this.roots.flatMap(filesBeneath);
+        const roots = this.sections
+            ? this.roots.filter(
+                  (node) => node.kind === 'repository' && node.active
+              )
+            : this.roots;
+        return roots.flatMap(filesBeneath);
     }
 
     /** Turns review mode on for what is on screen, or off. */
     setReview(review: ReviewOverlay | undefined): void {
+        const toggled = (review !== undefined) !== (this.review !== undefined);
         this.review = review;
+        if (review && this.sections) {
+            // A review is of one repository: the others step aside until it ends.
+            const active = this.sections.find((section) => section.active);
+            if (active) {
+                this.show(active.comparison, active.repository.root);
+            }
+        }
         this.refreshReview();
+        if (toggled) {
+            this.reviewToggled.fire(review !== undefined);
+        }
     }
 
     /** A line about a review in progress that is not what the view is showing. */
@@ -257,6 +317,10 @@ export class ChangedFilesTree implements vscode.TreeDataProvider<TreeNode> {
     }
 
     getTreeItem(node: TreeNode): vscode.TreeItem {
+        if (node.kind === 'repository') {
+            return this.repositoryItem(node);
+        }
+
         if (node.kind === 'group') {
             return this.groupItem(node);
         }
@@ -275,11 +339,38 @@ export class ChangedFilesTree implements vscode.TreeDataProvider<TreeNode> {
             item.description = `${files} ${files === 1 ? 'file' : 'files'}`;
             item.contextValue = 'gitHawkDirectory';
             // The section is part of it: the same folder can be under two.
-            item.id = `${this.generation}:${node.group ?? ''}:${node.path}`;
+            item.id = `${this.generation}:${node.root ?? ''}:${node.group ?? ''}:${node.path}`;
             return item;
         }
 
         return this.fileItem(node);
+    }
+
+    /**
+     * A repository's heading. The check is the repository picker's own mark
+     * for the one the graph and the commit box are pointed at; nothing here
+     * changes which that is — the selector above does.
+     */
+    private repositoryItem(node: RepositoryNode): vscode.TreeItem {
+        const item = new vscode.TreeItem(
+            node.name,
+            vscode.TreeItemCollapsibleState.Expanded
+        );
+        const files = countFiles(node);
+        item.iconPath = new vscode.ThemeIcon(node.active ? 'check' : 'repo');
+        item.description = [node.branch, `${files}`].filter(Boolean).join('  ·  ');
+        item.tooltip = new vscode.MarkdownString(
+            [
+                `**${node.name}**${node.branch ? ` on \`${node.branch}\`` : ''}`,
+                `\`${node.root}\``,
+                node.active
+                    ? '_Shown in the graph; the commit box commits here._'
+                    : '_Switch to it with the repository selector to commit here._',
+            ].join('\n\n')
+        );
+        item.contextValue = REPOSITORY_CONTEXT;
+        item.id = `${this.generation}:repository:${node.root}`;
+        return item;
     }
 
     private groupItem(node: GroupNode): vscode.TreeItem {
@@ -294,7 +385,7 @@ export class ChangedFilesTree implements vscode.TreeDataProvider<TreeNode> {
         // A stable id per section keeps its expanded state across reloads:
         // staging a file rebuilds the tree, and a section that folded itself
         // every time would be unusable.
-        item.id = `${this.generation}:group:${node.group}`;
+        item.id = `${this.generation}:group:${node.root ?? ''}:${node.group}`;
         return item;
     }
 
@@ -305,7 +396,7 @@ export class ChangedFilesTree implements vscode.TreeDataProvider<TreeNode> {
         // A private scheme, not file:. VS Code still resolves the icon from the
         // extension, and the decoration provider can colour these rows without
         // touching identically-named files elsewhere in the workbench.
-        item.resourceUri = changeUri(change.path, node.group);
+        item.resourceUri = changeUri(change.path, node.group, node.root);
         item.description = describeChange(change);
         item.tooltip = new vscode.MarkdownString(
             markdownTooltipSource(change)
@@ -353,7 +444,7 @@ export class ChangedFilesTree implements vscode.TreeDataProvider<TreeNode> {
         // An id makes VS Code remember the row's fold across a refresh. The
         // state is in it so that finishing a file folds it away — GitHub's
         // "viewed" does the same — and unticking opens it again.
-        item.id = `${this.generation}:${node.group ?? ''}:file:${node.change.path}:${state === 'viewed' ? 'v' : 'o'}`;
+        item.id = `${this.generation}:${node.root ?? ''}:${node.group ?? ''}:file:${node.change.path}:${state === 'viewed' ? 'v' : 'o'}`;
     }
 
     private hunkItem(node: HunkNode): vscode.TreeItem {
@@ -414,11 +505,16 @@ export class ChangedFilesTree implements vscode.TreeDataProvider<TreeNode> {
             return;
         }
 
+        if (this.sections) {
+            this.describeRepositories(this.sections);
+            return;
+        }
+
         if (!this.comparison) {
             this.view.title = 'Changes';
             this.view.description = undefined;
             this.view.message = [
-                'Select a commit in the Git Graph panel, or compare two branches, to see what changed.',
+                'No uncommitted changes. Select a commit in the Git Graph panel, or compare two branches, to see what changed.',
                 this.reviewNote,
             ]
                 .filter(Boolean)
@@ -467,6 +563,23 @@ export class ChangedFilesTree implements vscode.TreeDataProvider<TreeNode> {
                     : undefined;
         }
     }
+
+    /** Totals across every repository on screen. */
+    private describeRepositories(sections: readonly RepositorySection[]): void {
+        const view = this.view!;
+        const files = sections.reduce((sum, section) => sum + section.comparison.totals.files, 0);
+        const insertions = sections.reduce((sum, section) => sum + section.comparison.totals.insertions, 0);
+        const deletions = sections.reduce((sum, section) => sum + section.comparison.totals.deletions, 0);
+
+        view.title = 'Uncommitted changes';
+        view.description = `${plural(files, 'file', 'files')} in ${plural(sections.length, 'repository', 'repositories')}  +${insertions} −${deletions}`;
+        view.message = this.reviewNote;
+        view.badge = { value: files, tooltip: `${files} changed files` };
+    }
+}
+
+function plural(count: number, one: string, many: string): string {
+    return `${count} ${count === 1 ? one : many}`;
 }
 
 function groupTooltip(kind: ChangeGroupKind): string {

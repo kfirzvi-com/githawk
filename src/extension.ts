@@ -58,6 +58,7 @@ import type { RevisionNode } from './presentation/host/revisionFilesTreeModel';
 import {
     AUTO_REFRESH_SETTING,
     BLAME_STYLE_SETTING,
+    autoRefreshEnabled,
     CONFIG_SECTION,
     SCAN_DEPTH_SETTING,
     toggleBlame,
@@ -73,6 +74,15 @@ import {
     encodeRevisionUri,
 } from './presentation/host/RevisionContentProvider';
 import { CommitController } from './presentation/host/CommitController';
+import { RepositoryScope } from './presentation/host/RepositoryScope';
+import { GitCliCurrentBranchReader } from './infrastructure/git/GitCliCurrentBranchReader';
+import { GitCliRepositorySummaryReader } from './infrastructure/git/GitCliRepositorySummaryReader';
+import {
+    REPOSITORIES_VIEW_ID,
+    RepositoriesTree,
+} from './presentation/host/RepositoriesTree';
+import { RepositoriesWatcher } from './presentation/host/RepositoriesWatcher';
+import type { RepositoryRow } from './presentation/host/repositoriesTreeModel';
 import { ExplorerReveal } from './presentation/host/ExplorerReveal';
 import {
     COMMIT_VIEW_ID,
@@ -153,6 +163,9 @@ export async function activate(
     );
     repositoryRegistry = repositories;
     context.subscriptions.push(repositories);
+    const scope = new RepositoryScope(context.workspaceState);
+    context.subscriptions.push(scope);
+    const readBranch = (root: string) => new GitCliCurrentBranchReader(root).read();
 
     const explorer = new ExplorerReveal(() => repositories.active?.root);
     const comparisons = new ComparisonController(
@@ -231,7 +244,9 @@ export async function activate(
         createRemoteReader,
         createStashReader,
         createWorkingTreeReader,
-        revisions
+        revisions,
+        readBranch,
+        () => scope.showsAll
     );
 
     /*
@@ -495,18 +510,178 @@ export async function activate(
     );
     context.subscriptions.push({ dispose: () => refreshWorkingTree.cancel() });
 
-    /** A file event under the active repository is a change to its working tree. */
+    /**
+     * A file event under a repository the Changes view shows is a change to
+     * its working tree: the selected one, or any of them while the view shows
+     * every repository.
+     */
     const touchesActiveRepository = (uris: readonly vscode.Uri[]) => {
         const root = repositories.active?.root;
         return (
             root !== undefined &&
-            uris.some(
-                (uri) =>
-                    uri.scheme === 'file' &&
-                    repositories.containing(uri.fsPath)?.root === root
-            )
+            uris.some((uri) => {
+                if (uri.scheme !== 'file') {
+                    return false;
+                }
+                const owner = repositories.containing(uri.fsPath)?.root;
+                return owner === root || (owner !== undefined && changedFiles.showsRepositories);
+            })
         );
     };
+
+    /** The selectors above the commit box: the selected repository, and its branch. */
+    const describeCommitTarget = async () => {
+        const active = repositories.active;
+        commitView.setRepository(
+            active
+                ? {
+                      name: active.name,
+                      detail: active.description
+                          ? `${active.description} — ${active.root}`
+                          : active.root,
+                      count: repositories.all.length,
+                      branch: (await readBranch(active.root)) ?? null,
+                  }
+                : undefined
+        );
+    };
+
+    /*
+     * The Repositories view: every repository on one line, kept current by a
+     * watcher on each one's .git and by the same file events that keep the
+     * Changes view current — but for whichever repository the file is in,
+     * not only the selected one.
+     */
+    const repositoriesTree = new RepositoriesTree(
+        repositories,
+        (root) => new GitCliRepositorySummaryReader(root),
+        context.workspaceState
+    );
+    const repositoriesView = vscode.window.createTreeView(REPOSITORIES_VIEW_ID, {
+        treeDataProvider: repositoriesTree,
+    });
+    const repositoryWatchers = new RepositoriesWatcher(
+        () => new RepositoryWatcher((root) => new GitCliDirectoryReader(root))
+    );
+    const pendingSummaries = new Set<string>();
+    const refreshSummaries = new Debouncer(
+        () => {
+            const roots = [...pendingSummaries];
+            pendingSummaries.clear();
+            void repositoriesTree.refresh(roots);
+        },
+        WORKING_TREE_REFRESH_MS,
+        WORKING_TREE_REFRESH_MS * 4
+    );
+    const summarise = (root: string | undefined) => {
+        if (root !== undefined) {
+            pendingSummaries.add(root);
+            refreshSummaries.schedule();
+        }
+    };
+    const summariseOwnersOf = (uris: readonly vscode.Uri[]) => {
+        for (const uri of uris) {
+            if (uri.scheme === 'file') {
+                summarise(repositories.containing(uri.fsPath)?.root);
+            }
+        }
+    };
+    const workspaceFiles = vscode.workspace.createFileSystemWatcher('**/*');
+    const summariseOutsideGit = (uri: vscode.Uri) => {
+        if (autoRefreshEnabled() && !uri.path.includes('/.git/') && !uri.path.endsWith('/.git')) {
+            summariseOwnersOf([uri]);
+        }
+    };
+    /** A row's action is on its repository: it is selected first, as a click would. */
+    const onRow = async (row: RepositoryRow | undefined, act: () => Thenable<unknown>) => {
+        if (row) {
+            repositories.setActive(row.root);
+        }
+        await act();
+    };
+    context.subscriptions.push(
+        repositoriesTree,
+        repositoriesView,
+        repositoryWatchers,
+        { dispose: () => refreshSummaries.cancel() },
+        vscode.window.registerFileDecorationProvider(repositoriesTree.decorations),
+        repositoriesTree.onDidSummarise((count) => {
+            repositoriesView.badge =
+                count > 0
+                    ? {
+                          value: count,
+                          tooltip: `${count} ${count === 1 ? 'repository has' : 'repositories have'} uncommitted changes`,
+                      }
+                    : undefined;
+            repositoriesView.message =
+                repositoriesTree.hidesClean && count === 0
+                    ? 'Every repository is clean.'
+                    : undefined;
+        }),
+        repositories.onDidChange(() => {
+            void repositoryWatchers.watch(repositories.all.map((r) => r.root));
+            // A switch only moves the check; a rescan may have found new ones.
+            repositoriesTree.redraw();
+            void repositoriesTree.refreshAll();
+        }),
+        repositoryWatchers.onDidChange(summarise),
+        // The selected repository's status was just read for the commit box;
+        // its row should agree with it.
+        provider.onDidReadWorkingTree(() => summarise(repositories.active?.root)),
+        vscode.workspace.onDidSaveTextDocument((document) => summariseOwnersOf([document.uri])),
+        vscode.workspace.onDidCreateFiles((event) => summariseOwnersOf(event.files)),
+        vscode.workspace.onDidDeleteFiles((event) => summariseOwnersOf(event.files)),
+        vscode.workspace.onDidRenameFiles((event) =>
+            summariseOwnersOf(event.files.flatMap((file) => [file.oldUri, file.newUri]))
+        ),
+        /*
+         * A file written outside the editor — a terminal, an agent, a build —
+         * raises no save event. VS Code already watches the workspace, so
+         * this costs a subscription, not a second watcher; git's own churn
+         * is left to the watchers on each .git.
+         */
+        workspaceFiles,
+        workspaceFiles.onDidChange(summariseOutsideGit),
+        workspaceFiles.onDidCreate(summariseOutsideGit),
+        workspaceFiles.onDidDelete(summariseOutsideGit),
+        // Coming back from another app: a cheap catch-all for anything the
+        // watchers missed — they are excluded from some paths, and can drop
+        // events under load.
+        vscode.window.onDidChangeWindowState((state) => {
+            if (state.focused) {
+                for (const repository of repositories.all) {
+                    summarise(repository.root);
+                }
+            }
+        }),
+        vscode.commands.registerCommand('gitHawk.refreshRepositories', () =>
+            repositories.refresh()
+        ),
+        vscode.commands.registerCommand('gitHawk.hideCleanRepositories', () =>
+            repositoriesTree.setHideClean(true)
+        ),
+        vscode.commands.registerCommand('gitHawk.showCleanRepositories', () =>
+            repositoriesTree.setHideClean(false)
+        ),
+        vscode.commands.registerCommand('gitHawk.repository.commit', (row?: RepositoryRow) =>
+            onRow(row, () => vscode.commands.executeCommand('gitHawk.commit'))
+        ),
+        vscode.commands.registerCommand('gitHawk.repository.switchBranch', (row?: RepositoryRow) =>
+            onRow(row, () => provider.pickBranch())
+        ),
+        vscode.commands.registerCommand('gitHawk.repository.pull', (row?: RepositoryRow) =>
+            onRow(row, () => provider.runRemoteOperation('pull'))
+        ),
+        vscode.commands.registerCommand('gitHawk.repository.push', (row?: RepositoryRow) =>
+            onRow(row, () => provider.runRemoteOperation('push'))
+        ),
+        // The rows as VS Code was handed them, and the badge — what a user sees.
+        vscode.commands.registerCommand('gitHawk.repositoriesTree', () => ({
+            rows: repositoriesTree.rowsForTesting(),
+            badge: repositoriesView.badge?.value ?? 0,
+            hidesClean: repositoriesTree.hidesClean,
+        }))
+    );
 
     const rating = new RatingNotice(context.globalState, context.extension.id);
 
@@ -520,7 +695,35 @@ export async function activate(
             webviewOptions: { retainContextWhenHidden: true },
         }),
         // The counts the graph's row shows are the counts the box commits.
-        provider.onDidReadWorkingTree((status) => commitView.setStatus(status)),
+        provider.onDidReadWorkingTree((status) => {
+            commitView.setStatus(status);
+            // Every refresh, a checkout included, comes through here.
+            void describeCommitTarget();
+        }),
+        /*
+         * The toggle in the Changes view's title bar. Turning it either way
+         * redraws the working tree in place; the graph does not move.
+         */
+        vscode.commands.registerCommand('gitHawk.showAllRepositories', () =>
+            scope.set(true)
+        ),
+        vscode.commands.registerCommand('gitHawk.showSelectedRepository', () =>
+            scope.set(false)
+        ),
+        scope.onDidChange(() => void provider.compareWorkingTree('none')),
+        /*
+         * A review narrows the tree to its own repository; when it ends, the
+         * others come back.
+         */
+        // The box under the selectors exists while there is uncommitted work on screen.
+        changedFiles.onDidShow(() =>
+            commitView.setWorkingTreeShown(changedFiles.showsWorkingTree)
+        ),
+        changedFiles.onDidToggleReview((reviewing) => {
+            if (!reviewing && scope.showsAll && changedFiles.showsWorkingTree) {
+                void provider.refreshWorkingTree();
+            }
+        }),
         // Asks for a rating after several days of use; see ratingPrompt.
         // Not awaited, so a failure would vanish; log it where Show Log finds it.
         provider.onDidShowGraph(() =>
@@ -533,10 +736,10 @@ export async function activate(
          * clicking the + on a folder has to mean.
          */
         vscode.commands.registerCommand('gitHawk.stage', (node?: TreeNode) =>
-            commits.stage(pathsBeneath(node))
+            commits.stage(pathsBeneath(node), rootOf(node))
         ),
         vscode.commands.registerCommand('gitHawk.unstage', (node?: TreeNode) =>
-            commits.unstage(pathsBeneath(node))
+            commits.unstage(pathsBeneath(node), rootOf(node))
         ),
         vscode.commands.registerCommand('gitHawk.stageAll', () =>
             commits.stageAll()
@@ -687,6 +890,7 @@ export async function activate(
             repositories.refresh()
         ),
         repositories.onDidChange(() => {
+            scope.noteRepositoryCount(repositories.all.length);
             provider.refresh();
             // The scan may have chosen a different repository, and the watcher
             // is only ever pointed at one.
@@ -768,7 +972,7 @@ export async function activate(
          * the wrong diff for one of them.
          */
         vscode.commands.registerCommand(OPEN_DIFF_COMMAND, (node?: FileNode, hunk?: Hunk) => {
-            if (!changedFiles.current || !node) {
+            if (!node || (!changedFiles.current && !changedFiles.showsRepositories)) {
                 return;
             }
             // In a review a click is a step through it: the tree's selection
@@ -783,6 +987,7 @@ export async function activate(
                     previousPath: node.change.previousPath,
                     baseRev: node.baseRev,
                     targetRev: node.targetRev,
+                    root: node.root,
                 })
                 .catch((error: unknown) =>
                     vscode.window.showErrorMessage(
@@ -790,9 +995,11 @@ export async function activate(
                     )
                 );
         }),
-        vscode.commands.registerCommand('gitHawk.clearChanges', () =>
-            changedFiles.clear()
-        ),
+        // Back to the default: the uncommitted changes.
+        vscode.commands.registerCommand('gitHawk.clearChanges', () => {
+            changedFiles.clear();
+            return provider.showDefault();
+        }),
         changesView.onDidChangeCheckboxState((event) =>
             reviews.checkboxesChanged(event.items)
         ),
@@ -938,7 +1145,7 @@ export async function activate(
             (node?: TreeNode) => {
                 const path =
                     node?.kind === 'file'
-                        ? explorer.resolvePath(node.change.path)
+                        ? explorer.resolvePath(node.change.path, node.root)
                         : undefined;
                 return path ? explorer.reveal(vscode.Uri.file(path)) : undefined;
             }
@@ -1161,6 +1368,7 @@ export async function activate(
             ) {
                 // Re-reads the setting: installs the watchers, or removes them.
                 void watcher.watch(repositories.active?.root);
+                void repositoryWatchers.rewatch();
             } else if (event.affectsConfiguration(CONFIG_SECTION)) {
                 provider.refresh();
             }
@@ -1189,12 +1397,13 @@ function createGitRepository(): GitCliRepository {
     return new GitCliRepository({ cwd: activeRepositoryRoot(), limit });
 }
 
-function createGitWriter(): GitCliWriter {
-    return new GitCliWriter(activeRepositoryRoot());
+/** `root` for a row of another repository; the selected one otherwise. */
+function createGitWriter(root?: string): GitCliWriter {
+    return new GitCliWriter(root ?? activeRepositoryRoot());
 }
 
-function createGitComparer(): GitCliComparer {
-    return new GitCliComparer(activeRepositoryRoot());
+function createGitComparer(root?: string): GitCliComparer {
+    return new GitCliComparer(root ?? activeRepositoryRoot());
 }
 
 function createWorktreeReader(): GitCliWorktreeReader {
@@ -1304,6 +1513,14 @@ function reviewIdOf(arg: unknown): string | undefined {
 }
 
 /** The files a tree row stands for: itself, or everything beneath a folder or section. */
+/** The repository a row belongs to; undefined means the selected one. */
+function rootOf(node: TreeNode | undefined): string | undefined {
+    if (!node) {
+        return undefined;
+    }
+    return node.kind === 'hunk' ? node.file.root : node.root;
+}
+
 function pathsBeneath(node: TreeNode | undefined): string[] {
     if (!node) {
         return [];

@@ -116,7 +116,8 @@ and press Enter, and the sidebar becomes the place a commit is made:
   staged, which asks before staging everything — and <kbd>⌘</kbd>/<kbd>Ctrl</kbd>
   <kbd>Enter</kbd> to press it. A first line over 72 characters is pointed out.
   The draft survives clicking around the graph; the box leaves with the last
-  uncommitted file.
+  uncommitted file. Above it, the repository and branch the commit lands in,
+  each a click from a picker.
 - **Generate** asks an AI CLI to write the message. Pick the tool in the select
   beside it — Claude Code, Codex, Gemini CLI and opencode are configured out of
   the box, in `gitHawk.aiTools` — and the diff of what would be committed is
@@ -141,6 +142,10 @@ Every diff GitHawk opens — from a commit or from the working tree — has a
 **Reveal in Explorer View** button in its title bar and its tab's right-click
 menu, so the file you are reading a change to is one click from where it lives.
 The Changes tree's rows offer the same on right-click.
+
+With nothing selected in the graph, the Changes view shows the uncommitted work
+anyway — at startup, after switching repository, and when a comparison is
+cleared — so it is never an empty pane.
 
 The tree keeps up by itself: saving a file, or creating or deleting one through
 the explorer, moves it to the section it now belongs in. `GitHawk: Show
@@ -414,13 +419,29 @@ the left of the toolbar switches between them; so does
 **`GitHawk: Switch Repository`**. Switching moves everything with it — graph,
 menus, comparisons, and the Changes tree.
 
+The **Repositories** view, at the top of the sidebar whenever there is more than
+one, answers "which of these have I touched?" without switching to each: a row
+per repository with its branch, how many files are uncommitted, and how far it is
+ahead of or behind its upstream — `main · 4 changed · ↑1 ↓2`. Changed
+repositories take git's modified colour, conflicted ones its conflict colour, clean
+ones fade, and the sidebar's badge counts the changed ones. Click a row to select
+that repository; hover it for **Commit**, **Pull**, **Push** and **Check Out a
+Branch**, each offered only when it applies. The filter in its title bar hides the
+clean ones. It keeps up with commits and checkouts made anywhere, and with files
+written outside the editor — by a build, a terminal, or an agent.
+
+The Changes view can show them all at once, too: the toggle in its title bar lists
+every repository's uncommitted work under its own heading, the selected one first,
+as Source Control does. Staging, diffs and blame run in the repository a row
+belongs to, and none of them moves the graph.
+
 Submodules, linked worktrees, and repositories nested inside a monorepo are all
 found. How deep it looks is [`gitHawk.repositoryScanDepth`](#settings).
 
 ### Keep up with the repository
 
 Commit in a terminal, check out from the Source Control view, let an agent rebase
-in a worktree — the graph reloads on its own. GitHawk watches git's metadata, not
+in a worktree — the graph reloads on its own. The graph watches git's metadata, not
 your working tree, and waits for an operation to finish rather than redrawing on
 every step of a rebase. Your place in the history is kept: the row you are
 looking at stays where it is instead of sliding down as commits arrive above it.
@@ -481,7 +502,7 @@ different one, GitHawk switches to it and then shows the commit.
 | --- | --- | --- |
 | `gitHawk.commitLimit` | `500` | How many commits to read. Higher shows more and loads slower. |
 | `gitHawk.blame.style` | `off` | Blame in the editor: `column` for IntelliJ's annotate, `endOfLine` for one label per block. |
-| `gitHawk.autoRefresh` | `true` | Reload the graph when the repository changes outside GitHawk. Watches git's metadata, never your working tree. |
+| `gitHawk.autoRefresh` | `true` | Reload the graph when the repository changes outside GitHawk, and keep the Repositories view's counts current. The graph watches git's metadata only; the counts also follow files changing in the workspace. |
 | `gitHawk.repositoryScanDepth` | `2` | Directory levels below each opened folder to search for repositories. `0` searches the folders only; `2` covers a folder of projects, or a folder of buckets each holding projects. |
 | `gitHawk.aiTools` | Claude Code, Codex, Gemini CLI, opencode | The AI CLIs GitHawk knows: `command` for "Start an AI CLI here", `commitMessageCommand` — the same tool run once, non-interactively, prompt on stdin — for **Generate** in the commit box, and `promptCommand` — the tool started with a first message, `{prompt}` replaced by it — for handing a review over. Leave the optional ones out to keep a tool out of those pickers or, for `promptCommand`, to have the message typed in after `command`. |
 
@@ -495,6 +516,8 @@ different one, GitHawk switches to it and then shows the commit.
 | `GitHawk: Toggle Blame Annotations` | `Cmd+K B` / `Ctrl+K B` |
 | `GitHawk: Refresh Git Graph` | Also rescans for new repositories |
 | `GitHawk: Switch Repository` | |
+| `GitHawk: Show Changes of All Repositories` | Every repository's uncommitted work in the Changes view |
+| `GitHawk: Refresh Repositories` | Rescans for repositories and re-reads each one's status |
 | `GitHawk: Check Out A Branch` | The branch list as a picker |
 | `GitHawk: Who Wrote This Line` | `Cmd+K H` / `Ctrl+K H` |
 | `GitHawk: Show This Line's Commit In The Graph` | `Cmd+K G` / `Ctrl+K G` |
@@ -523,7 +546,6 @@ Honest list, in the order they are likely to annoy you:
   5000 is not.
 - **A conflicting merge or rebase leaves you mid-operation.** GitHawk reports git's
   message but offers no abort or resolution.
-- **One repository at a time** — there is no combined view across several.
 - **Repositories are found by scanning on load, not watched.** One cloned while the
   window is open needs a refresh.
 

@@ -5,12 +5,42 @@ import {
 } from '../../application/dto/ComparisonDto';
 import type { ChangeGroupKind } from '../../domain/models/Comparison';
 import type { Hunk } from '../../domain/models/Hunk';
+import type { RepositoryLocation } from '../../domain/models/RepositoryLocation';
 
 /**
- * A group sections the working tree; a directory groups children; a file
- * opens a diff; a hunk, shown only while reviewing, opens it at that change.
+ * A repository heads its own changes when the tree shows several; a group
+ * sections the working tree; a directory groups children; a file opens a
+ * diff; a hunk, shown only while reviewing, opens it at that change.
  */
-export type TreeNode = GroupNode | DirectoryNode | FileNode | HunkNode;
+export type TreeNode =
+    | RepositoryNode
+    | GroupNode
+    | DirectoryNode
+    | FileNode
+    | HunkNode;
+
+/**
+ * One repository's uncommitted changes, when the tree shows every repository
+ * in the workspace at once — VS Code's Source Control does the same.
+ */
+export interface RepositoryNode {
+    kind: 'repository';
+    root: string;
+    name: string;
+    /** HEAD's branch, or its short hash when detached. */
+    branch?: string;
+    /** The repository the graph and the commit box are pointed at. */
+    active: boolean;
+    children: TreeNode[];
+}
+
+/** What the tree is given for each repository with something uncommitted. */
+export interface RepositorySection {
+    repository: RepositoryLocation;
+    branch?: string;
+    active: boolean;
+    comparison: ComparisonDto;
+}
 
 /**
  * One section of the uncommitted changeset — Staged, Changes, Untracked,
@@ -21,6 +51,11 @@ export interface GroupNode {
     kind: 'group';
     group: ChangeGroupKind;
     label: string;
+    /**
+     * The repository the row belongs to. Every action on it — stage, unstage,
+     * open the diff — runs there, not in whichever repository the graph shows.
+     */
+    root?: string;
     /** Every file beneath, flat, for the group's own actions. */
     files: FileChangeDto[];
     children: TreeNode[];
@@ -33,6 +68,7 @@ export interface DirectoryNode {
     path: string;
     /** The section this folder is under, when the tree has sections. */
     group?: ChangeGroupKind;
+    root?: string;
     children: TreeNode[];
 }
 
@@ -49,6 +85,11 @@ export interface FileNode {
     /** The diff editor's two sides; falls back to the comparison's own. */
     baseRev: string;
     targetRev?: string;
+    /**
+     * The repository the row belongs to. Every action on it — stage, unstage,
+     * open the diff — runs there, not in whichever repository the graph shows.
+     */
+    root?: string;
 }
 
 /**
@@ -66,27 +107,62 @@ export interface HunkNode {
  * The tree for a comparison: sectioned when it has groups, a plain folder
  * tree otherwise.
  */
-export function buildComparisonTree(comparison: ComparisonDto): TreeNode[] {
+export function buildComparisonTree(
+    comparison: ComparisonDto,
+    root?: string
+): TreeNode[] {
     if (!comparison.groups) {
         return buildTree(comparison.files, {
             baseRev: comparison.baseRev,
             targetRev: comparison.targetRev,
+            root,
         });
     }
 
-    return comparison.groups.map((group) => buildGroup(group));
+    return comparison.groups.map((group) => buildGroup(group, root));
 }
 
-function buildGroup(group: ChangeGroupDto): GroupNode {
+/**
+ * Every repository's changes, one heading each. The one the graph shows comes
+ * first, so the commit box sits directly above the files it would commit; the
+ * rest follow by name.
+ */
+export function buildRepositoriesTree(
+    sections: readonly RepositorySection[]
+): RepositoryNode[] {
+    return [...sections]
+        .sort((a, b) =>
+            a.active !== b.active
+                ? a.active
+                    ? -1
+                    : 1
+                : a.repository.name.localeCompare(b.repository.name)
+        )
+        .map((section) => ({
+            kind: 'repository',
+            root: section.repository.root,
+            name: section.repository.name,
+            branch: section.branch,
+            active: section.active,
+            children: buildComparisonTree(
+                section.comparison,
+                section.repository.root
+            ),
+        }));
+}
+
+function buildGroup(group: ChangeGroupDto, root?: string): GroupNode {
     return {
         kind: 'group',
         group: group.kind,
         label: groupLabel(group.kind),
+        root,
         files: group.files,
         children: buildTree(group.files, {
             group: group.kind,
             baseRev: group.baseRev,
             targetRev: group.targetRev,
+            root,
         }),
     };
 }
@@ -109,6 +185,7 @@ interface FileContext {
     group?: ChangeGroupKind;
     baseRev: string;
     targetRev?: string;
+    root?: string;
 }
 
 /**
@@ -150,6 +227,7 @@ export function buildTree(
                     label: segment,
                     path: accumulated,
                     group: context.group,
+                    root: context.root,
                     children: [],
                 };
                 current.children.push(next);
@@ -163,6 +241,7 @@ export function buildTree(
             group: context.group,
             baseRev: context.baseRev,
             targetRev: context.targetRev,
+            root: context.root,
         });
     }
 
@@ -187,6 +266,7 @@ function collapseSingleChildDirectories(nodes: TreeNode[]): TreeNode[] {
                 label: `${collapsed.label}/${only.label}`,
                 path: only.path,
                 group: only.group,
+                root: only.root,
                 children: only.children,
             };
         }
@@ -218,6 +298,8 @@ function sortTree(directory: DirectoryNode): void {
 
 function nameOf(node: TreeNode): string {
     switch (node.kind) {
+        case 'repository':
+            return node.name;
         case 'group':
             return node.label;
         case 'directory':

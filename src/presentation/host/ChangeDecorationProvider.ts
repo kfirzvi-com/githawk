@@ -17,21 +17,29 @@ export const CHANGE_SCHEME = 'githawk-change';
  * is two rows with one path, and each has to be badged for its own state —
  * keyed on the path alone, the second would repaint the first.
  */
-export function changeUri(path: string, group?: ChangeGroupKind): vscode.Uri {
+export function changeUri(
+    path: string,
+    group?: ChangeGroupKind,
+    root?: string
+): vscode.Uri {
     return vscode.Uri.from({
         scheme: CHANGE_SCHEME,
         path: `/${path}`,
         query: group ?? '',
+        // Two repositories can both change src/index.ts; their rows must not
+        // share a colour.
+        fragment: root ?? '',
     });
 }
 
 function keyOf(uri: vscode.Uri): string {
-    return `${uri.query}:${uri.path.replace(/^\//, '')}`;
+    return uri.toString();
 }
 
 export interface DecoratedChange {
     change: FileChangeDto;
     group?: ChangeGroupKind;
+    root?: string;
 }
 
 /**
@@ -47,24 +55,18 @@ export class ChangeDecorationProvider
     private readonly changed = new vscode.EventEmitter<vscode.Uri[] | undefined>();
     readonly onDidChangeFileDecorations = this.changed.event;
 
-    private byKey = new Map<string, FileChangeDto>();
+    private byKey = new Map<string, { uri: vscode.Uri; change: FileChangeDto }>();
 
     setChanges(changes: DecoratedChange[]): void {
         const next = new Map(
-            changes.map(({ change, group }) => [
-                keyOf(changeUri(change.path, group)),
-                change,
-            ])
+            changes.map(({ change, group, root }) => {
+                const uri = changeUri(change.path, group, root);
+                return [keyOf(uri), { uri, change }] as const;
+            })
         );
-        const affected = [...this.byKey.keys(), ...next.keys()].map((key) => {
-            const separator = key.indexOf(':');
-            return changeUri(
-                key.slice(separator + 1),
-                (key.slice(0, separator) || undefined) as
-                    | ChangeGroupKind
-                    | undefined
-            );
-        });
+        const affected = [...this.byKey.values(), ...next.values()].map(
+            (entry) => entry.uri
+        );
 
         this.byKey = next;
         this.changed.fire(affected);
@@ -79,7 +81,7 @@ export class ChangeDecorationProvider
             return undefined;
         }
 
-        const change = this.byKey.get(keyOf(uri));
+        const change = this.byKey.get(keyOf(uri))?.change;
         if (!change) {
             return undefined;
         }
