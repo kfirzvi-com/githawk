@@ -3,6 +3,23 @@
 All notable changes to GitHawk are documented here, following
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+<!-- Each release's section is also GitHawk's What's New page. It shows only
+     `###` headings, flat `-` lists, **bold**, `code` and https links; anything
+     else appears as plain text. -->
+
+## [Unreleased]
+
+### Added
+
+- **A rating request, asked once.** After the graph has been opened on 7
+  different days, GitHawk asks for a rating in the store it came from, with
+  "Later" (asks once more, at 30 days) and "Don't Ask Again". Also the
+  `GitHawk: Rate GitHawk` command. The count stays in the editor; nothing is
+  sent.
+- **A What's New page after an update.** After a minor or major update,
+  GitHawk opens that version's notes from this changelog, with a "Rate
+  GitHawk" button.
+
 ## [0.12.0] — 2026-11-25
 
 ### Added

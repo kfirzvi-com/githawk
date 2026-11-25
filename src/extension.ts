@@ -52,6 +52,8 @@ import {
 } from './presentation/host/RevisionFilesTree';
 import { RevisionBrowser } from './presentation/host/RevisionBrowser';
 import { PublisherMoveNotice } from './presentation/host/PublisherMoveNotice';
+import { RatingNotice } from './presentation/host/RatingNotice';
+import { WhatsNewPanel } from './presentation/host/WhatsNewPanel';
 import type { RevisionNode } from './presentation/host/revisionFilesTreeModel';
 import {
     AUTO_REFRESH_SETTING,
@@ -138,9 +140,17 @@ export async function activate(
     log.info('GitHawk activated');
 
     // Only the last release under the old publisher; not awaited, since the
-    // notice waits on the user.
+    // notice waits on the user. Every other copy shows the What's New page
+    // after a minor or major update.
     if (PublisherMoveNotice.appliesTo(context.extension.id)) {
         void new PublisherMoveNotice().offer();
+    } else {
+        new WhatsNewPanel(context.globalState, {
+            extensionUri: context.extensionUri,
+            version: String(context.extension.packageJSON.version),
+        })
+            .onActivate()
+            .catch((error) => log.error("What's New page failed", error));
     }
 
     const repositories = new RepositoryRegistry(
@@ -673,6 +683,8 @@ export async function activate(
         }))
     );
 
+    const rating = new RatingNotice(context.globalState, context.extension.id);
+
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(GITHAWK_VIEW_ID, provider, {
             // Keep the graph alive while the panel is hidden; rebuilding it on
@@ -712,6 +724,12 @@ export async function activate(
                 void provider.refreshWorkingTree();
             }
         }),
+        // Asks for a rating after several days of use; see ratingPrompt.
+        // Not awaited, so a failure would vanish; log it where Show Log finds it.
+        provider.onDidShowGraph(() =>
+            rating.onGraphShown().catch((error) => log.error('Rating prompt failed', error))
+        ),
+        vscode.commands.registerCommand('gitHawk.rate', () => rating.rate()),
         /*
          * Stage, unstage, and commit, from the rows of the Changes tree. A
          * directory or a section stages everything beneath it, which is what
