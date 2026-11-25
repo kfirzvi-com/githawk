@@ -100,6 +100,15 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
      * told, so a default never puts a summary in the panel.
      */
     private showingDefault = false;
+    /**
+     * The ticket of a comparison the reader asked for that has not landed yet.
+     * The default is a fallback for an empty tree, and a tree with a commit on
+     * its way is not empty: a status read finishing first, or the webview
+     * clearing a selection a graph reload left behind, used to put the working
+     * tree up and take a newer ticket than the commit — so the commit, once
+     * read, was dropped as overtaken.
+     */
+    private requestedInFlight: number | undefined;
 
     constructor(
         private readonly extensionUri: vscode.Uri,
@@ -198,6 +207,10 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
      * view then says there is nothing uncommitted.
      */
     async showDefault(): Promise<void> {
+        if (this.requestedInFlight !== undefined) {
+            log.debug('not showing the default: a requested comparison is on its way');
+            return;
+        }
         this.showingDefault = true;
         await this.compareWorkingTree('none');
     }
@@ -690,6 +703,9 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
             this.showingDefault = false;
         }
         const ticket = ++this.comparisonTicket;
+        if (spec.kind !== 'workingTree' || reveal !== 'none') {
+            this.requestedInFlight = ticket;
+        }
         try {
             const comparison = await this.comparisons.compare(spec, {
                 quiet: reveal === 'none',
@@ -755,6 +771,10 @@ export class GitGraphViewProvider implements vscode.WebviewViewProvider {
                     log.show();
                 }
             });
+        } finally {
+            if (this.requestedInFlight === ticket) {
+                this.requestedInFlight = undefined;
+            }
         }
     }
 
