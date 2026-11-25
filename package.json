@@ -62,7 +62,7 @@
         "gitHawk.autoRefresh": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Reload the graph when the repository changes, so a commit, checkout, fetch, rebase or stash made outside GitHawk — in a terminal, in the Source Control view, or by another tool — shows up without pressing Refresh.\n\nGitHawk watches git's own metadata (`HEAD`, `refs`, `packed-refs`, the index), never your working tree, and waits for an operation to settle before reloading. Turn it off if the repository lives on a slow network filesystem, where each event costs a round trip."
+          "markdownDescription": "Reload the graph when the repository changes, so a commit, checkout, fetch, rebase or stash made outside GitHawk — in a terminal, in the Source Control view, or by another tool — shows up without pressing Refresh.\n\nThe graph watches git's own metadata (`HEAD`, `refs`, `packed-refs`, the index), never your working tree, and waits for an operation to settle before reloading. The Repositories view's counts also follow files changing in the workspace, so work written by a build, a terminal or an agent shows up there. Turn it off if the repository lives on a slow network filesystem, where each event costs a round trip."
         },
         "gitHawk.repositoryScanDepth": {
           "type": "number",
